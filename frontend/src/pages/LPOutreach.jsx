@@ -228,7 +228,8 @@ export default function LPOutreach() {
           <button className="btn btn-primary" onClick={async () => {
             try {
               const result = await runLPMatching();
-              alert(`Matching complete: ${result.stats?.targets_processed} processed, ${result.stats?.matches_found} matches found`);
+              const st = result.stats || {};
+              alert(`Matching complete: ${st.targets_processed || 0} LPs processed, ${st.matches_found || 0} with connections found.\n\nDirect matches: ${st.direct_matches || 0}\nCompany/colleague matches: ${st.company_matches || 0}`);
               loadStats();
               loadTargets();
             } catch (err) {

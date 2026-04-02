@@ -130,6 +130,36 @@ function fuzzyMatchName(targetName, candidateName) {
 }
 
 // ============================================================
+// Helper: Fuzzy company name matching
+// ============================================================
+function fuzzyMatchCompany(companyA, companyB) {
+  if (!companyA || !companyB) return 0;
+  const a = companyA.toLowerCase().trim().replace(/[,.\-()]/g, ' ').replace(/\s+/g, ' ');
+  const b = companyB.toLowerCase().trim().replace(/[,.\-()]/g, ' ').replace(/\s+/g, ' ');
+
+  if (a === b) return 100;
+
+  // Strip common suffixes for comparison
+  const suffixes = /\b(inc|llc|llp|lp|ltd|corp|co|group|partners|capital|management|mgmt|advisors|advisory|fund|funds|ventures|investments|holdings|foundation|assoc|association)\b/g;
+  const aNorm = a.replace(suffixes, '').trim().replace(/\s+/g, ' ');
+  const bNorm = b.replace(suffixes, '').trim().replace(/\s+/g, ' ');
+
+  if (aNorm === bNorm && aNorm.length > 2) return 95;
+  if (aNorm.includes(bNorm) && bNorm.length > 3) return 85;
+  if (bNorm.includes(aNorm) && aNorm.length > 3) return 85;
+
+  // Word overlap
+  const aWords = aNorm.split(/\s+/).filter(w => w.length > 2);
+  const bWords = bNorm.split(/\s+/).filter(w => w.length > 2);
+  if (aWords.length === 0 || bWords.length === 0) return 0;
+  const common = aWords.filter(w => bWords.includes(w));
+  const overlapRatio = common.length / Math.max(aWords.length, bWords.length);
+  if (overlapRatio >= 0.5 && common.length >= 1) return Math.round(60 + overlapRatio * 30);
+
+  return 0;
+}
+
+// ============================================================
 // Helper: Run matching algorithm
 // ============================================================
 async function runMatching() {
@@ -154,81 +184,98 @@ async function runMatching() {
       teamMemberMap[tm.id] = tm;
     });
 
-    // For each LP target, find all matches and compute best connector
-    for (const lp of lpTargets) {
-      const lpMatches = {}; // team_member_id -> highest confidence match
+    // Pre-index connections by normalized company for fast lookup
+    const connsByCompany = {};
+    for (const conn of connections) {
+      if (conn.company) {
+        const key = conn.company.toLowerCase().trim();
+        if (!connsByCompany[key]) connsByCompany[key] = [];
+        connsByCompany[key].push(conn);
+      }
+    }
 
-      // Direct name match
+    for (const lp of lpTargets) {
+      // Each match key = `${team_member_id}:${match_type}` to allow multiple match types per team member
+      const lpMatches = {};
+
+      const addMatch = (tmId, type, confidence, connectionId) => {
+        const key = `${tmId}:${type}`;
+        if (!lpMatches[key] || lpMatches[key].confidence < confidence) {
+          lpMatches[key] = { tmId, type, confidence, connectionId };
+        }
+      };
+
+      // ── Layer 1: Direct matches (name + email) ──
+      // The LP target IS one of your LinkedIn connections
       for (const conn of connections) {
+        // Direct name match
         const nameScore = fuzzyMatchName(lp.full_name, conn.full_name);
         if (nameScore >= 70) {
-          const tmId = conn.team_member_id;
-          if (!lpMatches[tmId] || lpMatches[tmId].confidence < nameScore) {
-            lpMatches[tmId] = {
-              type: 'direct_name',
-              confidence: nameScore,
-              connectionId: conn.id,
-            };
-          }
+          addMatch(conn.team_member_id, 'direct_name', nameScore, conn.id);
         }
       }
 
       // Direct email match
       if (lp.email) {
-        const emailConn = connections.find(
-          c => c.email && c.email.toLowerCase() === lp.email.toLowerCase()
-        );
-        if (emailConn) {
-          const tmId = emailConn.team_member_id;
-          if (!lpMatches[tmId] || lpMatches[tmId].confidence < 100) {
-            lpMatches[tmId] = {
-              type: 'direct_email',
-              confidence: 100,
-              connectionId: emailConn.id,
-            };
+        for (const conn of connections) {
+          if (conn.email && conn.email.toLowerCase() === lp.email.toLowerCase()) {
+            addMatch(conn.team_member_id, 'direct_email', 100, conn.id);
           }
         }
       }
 
-      // Company + name fuzzy match
+      // ── Layer 2: Same company (colleague match) ──
+      // Your LinkedIn connection works at the same company as the LP target.
+      // They're not the LP target themselves, but they could intro you.
       if (lp.company) {
-        const companyConns = connections.filter(
-          c => c.company && c.company.toLowerCase().includes(lp.company.toLowerCase())
-        );
-        for (const conn of companyConns) {
-          const nameScore = fuzzyMatchName(lp.full_name, conn.full_name);
-          if (nameScore >= 50) {
-            const tmId = conn.team_member_id;
-            const confidence = Math.min(85, nameScore + 15);
-            if (!lpMatches[tmId] || lpMatches[tmId].confidence < confidence) {
-              lpMatches[tmId] = {
-                type: 'company_match',
-                confidence,
-                connectionId: conn.id,
-              };
+        for (const conn of connections) {
+          if (!conn.company) continue;
+          const compScore = fuzzyMatchCompany(lp.company, conn.company);
+          if (compScore >= 75) {
+            // Exclude if this connection already matched as a direct match
+            const directKey = `${conn.team_member_id}:direct_name`;
+            const directEmailKey = `${conn.team_member_id}:direct_email`;
+            if (!lpMatches[directKey] && !lpMatches[directEmailKey]) {
+              // Confidence: 40-65 depending on company match quality
+              const confidence = Math.round(30 + (compScore / 100) * 35);
+              addMatch(conn.team_member_id, 'same_company', confidence, conn.id);
             }
           }
         }
       }
 
-      // Insert matches into DB
-      for (const [tmId, match] of Object.entries(lpMatches)) {
+      // ── Layer 3: LP name matches a company ──
+      // The LP target's full_name field is actually a firm name (e.g., "Sequoia Heritage")
+      // and your LinkedIn connection works at that firm.
+      // Check if lp.full_name looks like it could be a company name
+      // (heuristic: if it doesn't have a typical first+last pattern, or matches a connection's company)
+      for (const conn of connections) {
+        if (!conn.company) continue;
+        const nameAsCompanyScore = fuzzyMatchCompany(lp.full_name, conn.company);
+        if (nameAsCompanyScore >= 75) {
+          const confidence = Math.round(25 + (nameAsCompanyScore / 100) * 35);
+          addMatch(conn.team_member_id, 'lp_is_company', confidence, conn.id);
+        }
+      }
+
+      // Insert all matches into DB
+      for (const match of Object.values(lpMatches)) {
         await client.query(
           `INSERT INTO lp_connection_matches
            (lp_target_id, team_member_id, linkedin_connection_id, match_type, match_confidence)
            VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (lp_target_id, team_member_id, match_type) DO UPDATE
            SET match_confidence = EXCLUDED.match_confidence`,
-          [lp.id, tmId, match.connectionId || null, match.type, match.confidence]
+          [lp.id, match.tmId, match.connectionId || null, match.type, match.confidence]
         );
       }
 
-      // Determine best connector
+      // Determine best connector (prioritize direct > same_company > lp_is_company)
       const bestMatchResult = await client.query(
         `SELECT team_member_id, match_type, match_confidence
          FROM lp_connection_matches
          WHERE lp_target_id = $1
-         ORDER BY match_confidence DESC, match_type = 'direct_email' DESC
+         ORDER BY match_confidence DESC
          LIMIT 1`,
         [lp.id]
       );
@@ -240,18 +287,18 @@ async function runMatching() {
         bestConnectorId = bestMatchResult.rows[0].team_member_id;
         const matchType = bestMatchResult.rows[0].match_type;
 
-        if (matchType === 'direct_email') {
+        if (matchType === 'direct_email' || matchType === 'direct_name') {
           connectionStrength = 'direct';
-        } else if (matchType === 'direct_name') {
-          connectionStrength = 'direct';
-        } else if (matchType === 'company_match') {
+        } else if (matchType === 'same_company') {
+          connectionStrength = 'company_match';
+        } else if (matchType === 'lp_is_company') {
           connectionStrength = 'company_match';
         } else {
           connectionStrength = 'mutual';
         }
       }
 
-      // Count total connectors for this LP
+      // Count total unique connectors for this LP (across all match types)
       const countResult = await client.query(
         'SELECT COUNT(DISTINCT team_member_id) as count FROM lp_connection_matches WHERE lp_target_id = $1',
         [lp.id]
@@ -282,13 +329,17 @@ async function runMatching() {
     // Return stats
     const statsResult = await client.query(
       `SELECT COUNT(*) as total,
-              COUNT(CASE WHEN best_connector_id IS NOT NULL THEN 1 END) as with_matches
+              COUNT(CASE WHEN best_connector_id IS NOT NULL THEN 1 END) as with_matches,
+              COUNT(CASE WHEN connection_strength = 'direct' THEN 1 END) as direct_matches,
+              COUNT(CASE WHEN connection_strength = 'company_match' THEN 1 END) as company_matches
        FROM lp_targets`
     );
     const s = statsResult.rows[0];
     return {
       targets_processed: parseInt(s.total) || 0,
       matches_found: parseInt(s.with_matches) || 0,
+      direct_matches: parseInt(s.direct_matches) || 0,
+      company_matches: parseInt(s.company_matches) || 0,
     };
   } catch (err) {
     await client.query('ROLLBACK');
