@@ -1209,7 +1209,7 @@ router.get('/apollo/contacts/:lpId', authenticate, async (req, res) => {
 router.get('/apollo/status', authenticate, async (req, res) => {
   try {
     const { rows: total } = await db.query('SELECT COUNT(DISTINCT company) as count FROM lp_targets WHERE company IS NOT NULL');
-    const { rows: searched } = await db.query('SELECT COUNT(*) as count FROM apollo_company_cache');
+    const { rows: searched } = await db.query('SELECT COUNT(DISTINCT company_name) as count FROM apollo_company_contacts');
     const { rows: withContacts } = await db.query(
       'SELECT COUNT(DISTINCT lp_target_id) as count FROM apollo_company_contacts'
     );
