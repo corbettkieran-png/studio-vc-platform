@@ -65,3 +65,26 @@ export const getActivity = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/activity?${qs}`);
 };
+
+// LP Outreach
+export const getLPTeam = () => request('/lp/team');
+export const addLPTeamMember = (data) =>
+  request('/lp/team', { method: 'POST', body: JSON.stringify(data) });
+export const removeLPTeamMember = (id) =>
+  request(`/lp/team/${id}`, { method: 'DELETE' });
+export const uploadLinkedInCSV = (teamMemberId, formData) =>
+  request(`/lp/team/${teamMemberId}/connections`, { method: 'POST', body: formData });
+export const importLPTargets = (formData) =>
+  request('/lp/targets/import', { method: 'POST', body: formData });
+export const getLPTargets = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/lp/targets?${qs}`);
+};
+export const getLPTarget = (id) => request(`/lp/targets/${id}`);
+export const updateLPTarget = (id, data) =>
+  request(`/lp/targets/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const addLPActivity = (id, data) =>
+  request(`/lp/targets/${id}/activity`, { method: 'POST', body: JSON.stringify(data) });
+export const runLPMatching = () =>
+  request('/lp/match', { method: 'POST' });
+export const getLPStats = () => request('/lp/stats');

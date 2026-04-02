@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import SubmitDeck from './pages/SubmitDeck';
 import CRM from './pages/CRM';
 import Analytics from './pages/Analytics';
+import LPOutreach from './pages/LPOutreach';
 import Layout from './components/Layout';
 
 function ProtectedRoute({ children }) {
@@ -26,6 +27,9 @@ function AppRoutes() {
       } />
       <Route path="/analytics" element={
         <ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>
+      } />
+      <Route path="/lp-outreach" element={
+        <ProtectedRoute><Layout><LPOutreach /></Layout></ProtectedRoute>
       } />
 
       {/* Default redirect */}

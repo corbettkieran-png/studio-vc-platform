@@ -7,6 +7,7 @@ const fs = require('fs');
 const authRoutes = require('./routes/auth');
 const submissionRoutes = require('./routes/submissions');
 const activityRoutes = require('./routes/activity');
+const lpOutreachRoutes = require('./routes/lp-outreach');
 const { processEmailQueue } = require('./services/email');
 const db = require('./config/db');
 const bcrypt = require('bcryptjs');
@@ -34,6 +35,7 @@ app.use('/uploads', express.static(path.resolve(uploadDir)));
 app.use('/api/auth', authRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/activity', activityRoutes);
+app.use('/api/lp', lpOutreachRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

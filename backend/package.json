@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "db:migrate": "node src/utils/migrate.js",
+    "db:migrate": "node src/utils/migrate.js && node src/utils/migrate-lp.js",
+    "db:migrate-lp": "node src/utils/migrate-lp.js",
     "db:seed": "node src/utils/seed.js"
   },
   "dependencies": {
