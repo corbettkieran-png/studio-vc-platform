@@ -398,7 +398,7 @@ export default function LPOutreach() {
                           if (!file) return;
                           try {
                             const formData = new FormData();
-                            formData.append('csv', file);
+                            formData.append('file', file);
                             await uploadLinkedInCSV(member.id, formData);
                             alert('LinkedIn CSV uploaded successfully');
                             loadTeamMembers();
@@ -446,7 +446,7 @@ export default function LPOutreach() {
                       if (!file) return;
                       try {
                         const formData = new FormData();
-                        formData.append('csv', file);
+                        formData.append('file', file);
                         await importLPTargets(formData);
                         alert('LP list imported successfully');
                         loadStats();

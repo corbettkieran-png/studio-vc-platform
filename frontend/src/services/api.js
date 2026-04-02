@@ -22,7 +22,13 @@ async function request(path, options = {}) {
     throw new Error('Unauthorized');
   }
 
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('Server returned an unexpected response. Please try again.');
+  }
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
