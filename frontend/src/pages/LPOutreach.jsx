@@ -133,11 +133,11 @@ export default function LPOutreach() {
   const loadTargets = useCallback(async () => {
     try {
       const params = {
-        search: search || undefined,
         sort_by: sortBy,
         sort_dir: sortDir,
         limit: 100,
       };
+      if (search.trim()) params.search = search.trim();
       const data = await getLPTargets(params);
       setTargets(data.lp_targets || data.targets || []);
     } catch (err) {
