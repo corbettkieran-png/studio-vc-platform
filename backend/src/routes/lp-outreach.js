@@ -513,8 +513,25 @@ router.post('/targets/import', authenticate, upload.single('file'), async (req, 
       };
     });
 
+    // Truncate helper to prevent DB overflow
+    const trunc = (str, max = 490) => str && str.length > max ? str.substring(0, max) : str;
+
     // Filter out empty names
-    const validRows = normalizedRows.filter(r => r.full_name);
+    const validRows = normalizedRows
+      .filter(r => r.full_name)
+      .map(r => ({
+        ...r,
+        full_name: trunc(r.full_name),
+        email: trunc(r.email),
+        company: trunc(r.company, 1000),
+        title: trunc(r.title, 1000),
+        phone: trunc(r.phone, 250),
+        linkedin_url: trunc(r.linkedin_url, 1000),
+        fund_type: trunc(r.fund_type),
+        estimated_aum: trunc(r.estimated_aum),
+        typical_check_size: trunc(r.typical_check_size),
+        geographic_focus: trunc(r.geographic_focus, 1000),
+      }));
 
     if (validRows.length === 0) {
       const sampleHeaders = parsedRows.length > 0 ? Object.keys(parsedRows[0]).join(', ') : 'none';

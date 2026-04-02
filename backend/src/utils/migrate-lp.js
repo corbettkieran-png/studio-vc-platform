@@ -88,6 +88,18 @@ CREATE TABLE IF NOT EXISTS lp_activity_log (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Widen columns that may have been created too narrow
+ALTER TABLE lp_targets ALTER COLUMN full_name TYPE VARCHAR(500);
+ALTER TABLE lp_targets ALTER COLUMN email TYPE VARCHAR(500);
+ALTER TABLE lp_targets ALTER COLUMN company TYPE TEXT;
+ALTER TABLE lp_targets ALTER COLUMN title TYPE TEXT;
+ALTER TABLE lp_targets ALTER COLUMN phone TYPE VARCHAR(255);
+ALTER TABLE lp_targets ALTER COLUMN linkedin_url TYPE TEXT;
+ALTER TABLE lp_targets ALTER COLUMN fund_type TYPE VARCHAR(500);
+ALTER TABLE lp_targets ALTER COLUMN estimated_aum TYPE VARCHAR(500);
+ALTER TABLE lp_targets ALTER COLUMN typical_check_size TYPE VARCHAR(500);
+ALTER TABLE lp_targets ALTER COLUMN geographic_focus TYPE TEXT;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_linkedin_conn_team ON linkedin_connections(team_member_id);
 CREATE INDEX IF NOT EXISTS idx_linkedin_conn_name ON linkedin_connections(full_name);
