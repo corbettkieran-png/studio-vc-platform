@@ -467,27 +467,49 @@ router.post('/targets/import', authenticate, upload.single('file'), async (req, 
     const csvContent = req.file.buffer.toString('utf-8');
     const parsedRows = parseCSV(csvContent);
 
+    // Helper: find a value by trying multiple possible column names
+    function findCol(row, ...candidates) {
+      for (const key of candidates) {
+        if (row[key] && row[key].trim()) return row[key].trim();
+      }
+      // Also try fuzzy: check if any row key contains the candidate
+      const rowKeys = Object.keys(row);
+      for (const key of candidates) {
+        const match = rowKeys.find(k => k.includes(key));
+        if (match && row[match] && row[match].trim()) return row[match].trim();
+      }
+      return '';
+    }
+
     // Normalize and validate rows
     const normalizedRows = parsedRows.map(row => {
+      // Build full name from first+last if no single name field
+      let fullName = findCol(row, 'name', 'full name', 'full_name', 'contact name', 'contact_name', 'lp name', 'lp_name');
+      if (!fullName) {
+        const first = findCol(row, 'first name', 'first_name', 'first');
+        const last = findCol(row, 'last name', 'last_name', 'last');
+        if (first || last) fullName = [first, last].filter(Boolean).join(' ');
+      }
+
       // Parse sector_interest as comma-separated values
       let sectorInterest = [];
-      if (row['sector interest'] || row['sector_interest']) {
-        const sectors = (row['sector interest'] || row['sector_interest']).split(',');
-        sectorInterest = sectors.map(s => s.trim().toLowerCase()).filter(s => s);
+      const sectorRaw = findCol(row, 'sector interest', 'sector_interest', 'sector', 'sectors', 'interest', 'focus area', 'focus_area');
+      if (sectorRaw) {
+        sectorInterest = sectorRaw.split(/[,;|]/).map(s => s.trim().toLowerCase()).filter(s => s);
       }
 
       return {
-        full_name: row['name'] || row['full name'] || row['full_name'] || '',
-        email: row['email'] || '',
-        company: row['company'] || '',
-        title: row['title'] || row['job title'] || '',
-        phone: row['phone'] || '',
-        linkedin_url: row['linkedin'] || row['linkedin_url'] || '',
-        fund_type: row['fund type'] || row['fund_type'] || '',
-        estimated_aum: row['estimated aum'] || row['estimated_aum'] || '',
-        typical_check_size: row['typical check size'] || row['typical_check_size'] || '',
+        full_name: fullName,
+        email: findCol(row, 'email', 'email address', 'email_address', 'e-mail'),
+        company: findCol(row, 'company', 'company name', 'company_name', 'organization', 'firm', 'firm name', 'firm_name'),
+        title: findCol(row, 'title', 'job title', 'job_title', 'position', 'role'),
+        phone: findCol(row, 'phone', 'phone number', 'phone_number', 'mobile', 'telephone'),
+        linkedin_url: findCol(row, 'linkedin', 'linkedin_url', 'linkedin url', 'linkedin profile'),
+        fund_type: findCol(row, 'fund type', 'fund_type', 'type', 'investor type', 'investor_type', 'lp type', 'lp_type'),
+        estimated_aum: findCol(row, 'estimated aum', 'estimated_aum', 'aum', 'assets under management'),
+        typical_check_size: findCol(row, 'typical check size', 'typical_check_size', 'check size', 'check_size', 'commitment size', 'ticket size'),
         sector_interest: sectorInterest,
-        geographic_focus: row['geographic focus'] || row['geographic_focus'] || '',
+        geographic_focus: findCol(row, 'geographic focus', 'geographic_focus', 'geography', 'geo', 'region', 'location'),
       };
     });
 
@@ -495,7 +517,10 @@ router.post('/targets/import', authenticate, upload.single('file'), async (req, 
     const validRows = normalizedRows.filter(r => r.full_name);
 
     if (validRows.length === 0) {
-      return res.status(400).json({ error: 'No valid LP records found in CSV' });
+      const sampleHeaders = parsedRows.length > 0 ? Object.keys(parsedRows[0]).join(', ') : 'none';
+      return res.status(400).json({
+        error: `No valid LP records found in CSV. Could not find a name column. Your CSV headers: [${sampleHeaders}]. Expected one of: name, full name, first name + last name, contact name, lp name.`,
+      });
     }
 
     // Insert LP targets
