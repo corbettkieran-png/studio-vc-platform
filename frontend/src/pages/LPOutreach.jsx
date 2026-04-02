@@ -114,7 +114,7 @@ export default function LPOutreach() {
   const loadStats = useCallback(async () => {
     try {
       const data = await getLPStats();
-      setStats(data);
+      setStats(data.stats || data);
     } catch (err) {
       console.error('Load stats error:', err);
     }
@@ -130,7 +130,7 @@ export default function LPOutreach() {
         limit: 100,
       };
       const data = await getLPTargets(params);
-      setTargets(data.targets || []);
+      setTargets(data.lp_targets || data.targets || []);
     } catch (err) {
       console.error('Load targets error:', err);
     } finally {
@@ -142,7 +142,7 @@ export default function LPOutreach() {
   const loadTeamMembers = useCallback(async () => {
     try {
       const data = await getLPTeam();
-      setTeamMembers(data.team || []);
+      setTeamMembers(data.team_members || data.team || []);
     } catch (err) {
       console.error('Load team error:', err);
     }
@@ -167,7 +167,7 @@ export default function LPOutreach() {
     const loadDetail = async () => {
       try {
         const data = await getLPTarget(selectedTarget);
-        setDetail(data.target);
+        setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, activity: data.activity_log });
       } catch (err) {
         console.error('Load detail error:', err);
       }
@@ -187,7 +187,7 @@ export default function LPOutreach() {
             <div className="stat-label">Total LPs</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{stats.with_connections}</div>
+            <div className="stat-value">{stats.with_connector}</div>
             <div className="stat-label">With Connections</div>
           </div>
           <div className="stat-card">
@@ -195,21 +195,21 @@ export default function LPOutreach() {
             <div className="stat-label">Avg Fit Score</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{stats.team_members}</div>
+            <div className="stat-value">{stats.team_member_connection_counts?.length || 0}</div>
             <div className="stat-label">Team Members</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{stats.total_connections}</div>
+            <div className="stat-value">{stats.team_member_connection_counts?.reduce((sum, t) => sum + (t.connections_count || 0), 0) || 0}</div>
             <div className="stat-label">Total Connections</div>
           </div>
         </div>
 
         {/* Status Breakdown */}
-        {stats.status_breakdown && (
+        {stats.by_status && Object.keys(stats.by_status).length > 0 && (
           <div style={{ marginTop: 24 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Outreach Status Breakdown</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
-              {Object.entries(stats.status_breakdown).map(([status, count]) => (
+              {Object.entries(stats.by_status).map(([status, count]) => (
                 <div key={status} className="card" style={{ padding: 16, textAlign: 'center' }}>
                   <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--navy)', marginBottom: 4 }}>
                     {count}
@@ -362,7 +362,7 @@ export default function LPOutreach() {
                 }
                 try {
                   await addLPTeamMember({
-                    name: newMemberName,
+                    full_name: newMemberName,
                     email: newMemberEmail,
                     linkedin_url: newMemberLinkedin || undefined,
                   });
@@ -387,7 +387,7 @@ export default function LPOutreach() {
                   justifyContent: 'space-between', alignItems: 'center', fontSize: 13
                 }}>
                   <div>
-                    <div style={{ fontWeight: 500 }}>{member.name}</div>
+                    <div style={{ fontWeight: 500 }}>{member.full_name}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{member.email}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -409,7 +409,7 @@ export default function LPOutreach() {
                       <span className="btn btn-sm btn-secondary">Upload CSV</span>
                     </label>
                     <button className="btn btn-sm btn-danger" onClick={async () => {
-                      if (window.confirm(`Remove ${member.name}?`)) {
+                      if (window.confirm(`Remove ${member.full_name}?`)) {
                         try {
                           await removeLPTeamMember(member.id);
                           loadTeamMembers();
@@ -582,7 +582,7 @@ export default function LPOutreach() {
                       try {
                         await updateLPTarget(detail.id, { outreach_status: key });
                         const updated = await getLPTarget(detail.id);
-                        setDetail(updated.target);
+                        setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, activity: updated.activity_log });
                         loadTargets();
                       } catch (err) {
                         alert(err.message);
@@ -665,7 +665,7 @@ export default function LPOutreach() {
                     setActivityAction('email_sent');
                     setActivityDetails('');
                     const updated = await getLPTarget(detail.id);
-                    setDetail(updated.target);
+                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, activity: updated.activity_log });
                   } catch (err) {
                     alert(err.message);
                   }
@@ -695,7 +695,7 @@ export default function LPOutreach() {
                     await updateLPTarget(detail.id, { notes: (detail.notes || '') + '\n' + noteText });
                     setNoteText('');
                     const updated = await getLPTarget(detail.id);
-                    setDetail(updated.target);
+                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, activity: updated.activity_log });
                   } catch (err) {
                     alert(err.message);
                   }
@@ -722,7 +722,7 @@ export default function LPOutreach() {
         <h1>LP Outreach</h1>
         <div className="top-bar-actions">
           <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {stats ? `${stats.with_connections} LPs with connections` : ''}
+            {stats ? `${stats.with_connector} LPs with connections` : ''}
           </span>
         </div>
       </div>
