@@ -1090,4 +1090,158 @@ router.get('/stats', authenticate, async (req, res) => {
   }
 });
 
+// ============================================================
+// APOLLO INTEGRATION
+// ============================================================
+
+// POST /api/lp/apollo/company-contacts - Store Apollo search results for a company
+router.post('/apollo/company-contacts', authenticate, async (req, res) => {
+  try {
+    const { company_name, lp_target_ids, contacts, company_info } = req.body;
+
+    if (!company_name) {
+      return res.status(400).json({ error: 'company_name is required' });
+    }
+
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Upsert company cache
+      if (company_info) {
+        await client.query(
+          `INSERT INTO apollo_company_cache
+           (id, company_name, domain, industry, employee_count, revenue_range, apollo_org_id, total_people_found, senior_contacts_found, last_searched_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+           ON CONFLICT (company_name) DO UPDATE SET
+             domain = EXCLUDED.domain, industry = EXCLUDED.industry,
+             employee_count = EXCLUDED.employee_count, revenue_range = EXCLUDED.revenue_range,
+             apollo_org_id = EXCLUDED.apollo_org_id, total_people_found = EXCLUDED.total_people_found,
+             senior_contacts_found = EXCLUDED.senior_contacts_found, last_searched_at = NOW()`,
+          [
+            uuid(), company_name, company_info.domain || null,
+            company_info.industry || null, company_info.employee_count || null,
+            company_info.revenue_range || null, company_info.apollo_org_id || null,
+            company_info.total_people_found || 0, company_info.senior_contacts_found || 0,
+          ]
+        );
+      }
+
+      // Insert contacts for each LP target at this company
+      let insertedCount = 0;
+      const targetIds = lp_target_ids || [];
+
+      for (const contact of (contacts || [])) {
+        for (const lpId of targetIds) {
+          try {
+            await client.query(
+              `INSERT INTO apollo_company_contacts
+               (id, lp_target_id, company_name, apollo_person_id, first_name, last_name, full_name, title, seniority, linkedin_url, email, city, state, country, match_type)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+               ON CONFLICT (lp_target_id, apollo_person_id) DO UPDATE SET
+                 title = EXCLUDED.title, seniority = EXCLUDED.seniority, full_name = EXCLUDED.full_name`,
+              [
+                uuid(), lpId, company_name, contact.apollo_person_id || uuid(),
+                contact.first_name || null, contact.last_name || null,
+                contact.full_name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim(),
+                contact.title || null, contact.seniority || null,
+                contact.linkedin_url || null, contact.email || null,
+                contact.city || null, contact.state || null, contact.country || null,
+                contact.match_type || 'apollo_search',
+              ]
+            );
+            insertedCount++;
+          } catch (insertErr) {
+            // Skip duplicates silently
+          }
+        }
+      }
+
+      // Update LP targets with apollo match info
+      for (const lpId of targetIds) {
+        const { rows: countRows } = await client.query(
+          'SELECT COUNT(*) as count FROM apollo_company_contacts WHERE lp_target_id = $1',
+          [lpId]
+        );
+        const apolloContacts = parseInt(countRows[0].count) || 0;
+        if (apolloContacts > 0) {
+          await client.query(
+            `UPDATE lp_targets SET total_connectors = $1, connection_strength = 'apollo_match', updated_at = NOW() WHERE id = $2`,
+            [apolloContacts, lpId]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+      res.json({ message: 'Apollo contacts stored', inserted: insertedCount });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('Error storing Apollo contacts:', err);
+    res.status(500).json({ error: 'Failed to store Apollo contacts' });
+  }
+});
+
+// GET /api/lp/apollo/contacts/:lpId - Get Apollo contacts for an LP target
+router.get('/apollo/contacts/:lpId', authenticate, async (req, res) => {
+  try {
+    const { lpId } = req.params;
+    const { rows: contacts } = await db.query(
+      `SELECT * FROM apollo_company_contacts WHERE lp_target_id = $1 ORDER BY seniority DESC, full_name`,
+      [lpId]
+    );
+    const { rows: cache } = await db.query(
+      `SELECT * FROM apollo_company_cache WHERE company_name = (SELECT company FROM lp_targets WHERE id = $1)`,
+      [lpId]
+    );
+    res.json({ contacts, company_info: cache[0] || null });
+  } catch (err) {
+    console.error('Error fetching Apollo contacts:', err);
+    res.status(500).json({ error: 'Failed to fetch Apollo contacts' });
+  }
+});
+
+// GET /api/lp/apollo/status - Get Apollo enrichment status
+router.get('/apollo/status', authenticate, async (req, res) => {
+  try {
+    const { rows: total } = await db.query('SELECT COUNT(DISTINCT company) as count FROM lp_targets WHERE company IS NOT NULL');
+    const { rows: searched } = await db.query('SELECT COUNT(*) as count FROM apollo_company_cache');
+    const { rows: withContacts } = await db.query(
+      'SELECT COUNT(DISTINCT lp_target_id) as count FROM apollo_company_contacts'
+    );
+    const { rows: totalContacts } = await db.query('SELECT COUNT(*) as count FROM apollo_company_contacts');
+
+    res.json({
+      total_companies: parseInt(total[0].count) || 0,
+      companies_searched: parseInt(searched[0].count) || 0,
+      lps_with_apollo_contacts: parseInt(withContacts[0].count) || 0,
+      total_apollo_contacts: parseInt(totalContacts[0].count) || 0,
+    });
+  } catch (err) {
+    console.error('Error fetching Apollo status:', err);
+    res.status(500).json({ error: 'Failed to fetch Apollo status' });
+  }
+});
+
+// GET /api/lp/companies - Get unique company names from LP targets
+router.get('/companies', authenticate, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT company, array_agg(id) as lp_ids, COUNT(*) as lp_count
+       FROM lp_targets
+       WHERE company IS NOT NULL AND company != ''
+       GROUP BY company
+       ORDER BY company`
+    );
+    res.json({ companies: rows });
+  } catch (err) {
+    console.error('Error fetching companies:', err);
+    res.status(500).json({ error: 'Failed to fetch companies' });
+  }
+});
+
 module.exports = router;

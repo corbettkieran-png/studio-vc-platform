@@ -100,7 +100,47 @@ ALTER TABLE lp_targets ALTER COLUMN estimated_aum TYPE VARCHAR(500);
 ALTER TABLE lp_targets ALTER COLUMN typical_check_size TYPE VARCHAR(500);
 ALTER TABLE lp_targets ALTER COLUMN geographic_focus TYPE TEXT;
 
+-- Apollo enrichment: contacts found at LP target companies
+CREATE TABLE IF NOT EXISTS apollo_company_contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lp_target_id UUID REFERENCES lp_targets(id) ON DELETE CASCADE,
+  company_name TEXT NOT NULL,
+  apollo_person_id TEXT,
+  first_name VARCHAR(255),
+  last_name VARCHAR(255),
+  full_name VARCHAR(500),
+  title TEXT,
+  seniority VARCHAR(100),
+  linkedin_url TEXT,
+  email VARCHAR(500),
+  city VARCHAR(255),
+  state VARCHAR(255),
+  country VARCHAR(255),
+  match_type VARCHAR(50) DEFAULT 'apollo_search',
+  enriched BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(lp_target_id, apollo_person_id)
+);
+
+-- Apollo company enrichment cache
+CREATE TABLE IF NOT EXISTS apollo_company_cache (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_name TEXT NOT NULL,
+  domain VARCHAR(500),
+  industry VARCHAR(255),
+  employee_count INT,
+  revenue_range VARCHAR(100),
+  apollo_org_id TEXT,
+  total_people_found INT DEFAULT 0,
+  senior_contacts_found INT DEFAULT 0,
+  last_searched_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(company_name)
+);
+
 -- Indexes
+CREATE INDEX IF NOT EXISTS idx_apollo_contacts_lp ON apollo_company_contacts(lp_target_id);
+CREATE INDEX IF NOT EXISTS idx_apollo_contacts_company ON apollo_company_contacts(company_name);
+CREATE INDEX IF NOT EXISTS idx_apollo_cache_company ON apollo_company_cache(company_name);
 CREATE INDEX IF NOT EXISTS idx_linkedin_conn_team ON linkedin_connections(team_member_id);
 CREATE INDEX IF NOT EXISTS idx_linkedin_conn_name ON linkedin_connections(full_name);
 CREATE INDEX IF NOT EXISTS idx_linkedin_conn_company ON linkedin_connections(company);

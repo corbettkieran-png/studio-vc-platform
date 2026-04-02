@@ -94,3 +94,10 @@ export const addLPActivity = (id, data) =>
 export const runLPMatching = () =>
   request('/lp/match', { method: 'POST' });
 export const getLPStats = () => request('/lp/stats');
+
+// Apollo integration
+export const getApolloStatus = () => request('/lp/apollo/status');
+export const getApolloContacts = (lpId) => request(`/lp/apollo/contacts/${lpId}`);
+export const getLPCompanies = () => request('/lp/companies');
+export const storeApolloContacts = (data) =>
+  request('/lp/apollo/company-contacts', { method: 'POST', body: JSON.stringify(data) });
