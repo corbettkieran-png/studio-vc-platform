@@ -954,6 +954,28 @@ router.post('/match', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/lp/debug-match - Sample data from both tables to diagnose matching
+router.get('/debug-match', authenticate, async (req, res) => {
+  try {
+    const { rows: lpSample } = await db.query(
+      'SELECT full_name, company, email FROM lp_targets ORDER BY full_name LIMIT 10'
+    );
+    const { rows: connSample } = await db.query(
+      'SELECT full_name, company, email FROM linkedin_connections ORDER BY full_name LIMIT 10'
+    );
+    const { rows: lpCount } = await db.query('SELECT COUNT(*) as count FROM lp_targets');
+    const { rows: connCount } = await db.query('SELECT COUNT(*) as count FROM linkedin_connections');
+    res.json({
+      lp_count: parseInt(lpCount[0].count),
+      conn_count: parseInt(connCount[0].count),
+      lp_sample: lpSample,
+      conn_sample: connSample,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ============================================================
 // DASHBOARD STATS
 // ============================================================
