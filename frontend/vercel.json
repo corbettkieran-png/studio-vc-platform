@@ -1,7 +1,7 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "REPLACE_WITH_RAILWAY_URL/api/$1" },
-    { "source": "/uploads/(.*)", "destination": "REPLACE_WITH_RAILWAY_URL/uploads/$1" },
+    { "source": "/api/(.*)", "destination": "https://studio-vc-backend-production.up.railway.app/api/$1" },
+    { "source": "/uploads/(.*)", "destination": "https://studio-vc-backend-production.up.railway.app/uploads/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
