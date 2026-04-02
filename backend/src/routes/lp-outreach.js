@@ -26,12 +26,25 @@ function parseCSV(csvContent) {
   const lines = cleaned.trim().split('\n');
   if (lines.length === 0) return [];
 
-  // Parse header row - strip BOM, quotes, whitespace, normalize to lowercase
-  const headerRow = lines[0];
+  // Find the actual header row — LinkedIn CSVs sometimes have metadata lines at the top.
+  // Look for a line that contains known CSV header keywords.
+  const headerKeywords = ['first name', 'last name', 'email', 'company', 'name', 'position', 'title', 'connected', 'organization', 'full_name'];
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    const lineLower = lines[i].toLowerCase();
+    const matches = headerKeywords.filter(kw => lineLower.includes(kw));
+    if (matches.length >= 2) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  const headerRow = lines[headerIdx];
   const headers = headerRow.split(',').map(h => h.trim().replace(/^"|"$/g, '').replace(/^\uFEFF/, '').toLowerCase());
+  console.log(`parseCSV: header row index=${headerIdx}, headers=[${headers.join(', ')}]`);
 
   const rows = [];
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = headerIdx + 1; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
 
