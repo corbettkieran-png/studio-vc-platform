@@ -21,12 +21,14 @@ const upload = multer({
 // Helper: Parse CSV
 // ============================================================
 function parseCSV(csvContent) {
-  const lines = csvContent.trim().split('\n');
+  // Strip BOM (LinkedIn CSVs use UTF-8 BOM)
+  const cleaned = csvContent.replace(/^\uFEFF/, '');
+  const lines = cleaned.trim().split('\n');
   if (lines.length === 0) return [];
 
-  // Parse header row
+  // Parse header row - strip BOM, quotes, whitespace, normalize to lowercase
   const headerRow = lines[0];
-  const headers = headerRow.split(',').map(h => h.trim().toLowerCase());
+  const headers = headerRow.split(',').map(h => h.trim().replace(/^"|"$/g, '').replace(/^\uFEFF/, '').toLowerCase());
 
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
@@ -433,23 +435,46 @@ router.post('/team/:id/connections', authenticate, upload.single('file'), async 
     const csvContent = req.file.buffer.toString('utf-8');
     const parsedRows = parseCSV(csvContent);
 
+    console.log(`LinkedIn CSV: ${parsedRows.length} rows parsed. Headers detected: ${parsedRows.length > 0 ? Object.keys(parsedRows[0]).join(', ') : 'none'}`);
+
+    // Flexible column finder (same as LP import)
+    function findConnCol(row, ...candidates) {
+      for (const key of candidates) {
+        if (row[key] && row[key].trim()) return row[key].trim();
+      }
+      const rowKeys = Object.keys(row);
+      for (const key of candidates) {
+        const match = rowKeys.find(k => k.includes(key));
+        if (match && row[match] && row[match].trim()) return row[match].trim();
+      }
+      return '';
+    }
+
     // Map CSV columns to database fields
     const normalizedRows = parsedRows.map(row => {
-      const firstName =
-        row['first name'] || row['firstname'] || row['first_name'] || '';
-      const lastName = row['last name'] || row['lastname'] || row['last_name'] || '';
+      const firstName = findConnCol(row, 'first name', 'firstname', 'first_name', 'first');
+      const lastName = findConnCol(row, 'last name', 'lastname', 'last_name', 'last');
       const fullName = `${firstName} ${lastName}`.trim();
 
       return {
         first_name: firstName,
         last_name: lastName,
-        full_name: fullName || row['name'] || row['full name'] || '',
-        email: row['email address'] || row['email'] || '',
-        company: row['company'] || '',
-        position: row['position'] || row['title'] || '',
-        connected_on: row['connected on'] || row['date connected'] || null,
+        full_name: fullName || findConnCol(row, 'name', 'full name', 'full_name'),
+        email: findConnCol(row, 'email address', 'email', 'email_address'),
+        company: findConnCol(row, 'company', 'organization', 'employer'),
+        position: findConnCol(row, 'position', 'title', 'job title', 'job_title'),
+        connected_on: findConnCol(row, 'connected on', 'date connected', 'connected_on', 'connection date') || null,
       };
     });
+
+    const validRows = normalizedRows.filter(r => r.full_name);
+    console.log(`LinkedIn CSV: ${validRows.length} valid rows with names (out of ${normalizedRows.length} total). Sample: ${validRows.length > 0 ? JSON.stringify(validRows[0]) : 'none'}`);
+
+    if (validRows.length === 0) {
+      return res.status(400).json({
+        error: 'No valid connections found in CSV. Detected headers: ' + (parsedRows.length > 0 ? Object.keys(parsedRows[0]).join(', ') : 'none')
+      });
+    }
 
     // Insert connections
     const client = await db.pool.connect();
@@ -459,7 +484,7 @@ router.post('/team/:id/connections', authenticate, upload.single('file'), async 
       // Delete old connections for this team member
       await client.query('DELETE FROM linkedin_connections WHERE team_member_id = $1', [id]);
 
-      for (const row of normalizedRows) {
+      for (const row of validRows) {
         if (row.full_name) {
           // Parse date if provided
           let connectedDate = null;
@@ -494,10 +519,11 @@ router.post('/team/:id/connections', authenticate, upload.single('file'), async 
         `UPDATE team_members
          SET connections_count = $1, last_upload_at = NOW()
          WHERE id = $2`,
-        [normalizedRows.filter(r => r.full_name).length, id]
+        [validRows.length, id]
       );
 
       await client.query('COMMIT');
+      console.log(`LinkedIn CSV: Successfully inserted ${validRows.length} connections for team member ${id}`);
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -508,7 +534,7 @@ router.post('/team/:id/connections', authenticate, upload.single('file'), async 
     // Trigger matching algorithm
     await runMatching();
 
-    res.json({ message: 'Connections imported successfully', count: normalizedRows.length });
+    res.json({ message: 'Connections imported successfully', count: validRows.length });
   } catch (err) {
     console.error('Error uploading connections:', err);
     res.status(500).json({ error: 'Failed to upload connections' });
