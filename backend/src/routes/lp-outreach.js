@@ -278,6 +278,18 @@ async function runMatching() {
     }
 
     await client.query('COMMIT');
+
+    // Return stats
+    const statsResult = await client.query(
+      `SELECT COUNT(*) as total,
+              COUNT(CASE WHEN best_connector_id IS NOT NULL THEN 1 END) as with_matches
+       FROM lp_targets`
+    );
+    const s = statsResult.rows[0];
+    return {
+      targets_processed: parseInt(s.total) || 0,
+      matches_found: parseInt(s.with_matches) || 0,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -883,8 +895,8 @@ router.post('/targets/:id/activity', authenticate, async (req, res) => {
 // POST /api/lp/match - Re-run matching algorithm
 router.post('/match', authenticate, async (req, res) => {
   try {
-    await runMatching();
-    res.json({ message: 'Matching algorithm completed successfully' });
+    const stats = await runMatching();
+    res.json({ message: 'Matching algorithm completed successfully', stats });
   } catch (err) {
     console.error('Error running matching algorithm:', err);
     res.status(500).json({ error: 'Failed to run matching algorithm' });
