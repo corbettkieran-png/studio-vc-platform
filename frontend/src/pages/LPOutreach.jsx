@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getLPTeam, addLPTeamMember, removeLPTeamMember, uploadLinkedInCSV,
   importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
-  runLPMatching, getLPStats
+  runLPMatching, getLPStats, getApolloStatus, getApolloContacts
 } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -45,6 +45,7 @@ const CONNECTION_STRENGTH_LABELS = {
   direct_email: 'Direct Email',
   direct_name: 'Name Match',
   company_match: 'Company',
+  apollo_match: 'Apollo',
   none: 'No Connection',
 };
 
@@ -52,8 +53,13 @@ const CONNECTION_STRENGTH_COLORS = {
   direct_email: '#059669',
   direct_name: '#10B981',
   company_match: '#F59E0B',
+  apollo_match: '#6366F1',
   none: '#9CA3AF',
 };
+
+const SENIORITY_ORDER = { c_suite: 0, vp: 1, director: 2, manager: 3, senior: 4 };
+const SENIORITY_LABELS = { c_suite: 'C-Suite', vp: 'VP', director: 'Director', manager: 'Manager', senior: 'Senior' };
+const SENIORITY_COLORS = { c_suite: '#DC2626', vp: '#7C3AED', director: '#2563EB', manager: '#0891B2', senior: '#6B7280' };
 
 function getFitScoreColor(score) {
   if (score >= 81) return '#059669';
@@ -109,6 +115,9 @@ export default function LPOutreach() {
   const [activityAction, setActivityAction] = useState('email_sent');
   const [activityDetails, setActivityDetails] = useState('');
   const [noteText, setNoteText] = useState('');
+  const [apolloStats, setApolloStats] = useState(null);
+  const [apolloContacts, setApolloContacts] = useState([]);
+  const [apolloLoading, setApolloLoading] = useState(false);
 
   // Load dashboard stats
   const loadStats = useCallback(async () => {
@@ -148,11 +157,22 @@ export default function LPOutreach() {
     }
   }, []);
 
+  // Load Apollo stats
+  const loadApolloStats = useCallback(async () => {
+    try {
+      const data = await getApolloStatus();
+      setApolloStats(data);
+    } catch (err) {
+      console.error('Load apollo stats error:', err);
+    }
+  }, []);
+
   // Initial loads
   useEffect(() => {
     loadStats();
     loadTeamMembers();
-  }, [loadStats, loadTeamMembers]);
+    loadApolloStats();
+  }, [loadStats, loadTeamMembers, loadApolloStats]);
 
   useEffect(() => {
     loadTargets();
@@ -162,12 +182,20 @@ export default function LPOutreach() {
   useEffect(() => {
     if (!selectedTarget) {
       setDetail(null);
+      setApolloContacts([]);
       return;
     }
     const loadDetail = async () => {
       try {
         const data = await getLPTarget(selectedTarget);
         setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, activity: data.activity_log });
+        // Load Apollo contacts for this LP
+        setApolloLoading(true);
+        try {
+          const apolloData = await getApolloContacts(selectedTarget);
+          setApolloContacts(apolloData.contacts || []);
+        } catch { setApolloContacts([]); }
+        setApolloLoading(false);
       } catch (err) {
         console.error('Load detail error:', err);
       }
@@ -219,6 +247,36 @@ export default function LPOutreach() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Apollo Enrichment Stats */}
+        {apolloStats && (
+          <div style={{ marginTop: 24 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Apollo Enrichment</h3>
+            <div className="stats-row">
+              <div className="stat-card" style={{ borderLeft: '3px solid #6366F1' }}>
+                <div className="stat-value">{apolloStats.companies_searched || 0}</div>
+                <div className="stat-label">Companies Searched</div>
+              </div>
+              <div className="stat-card" style={{ borderLeft: '3px solid #6366F1' }}>
+                <div className="stat-value">{apolloStats.lps_with_apollo_contacts || 0}</div>
+                <div className="stat-label">LPs with Contacts</div>
+              </div>
+              <div className="stat-card" style={{ borderLeft: '3px solid #6366F1' }}>
+                <div className="stat-value">{apolloStats.total_apollo_contacts || 0}</div>
+                <div className="stat-label">Total Apollo Contacts</div>
+              </div>
+              <div className="stat-card" style={{ borderLeft: '3px solid #6366F1' }}>
+                <div className="stat-value">{apolloStats.total_companies || 0}</div>
+                <div className="stat-label">Total Companies</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
+              {apolloStats.companies_searched > 0
+                ? `${Math.round((apolloStats.companies_searched / apolloStats.total_companies) * 100)}% of LP companies enriched via Apollo`
+                : 'Apollo enrichment in progress — senior contacts are being mapped to your LP targets'}
             </div>
           </div>
         )}
@@ -278,7 +336,7 @@ export default function LPOutreach() {
               <tr>
                 <th>Name / Company</th>
                 <th>Fit Score</th>
-                <th>Best Connector</th>
+                <th>Connector / Apollo</th>
                 <th>Strength</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -294,10 +352,17 @@ export default function LPOutreach() {
                   <td>
                     <FitScoreBar score={t.fit_score || 0} />
                   </td>
-                  <td style={{ fontSize: 12 }}>{t.best_connector_name || '—'}</td>
+                  <td style={{ fontSize: 12 }}>
+                    {t.best_connector_name || '—'}
+                    {t.total_connectors > 0 && (
+                      <div style={{ fontSize: 10, color: '#6366F1', marginTop: 2 }}>
+                        {t.total_connectors} contact{t.total_connectors !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <StatusBadge
-                      status={CONNECTION_STRENGTH_LABELS[t.connection_strength] || t.connection_strength}
+                      status={CONNECTION_STRENGTH_LABELS[t.connection_strength] || t.connection_strength || 'No Connection'}
                       color={CONNECTION_STRENGTH_COLORS[t.connection_strength] || '#9CA3AF'}
                     />
                   </td>
@@ -620,6 +685,73 @@ export default function LPOutreach() {
                 ))}
               </div>
             )}
+
+            {/* Apollo Contacts */}
+            <div className="detail-section">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#6366F1' }}>⚡</span> Apollo Contacts
+                {apolloContacts.length > 0 && (
+                  <span style={{ fontSize: 11, background: '#6366F1', color: 'white', padding: '2px 8px', borderRadius: 10 }}>
+                    {apolloContacts.length}
+                  </span>
+                )}
+              </h3>
+              {apolloLoading ? (
+                <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Loading Apollo data...</div>
+              ) : apolloContacts.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {apolloContacts
+                    .sort((a, b) => (SENIORITY_ORDER[a.seniority] ?? 99) - (SENIORITY_ORDER[b.seniority] ?? 99))
+                    .map((contact, i) => (
+                    <div key={i} style={{
+                      padding: 12, background: 'var(--card-bg)', borderRadius: 8,
+                      borderLeft: `3px solid ${SENIORITY_COLORS[contact.seniority] || '#6B7280'}`,
+                      fontSize: 12
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 13 }}>
+                            {contact.first_name} {contact.last_name}
+                          </div>
+                          <div style={{ color: 'var(--muted)', marginTop: 2 }}>{contact.title}</div>
+                          <div style={{ color: 'var(--muted)', marginTop: 2 }}>{contact.company_name}</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                          {contact.seniority && (
+                            <span style={{
+                              background: SENIORITY_COLORS[contact.seniority] || '#6B7280',
+                              color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600
+                            }}>
+                              {SENIORITY_LABELS[contact.seniority] || contact.seniority}
+                            </span>
+                          )}
+                          {contact.email && (
+                            <span style={{ fontSize: 11, color: '#059669' }}>✓ Has email</span>
+                          )}
+                        </div>
+                      </div>
+                      {(contact.city || contact.state || contact.country) && (
+                        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
+                          📍 {[contact.city, contact.state, contact.country].filter(Boolean).join(', ')}
+                        </div>
+                      )}
+                      {contact.linkedin_url && (
+                        <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: 11, color: '#0077B5', marginTop: 4, display: 'inline-block' }}>
+                          View LinkedIn →
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13, background: 'var(--card-bg)', borderRadius: 8 }}>
+                  No Apollo contacts found yet for this company.
+                  <br />
+                  <span style={{ fontSize: 11 }}>Apollo enrichment is being processed progressively.</span>
+                </div>
+              )}
+            </div>
 
             {/* Activity Log */}
             {detail.activity && detail.activity.length > 0 && (
