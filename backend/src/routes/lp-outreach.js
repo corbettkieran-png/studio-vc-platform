@@ -1363,6 +1363,175 @@ router.delete('/apollo/contacts/:contactId/know', authenticate, async (req, res)
 });
 
 // ============================================================
+// APOLLO DEEP ENRICHMENT (People Match - gets LinkedIn URLs, emails)
+// ============================================================
+
+// POST /api/lp/apollo/contacts/:contactId/enrich - Deep enrich a single Apollo contact
+router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res) => {
+  try {
+    const apolloApiKey = process.env.APOLLO_API_KEY;
+    if (!apolloApiKey) {
+      return res.status(500).json({ error: 'APOLLO_API_KEY environment variable not set' });
+    }
+
+    const { contactId } = req.params;
+    const { rows: [contact] } = await db.query(
+      'SELECT * FROM apollo_company_contacts WHERE id = $1',
+      [contactId]
+    );
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+
+    // Call Apollo People Match API
+    const apolloRes = await fetch('https://api.apollo.io/api/v1/people/match', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'X-Api-Key': apolloApiKey,
+      },
+      body: JSON.stringify({
+        first_name: contact.first_name,
+        last_name: contact.last_name,
+        organization_name: contact.company_name,
+        ...(contact.apollo_person_id && contact.apollo_person_id.length > 10 ? { id: contact.apollo_person_id } : {}),
+      }),
+    });
+
+    if (!apolloRes.ok) {
+      const errText = await apolloRes.text();
+      console.error('Apollo People Match error:', apolloRes.status, errText);
+      return res.status(502).json({ error: 'Apollo API error', status: apolloRes.status });
+    }
+
+    const apolloData = await apolloRes.json();
+    const person = apolloData.person;
+
+    if (!person) {
+      return res.status(404).json({ error: 'No match found in Apollo' });
+    }
+
+    // Update the contact with enriched data
+    const updates = {
+      linkedin_url: person.linkedin_url || contact.linkedin_url,
+      email: person.email || contact.email,
+      title: person.title || contact.title,
+      city: person.city || contact.city,
+      state: person.state || contact.state,
+      country: person.country || contact.country,
+      enriched: true,
+    };
+
+    await db.query(
+      `UPDATE apollo_company_contacts SET
+        linkedin_url = $1, email = $2, title = $3,
+        city = $4, state = $5, country = $6, enriched = true
+       WHERE id = $7`,
+      [updates.linkedin_url, updates.email, updates.title,
+       updates.city, updates.state, updates.country, contactId]
+    );
+
+    // Return enriched contact
+    const { rows: [updated] } = await db.query(
+      'SELECT * FROM apollo_company_contacts WHERE id = $1',
+      [contactId]
+    );
+
+    res.json({
+      contact: updated,
+      apollo_match: {
+        linkedin_url: person.linkedin_url,
+        email: person.email,
+        title: person.title,
+        headline: person.headline,
+        photo_url: person.photo_url,
+        employment_history: (person.employment_history || []).slice(0, 5),
+        organization: person.organization ? {
+          name: person.organization.name,
+          website_url: person.organization.website_url,
+          industry: person.organization.industry,
+        } : null,
+      },
+    });
+  } catch (err) {
+    console.error('Error enriching Apollo contact:', err);
+    res.status(500).json({ error: 'Failed to enrich contact', detail: err.message });
+  }
+});
+
+// POST /api/lp/apollo/contacts/enrich-batch - Enrich multiple contacts for an LP target
+router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res) => {
+  try {
+    const apolloApiKey = process.env.APOLLO_API_KEY;
+    if (!apolloApiKey) {
+      return res.status(500).json({ error: 'APOLLO_API_KEY environment variable not set' });
+    }
+
+    const { lpId } = req.params;
+    const { rows: contacts } = await db.query(
+      'SELECT * FROM apollo_company_contacts WHERE lp_target_id = $1 AND (enriched = false OR enriched IS NULL)',
+      [lpId]
+    );
+
+    if (!contacts.length) {
+      return res.json({ message: 'All contacts already enriched', enriched: 0 });
+    }
+
+    let enriched = 0;
+    let errors = 0;
+
+    for (const contact of contacts.slice(0, 10)) { // Max 10 at a time to be conservative
+      try {
+        const apolloRes = await fetch('https://api.apollo.io/api/v1/people/match', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            'X-Api-Key': apolloApiKey,
+          },
+          body: JSON.stringify({
+            first_name: contact.first_name,
+            last_name: contact.last_name,
+            organization_name: contact.company_name,
+            ...(contact.apollo_person_id && contact.apollo_person_id.length > 10 ? { id: contact.apollo_person_id } : {}),
+          }),
+        });
+
+        if (apolloRes.ok) {
+          const data = await apolloRes.json();
+          if (data.person) {
+            await db.query(
+              `UPDATE apollo_company_contacts SET
+                linkedin_url = COALESCE($1, linkedin_url),
+                email = COALESCE($2, email),
+                title = COALESCE($3, title),
+                city = COALESCE($4, city),
+                state = COALESCE($5, state),
+                country = COALESCE($6, country),
+                enriched = true
+               WHERE id = $7`,
+              [
+                data.person.linkedin_url, data.person.email, data.person.title,
+                data.person.city, data.person.state, data.person.country, contact.id,
+              ]
+            );
+            enriched++;
+          }
+        }
+      } catch (e) {
+        errors++;
+      }
+      // Small delay to avoid rate limiting
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    res.json({ enriched, errors, total: contacts.length });
+  } catch (err) {
+    console.error('Error batch enriching contacts:', err);
+    res.status(500).json({ error: 'Failed to batch enrich contacts' });
+  }
+});
+
+// ============================================================
 // LINKEDIN ENRICHMENT (via People Data Labs)
 // ============================================================
 

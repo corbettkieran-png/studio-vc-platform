@@ -3,7 +3,8 @@ import {
   getLPTeam, addLPTeamMember, removeLPTeamMember, uploadLinkedInCSV,
   importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
   runLPMatching, getLPStats, getApolloStatus, getApolloContacts,
-  flagKnownContact, unflagKnownContact, enrichLPTarget
+  flagKnownContact, unflagKnownContact, enrichLPTarget,
+  enrichApolloContact, enrichApolloContactsBatch
 } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -888,6 +889,24 @@ export default function LPOutreach() {
                   </span>
                 )}
               </h3>
+              {apolloContacts.length > 0 && apolloContacts.some(c => !c.enriched) && (
+                <button
+                  className="btn btn-sm"
+                  style={{ marginBottom: 10, background: '#6366F1', color: 'white', border: 'none', fontSize: 11 }}
+                  onClick={async () => {
+                    try {
+                      const res = await enrichApolloContactsBatch(selectedTarget);
+                      alert(`Enriched ${res.enriched} contacts${res.errors ? ` (${res.errors} errors)` : ''}`);
+                      const apolloData = await getApolloContacts(selectedTarget);
+                      setApolloContacts(apolloData.contacts || []);
+                    } catch (err) {
+                      alert('Batch enrich failed: ' + err.message);
+                    }
+                  }}
+                >
+                  Enrich All Contacts (LinkedIn + Email)
+                </button>
+              )}
               {apolloLoading ? (
                 <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Loading Apollo data...</div>
               ) : apolloContacts.length > 0 ? (
@@ -927,12 +946,35 @@ export default function LPOutreach() {
                           📍 {[contact.city, contact.state, contact.country].filter(Boolean).join(', ')}
                         </div>
                       )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                         {contact.linkedin_url && (
                           <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer"
                             style={{ fontSize: 11, color: '#0077B5' }}>
                             View LinkedIn →
                           </a>
+                        )}
+                        {contact.enriched && (
+                          <span style={{ fontSize: 10, color: '#059669', background: '#ECFDF5', padding: '2px 6px', borderRadius: 3 }}>Enriched</span>
+                        )}
+                        {!contact.enriched && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await enrichApolloContact(contact.id);
+                                const apolloData = await getApolloContacts(selectedTarget);
+                                setApolloContacts(apolloData.contacts || []);
+                              } catch (err) {
+                                alert('Enrich failed: ' + err.message);
+                              }
+                            }}
+                            style={{
+                              padding: '2px 8px', borderRadius: 3, fontSize: 10, cursor: 'pointer',
+                              border: '1px solid #6366F1', background: 'transparent', color: '#6366F1', fontWeight: 600
+                            }}
+                          >
+                            Enrich
+                          </button>
                         )}
                         <button
                           onClick={async (e) => {
