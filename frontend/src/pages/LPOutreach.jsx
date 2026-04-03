@@ -346,7 +346,7 @@ export default function LPOutreach() {
               {targets.map((t) => (
                 <tr key={t.id} onClick={() => setSelectedTarget(t.id)} style={{ cursor: 'pointer' }}>
                   <td>
-                    <div style={{ fontWeight: 500 }}>{t.name}</div>
+                    <div style={{ fontWeight: 500 }}>{t.full_name || t.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{t.company}</div>
                   </td>
                   <td>
@@ -560,7 +560,7 @@ export default function LPOutreach() {
         <div className="detail-panel open" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
           <div className="detail-header">
             <div>
-              <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{detail.name}</h2>
+              <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{detail.full_name || detail.name}</h2>
               <p style={{ fontSize: 13, color: 'var(--muted)' }}>{detail.company}</p>
             </div>
             <button onClick={() => setSelectedTarget(null)} style={{
