@@ -1776,3 +1776,4 @@ router.get('/companies', authenticate, async (req, res) => {
 });
 
 module.exports = router;
+// RocketReach GET fix deployed
