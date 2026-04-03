@@ -1381,9 +1381,21 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
     );
     if (!contact) return res.status(404).json({ error: 'Contact not found' });
 
+    // Build name from full_name or first+last (handle null last_name from Apollo free tier)
+    const contactName = contact.full_name && contact.full_name !== contact.first_name
+      ? contact.full_name
+      : [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+
+    if (!contactName || contactName.trim().split(' ').length < 2) {
+      return res.status(400).json({
+        error: 'Insufficient name data for enrichment — need first and last name',
+        contact_name: contactName,
+      });
+    }
+
     // Call RocketReach Person Lookup API (GET with query params)
     const rrParams = new URLSearchParams({
-      name: `${contact.first_name} ${contact.last_name}`,
+      name: contactName,
       current_employer: contact.company_name,
     });
     const rrRes = await fetch(`https://api.rocketreach.co/api/v2/person/lookup?${rrParams}`, {
@@ -1392,6 +1404,10 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
         'Api-Key': rrApiKey,
       },
     });
+
+    if (rrRes.status === 404) {
+      return res.status(404).json({ error: 'No match found in RocketReach', contact_name: contactName });
+    }
 
     if (!rrRes.ok) {
       const errText = await rrRes.text();
@@ -1480,10 +1496,22 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
     let enriched = 0;
     let errors = 0;
 
+    let skipped = 0;
+
     for (const contact of contacts.slice(0, 10)) { // Max 10 at a time to conserve credits
       try {
+        // Build name from full_name or first+last (handle null last_name from Apollo free tier)
+        const contactName = contact.full_name && contact.full_name !== contact.first_name
+          ? contact.full_name
+          : [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+
+        if (!contactName || contactName.trim().split(' ').length < 2) {
+          skipped++;
+          continue; // Skip contacts without full names
+        }
+
         const rrParams = new URLSearchParams({
-          name: `${contact.first_name} ${contact.last_name}`,
+          name: contactName,
           current_employer: contact.company_name,
         });
         const rrRes = await fetch(`https://api.rocketreach.co/api/v2/person/lookup?${rrParams}`, {
@@ -1534,7 +1562,7 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
       await new Promise(r => setTimeout(r, 300));
     }
 
-    res.json({ enriched, errors, total: contacts.length, source: 'rocketreach' });
+    res.json({ enriched, errors, skipped, total: contacts.length, source: 'rocketreach' });
   } catch (err) {
     console.error('Error batch enriching contacts:', err);
     res.status(500).json({ error: 'Failed to batch enrich contacts' });
