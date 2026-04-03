@@ -869,10 +869,17 @@ router.get('/targets/:id', authenticate, async (req, res) => {
       warmIntroPaths.sort((a, b) => b.known_contacts.length - a.known_contacts.length);
     }
 
+    // ── LinkedIn Enrichment (from People Data Labs) ──
+    const { rows: enrichmentRows } = await db.query(
+      'SELECT * FROM linkedin_enrichments WHERE lp_target_id = $1 ORDER BY enriched_at DESC LIMIT 1',
+      [id]
+    );
+
     res.json({
       lp_target: lp,
       connectors,
       warm_intro_paths: warmIntroPaths,
+      linkedin_enrichment: enrichmentRows[0] || null,
       activity_log: activity,
     });
   } catch (err) {
@@ -1352,6 +1359,223 @@ router.delete('/apollo/contacts/:contactId/know', authenticate, async (req, res)
   } catch (err) {
     console.error('Error removing known contact:', err);
     res.status(500).json({ error: 'Failed to remove contact flag' });
+  }
+});
+
+// ============================================================
+// LINKEDIN ENRICHMENT (via People Data Labs)
+// ============================================================
+
+// Helper: Initialize PDL client (lazy, so it doesn't crash if no key set)
+let pdlClient = null;
+function getPDLClient() {
+  if (!pdlClient) {
+    if (!process.env.PDL_API_KEY) {
+      throw new Error('PDL_API_KEY environment variable not set');
+    }
+    const PDLJS = require('peopledatalabs');
+    pdlClient = new PDLJS({ apiKey: process.env.PDL_API_KEY });
+  }
+  return pdlClient;
+}
+
+// Helper: Map PDL response to our enrichment fields
+function mapPDLResponse(data) {
+  return {
+    pdl_id: data.id || null,
+    full_name: data.full_name || null,
+    headline: data.headline || null,
+    summary: data.summary || null,
+    location: data.location_name || null,
+    industry: data.industry || null,
+    current_title: data.job_title || null,
+    current_company: data.job_company_name || null,
+    current_company_industry: data.job_company_industry || null,
+    job_history: (data.experience || []).map(exp => ({
+      title: exp.title?.name || exp.title || null,
+      company: exp.company?.name || exp.company || null,
+      start_date: exp.start_date || null,
+      end_date: exp.end_date || null,
+      is_primary: exp.is_primary || false,
+      summary: exp.summary || null,
+    })),
+    education: (data.education || []).map(edu => ({
+      school: edu.school?.name || edu.school || null,
+      degree: edu.degrees?.join(', ') || edu.degree || null,
+      field_of_study: edu.majors?.join(', ') || edu.field_of_study || null,
+      start_date: edu.start_date || null,
+      end_date: edu.end_date || null,
+    })),
+    skills: data.skills || [],
+    twitter_url: data.twitter_url || null,
+    github_url: data.github_url || null,
+    facebook_url: data.facebook_url || null,
+  };
+}
+
+// POST /api/lp/linkedin/enrich - Enrich a person by LinkedIn URL
+// Body: { linkedin_url, lp_target_id?, apollo_contact_id? }
+router.post('/linkedin/enrich', authenticate, async (req, res) => {
+  try {
+    const { linkedin_url, lp_target_id, apollo_contact_id } = req.body;
+    if (!linkedin_url) {
+      return res.status(400).json({ error: 'linkedin_url is required' });
+    }
+
+    // Check if we already have enrichment for this URL
+    const { rows: existing } = await db.query(
+      'SELECT * FROM linkedin_enrichments WHERE linkedin_url = $1',
+      [linkedin_url]
+    );
+    if (existing.length > 0) {
+      // Update foreign keys if needed
+      if (lp_target_id && !existing[0].lp_target_id) {
+        await db.query('UPDATE linkedin_enrichments SET lp_target_id = $1 WHERE id = $2', [lp_target_id, existing[0].id]);
+        existing[0].lp_target_id = lp_target_id;
+      }
+      if (apollo_contact_id && !existing[0].apollo_contact_id) {
+        await db.query('UPDATE linkedin_enrichments SET apollo_contact_id = $1 WHERE id = $2', [apollo_contact_id, existing[0].id]);
+        existing[0].apollo_contact_id = apollo_contact_id;
+      }
+      return res.json({ enrichment: existing[0], cached: true });
+    }
+
+    // Call People Data Labs
+    const pdl = getPDLClient();
+    let pdlResponse;
+    try {
+      pdlResponse = await pdl.person.enrichment({ profile: [linkedin_url] });
+    } catch (pdlErr) {
+      if (pdlErr.status === 404) {
+        return res.status(404).json({ error: 'No matching profile found in People Data Labs' });
+      }
+      console.error('PDL API error:', pdlErr.message || pdlErr);
+      return res.status(502).json({ error: 'People Data Labs API error', detail: pdlErr.message });
+    }
+
+    const mapped = mapPDLResponse(pdlResponse.data || pdlResponse);
+    const id = uuid();
+
+    await db.query(
+      `INSERT INTO linkedin_enrichments
+        (id, lp_target_id, apollo_contact_id, linkedin_url,
+         pdl_id, full_name, headline, summary, location, industry,
+         current_title, current_company, current_company_industry,
+         job_history, education, skills,
+         twitter_url, github_url, facebook_url, pdl_likelihood)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       RETURNING *`,
+      [
+        id, lp_target_id || null, apollo_contact_id || null, linkedin_url,
+        mapped.pdl_id, mapped.full_name, mapped.headline, mapped.summary,
+        mapped.location, mapped.industry,
+        mapped.current_title, mapped.current_company, mapped.current_company_industry,
+        JSON.stringify(mapped.job_history), JSON.stringify(mapped.education),
+        mapped.skills.length > 0 ? mapped.skills : null,
+        mapped.twitter_url, mapped.github_url, mapped.facebook_url,
+        pdlResponse.likelihood || null,
+      ]
+    );
+
+    const { rows: [enrichment] } = await db.query(
+      'SELECT * FROM linkedin_enrichments WHERE id = $1', [id]
+    );
+
+    res.json({ enrichment, cached: false });
+  } catch (err) {
+    console.error('Error enriching LinkedIn profile:', err);
+    res.status(500).json({ error: 'Failed to enrich LinkedIn profile', detail: err.message });
+  }
+});
+
+// GET /api/lp/linkedin/enrichment/:targetId - Get enrichment for an LP target
+router.get('/linkedin/enrichment/:targetId', authenticate, async (req, res) => {
+  try {
+    const { targetId } = req.params;
+    const { rows } = await db.query(
+      'SELECT * FROM linkedin_enrichments WHERE lp_target_id = $1 ORDER BY enriched_at DESC LIMIT 1',
+      [targetId]
+    );
+    if (!rows.length) {
+      return res.json({ enrichment: null });
+    }
+    res.json({ enrichment: rows[0] });
+  } catch (err) {
+    console.error('Error fetching enrichment:', err);
+    res.status(500).json({ error: 'Failed to fetch enrichment' });
+  }
+});
+
+// POST /api/lp/linkedin/enrich-target/:targetId - Enrich an LP target using their stored LinkedIn URL
+router.post('/linkedin/enrich-target/:targetId', authenticate, async (req, res) => {
+  try {
+    const { targetId } = req.params;
+    const { rows: [target] } = await db.query(
+      'SELECT id, full_name, linkedin_url FROM lp_targets WHERE id = $1',
+      [targetId]
+    );
+    if (!target) return res.status(404).json({ error: 'LP target not found' });
+    if (!target.linkedin_url) return res.status(400).json({ error: 'LP target has no LinkedIn URL' });
+
+    // Delegate to the main enrichment endpoint logic
+    req.body = { linkedin_url: target.linkedin_url, lp_target_id: targetId };
+
+    // Check cache first
+    const { rows: existing } = await db.query(
+      'SELECT * FROM linkedin_enrichments WHERE linkedin_url = $1',
+      [target.linkedin_url]
+    );
+    if (existing.length > 0) {
+      if (!existing[0].lp_target_id) {
+        await db.query('UPDATE linkedin_enrichments SET lp_target_id = $1 WHERE id = $2', [targetId, existing[0].id]);
+        existing[0].lp_target_id = targetId;
+      }
+      return res.json({ enrichment: existing[0], cached: true });
+    }
+
+    // Call PDL
+    const pdl = getPDLClient();
+    let pdlResponse;
+    try {
+      pdlResponse = await pdl.person.enrichment({ profile: [target.linkedin_url] });
+    } catch (pdlErr) {
+      if (pdlErr.status === 404) {
+        return res.status(404).json({ error: `No PDL match for ${target.full_name}` });
+      }
+      return res.status(502).json({ error: 'PDL API error', detail: pdlErr.message });
+    }
+
+    const mapped = mapPDLResponse(pdlResponse.data || pdlResponse);
+    const id = uuid();
+
+    await db.query(
+      `INSERT INTO linkedin_enrichments
+        (id, lp_target_id, linkedin_url,
+         pdl_id, full_name, headline, summary, location, industry,
+         current_title, current_company, current_company_industry,
+         job_history, education, skills,
+         twitter_url, github_url, facebook_url, pdl_likelihood)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       RETURNING *`,
+      [
+        id, targetId, target.linkedin_url,
+        mapped.pdl_id, mapped.full_name, mapped.headline, mapped.summary,
+        mapped.location, mapped.industry,
+        mapped.current_title, mapped.current_company, mapped.current_company_industry,
+        JSON.stringify(mapped.job_history), JSON.stringify(mapped.education),
+        mapped.skills.length > 0 ? mapped.skills : null,
+        mapped.twitter_url, mapped.github_url, mapped.facebook_url,
+        pdlResponse.likelihood || null,
+      ]
+    );
+
+    const { rows: [enrichment] } = await db.query(
+      'SELECT * FROM linkedin_enrichments WHERE id = $1', [id]
+    );
+    res.json({ enrichment, cached: false });
+  } catch (err) {
+    console.error('Error enriching LP target:', err);
+    res.status(500).json({ error: 'Failed to enrich LP target', detail: err.message });
   }
 });
 

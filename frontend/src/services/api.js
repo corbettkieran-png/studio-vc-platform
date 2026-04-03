@@ -107,3 +107,11 @@ export const flagKnownContact = (contactId, note) =>
   request(`/lp/apollo/contacts/${contactId}/know`, { method: 'POST', body: JSON.stringify({ relationship_note: note }) });
 export const unflagKnownContact = (contactId) =>
   request(`/lp/apollo/contacts/${contactId}/know`, { method: 'DELETE' });
+
+// LinkedIn Enrichment (People Data Labs)
+export const enrichLPTarget = (targetId) =>
+  request(`/lp/linkedin/enrich-target/${targetId}`, { method: 'POST' });
+export const enrichLinkedInProfile = (linkedin_url, lp_target_id, apollo_contact_id) =>
+  request('/lp/linkedin/enrich', { method: 'POST', body: JSON.stringify({ linkedin_url, lp_target_id, apollo_contact_id }) });
+export const getLinkedInEnrichment = (targetId) =>
+  request(`/lp/linkedin/enrichment/${targetId}`);

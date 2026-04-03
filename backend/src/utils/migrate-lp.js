@@ -148,7 +148,43 @@ CREATE TABLE IF NOT EXISTS known_contacts (
   UNIQUE(apollo_contact_id, team_member_id)
 );
 
+-- LinkedIn enrichment via People Data Labs
+CREATE TABLE IF NOT EXISTS linkedin_enrichments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- Can enrich either an LP target or an Apollo contact
+  lp_target_id UUID REFERENCES lp_targets(id) ON DELETE CASCADE,
+  apollo_contact_id UUID REFERENCES apollo_company_contacts(id) ON DELETE CASCADE,
+  linkedin_url TEXT NOT NULL,
+  -- Profile basics
+  pdl_id TEXT,
+  full_name TEXT,
+  headline TEXT,
+  summary TEXT,
+  location TEXT,
+  industry TEXT,
+  -- Current role
+  current_title TEXT,
+  current_company TEXT,
+  current_company_industry TEXT,
+  -- Career history (JSONB array)
+  job_history JSONB DEFAULT '[]',
+  -- Education (JSONB array)
+  education JSONB DEFAULT '[]',
+  -- Skills (text array)
+  skills TEXT[],
+  -- Social profiles
+  twitter_url TEXT,
+  github_url TEXT,
+  facebook_url TEXT,
+  -- Metadata
+  pdl_likelihood INT,
+  enriched_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(linkedin_url)
+);
+
 -- Indexes
+CREATE INDEX IF NOT EXISTS idx_linkedin_enrichments_lp ON linkedin_enrichments(lp_target_id);
+CREATE INDEX IF NOT EXISTS idx_linkedin_enrichments_apollo ON linkedin_enrichments(apollo_contact_id);
 CREATE INDEX IF NOT EXISTS idx_known_contacts_apollo ON known_contacts(apollo_contact_id);
 CREATE INDEX IF NOT EXISTS idx_known_contacts_team ON known_contacts(team_member_id);
 CREATE INDEX IF NOT EXISTS idx_apollo_contacts_lp ON apollo_company_contacts(lp_target_id);

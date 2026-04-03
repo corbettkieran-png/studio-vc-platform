@@ -3,7 +3,7 @@ import {
   getLPTeam, addLPTeamMember, removeLPTeamMember, uploadLinkedInCSV,
   importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
   runLPMatching, getLPStats, getApolloStatus, getApolloContacts,
-  flagKnownContact, unflagKnownContact
+  flagKnownContact, unflagKnownContact, enrichLPTarget
 } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -189,7 +189,7 @@ export default function LPOutreach() {
     const loadDetail = async () => {
       try {
         const data = await getLPTarget(selectedTarget);
-        setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], activity: data.activity_log });
+        setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log });
         // Load Apollo contacts for this LP
         setApolloLoading(true);
         try {
@@ -634,6 +634,130 @@ export default function LPOutreach() {
               )}
             </div>
 
+            {/* LinkedIn Enrichment */}
+            <div className="detail-section">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#0077B5' }}>in</span> LinkedIn Profile
+                {detail.linkedin_enrichment && (
+                  <span style={{ fontSize: 10, background: '#059669', color: 'white', padding: '2px 6px', borderRadius: 10 }}>Enriched</span>
+                )}
+              </h3>
+              {detail.linkedin_enrichment ? (() => {
+                const enr = detail.linkedin_enrichment;
+                return (
+                  <div style={{ fontSize: 12 }}>
+                    {/* Headline / Summary */}
+                    {enr.headline && (
+                      <div style={{ fontWeight: 500, marginBottom: 6, color: 'var(--text)' }}>{enr.headline}</div>
+                    )}
+                    {enr.summary && (
+                      <div style={{ color: 'var(--muted)', marginBottom: 10, fontSize: 11, lineHeight: 1.5 }}>
+                        {enr.summary.length > 200 ? enr.summary.slice(0, 200) + '...' : enr.summary}
+                      </div>
+                    )}
+                    {/* Location / Industry */}
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+                      {enr.location && (
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>📍 {enr.location}</span>
+                      )}
+                      {enr.industry && (
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>🏢 {enr.industry}</span>
+                      )}
+                    </div>
+                    {/* Job History */}
+                    {enr.job_history && enr.job_history.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                          Career History
+                        </div>
+                        {enr.job_history.slice(0, 5).map((job, ji) => (
+                          <div key={ji} style={{
+                            padding: '6px 10px', background: ji === 0 ? '#EFF6FF' : 'var(--card-bg)',
+                            borderRadius: 4, marginBottom: 4, borderLeft: ji === 0 ? '3px solid #3B82F6' : '3px solid transparent'
+                          }}>
+                            <div style={{ fontWeight: 500 }}>{job.title || 'Unknown Role'}</div>
+                            <div style={{ color: 'var(--muted)', fontSize: 11 }}>
+                              {job.company || 'Unknown Company'}
+                              {job.start_date && <span> · {job.start_date}{job.end_date ? ` – ${job.end_date}` : ' – Present'}</span>}
+                            </div>
+                          </div>
+                        ))}
+                        {enr.job_history.length > 5 && (
+                          <div style={{ fontSize: 11, color: 'var(--muted)', paddingLeft: 10 }}>
+                            +{enr.job_history.length - 5} more roles
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* Education */}
+                    {enr.education && enr.education.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                          Education
+                        </div>
+                        {enr.education.map((edu, ei) => (
+                          <div key={ei} style={{ padding: '4px 10px', fontSize: 12, marginBottom: 2 }}>
+                            <span style={{ fontWeight: 500 }}>{edu.school || 'Unknown'}</span>
+                            {edu.degree && <span style={{ color: 'var(--muted)' }}> — {edu.degree}</span>}
+                            {edu.field_of_study && <span style={{ color: 'var(--muted)' }}> ({edu.field_of_study})</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Skills */}
+                    {enr.skills && enr.skills.length > 0 && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                          Skills
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {enr.skills.slice(0, 12).map((skill, si) => (
+                            <span key={si} style={{
+                              background: '#F3F4F6', color: '#374151', padding: '2px 8px',
+                              borderRadius: 3, fontSize: 10
+                            }}>{skill}</span>
+                          ))}
+                          {enr.skills.length > 12 && (
+                            <span style={{ fontSize: 10, color: 'var(--muted)', padding: '2px 4px' }}>+{enr.skills.length - 12} more</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>
+                      Enriched {enr.enriched_at ? timeAgo(enr.enriched_at) : 'recently'} via People Data Labs
+                      {enr.pdl_likelihood && <span> · Confidence: {enr.pdl_likelihood}/10</span>}
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  {detail.linkedin_url ? (
+                    <div>
+                      <div style={{ marginBottom: 8 }}>
+                        <a href={detail.linkedin_url} target="_blank" rel="noopener noreferrer"
+                          style={{ color: '#0077B5', fontSize: 12 }}>View LinkedIn Profile →</a>
+                      </div>
+                      <button className="btn btn-sm btn-secondary"
+                        style={{ background: '#0077B5', color: 'white', border: 'none' }}
+                        onClick={async () => {
+                          try {
+                            const res = await enrichLPTarget(detail.id);
+                            const updated = await getLPTarget(detail.id);
+                            setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log });
+                          } catch (err) {
+                            alert('Enrichment failed: ' + err.message);
+                          }
+                        }}>
+                        Enrich from LinkedIn
+                      </button>
+                    </div>
+                  ) : (
+                    <span>No LinkedIn URL available for this LP target.</span>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Outreach Status */}
             <div className="detail-section">
               <h3>Outreach Status</h3>
@@ -649,7 +773,7 @@ export default function LPOutreach() {
                       try {
                         await updateLPTarget(detail.id, { outreach_status: key });
                         const updated = await getLPTarget(detail.id);
-                        setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], activity: updated.activity_log });
+                        setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log });
                         loadTargets();
                       } catch (err) {
                         alert(err.message);
@@ -824,7 +948,7 @@ export default function LPOutreach() {
                               setApolloContacts(apolloData.contacts || []);
                               // Reload detail for warm intro paths
                               const data = await getLPTarget(selectedTarget);
-                              setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], activity: data.activity_log });
+                              setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log });
                             } catch (err) { console.error('Flag error:', err); }
                           }}
                           style={{
@@ -901,7 +1025,7 @@ export default function LPOutreach() {
                     setActivityAction('email_sent');
                     setActivityDetails('');
                     const updated = await getLPTarget(detail.id);
-                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], activity: updated.activity_log });
+                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log });
                   } catch (err) {
                     alert(err.message);
                   }
@@ -931,7 +1055,7 @@ export default function LPOutreach() {
                     await updateLPTarget(detail.id, { notes: (detail.notes || '') + '\n' + noteText });
                     setNoteText('');
                     const updated = await getLPTarget(detail.id);
-                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], activity: updated.activity_log });
+                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log });
                   } catch (err) {
                     alert(err.message);
                   }
