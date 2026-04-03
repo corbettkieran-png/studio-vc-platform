@@ -1381,15 +1381,24 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
     );
     if (!contact) return res.status(404).json({ error: 'Contact not found' });
 
-    // Build name from full_name or first+last (handle null last_name from Apollo free tier)
-    const contactName = contact.full_name && contact.full_name !== contact.first_name
-      ? contact.full_name
-      : [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+    // Accept optional overrides from request body (e.g. linkedin_url found via search)
+    const { linkedin_url: bodyLinkedin, override_name: bodyName } = req.body || {};
 
-    // Build RocketReach query params — use title to help match when only first name available
-    const rrParams = new URLSearchParams({ current_employer: contact.company_name });
-    if (contactName) rrParams.set('name', contactName);
-    if (contact.title) rrParams.set('current_title', contact.title);
+    // Build name from body override, full_name, or first+last
+    const contactName = bodyName
+      || (contact.full_name && contact.full_name !== contact.first_name ? contact.full_name : null)
+      || [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+
+    // Build RocketReach query — prioritize LinkedIn URL for most reliable match
+    const linkedinUrl = bodyLinkedin || contact.linkedin_url;
+    const rrParams = new URLSearchParams();
+    if (linkedinUrl) {
+      rrParams.set('linkedin_url', linkedinUrl);
+    } else {
+      rrParams.set('current_employer', contact.company_name);
+      if (contactName) rrParams.set('name', contactName);
+      if (contact.title) rrParams.set('current_title', contact.title);
+    }
 
     const rrRes = await fetch(`https://api.rocketreach.co/api/v2/person/lookup?${rrParams}`, {
       method: 'GET',
@@ -1399,7 +1408,7 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
     });
 
     if (rrRes.status === 404) {
-      return res.status(404).json({ error: 'No match found in RocketReach', contact_name: contactName });
+      return res.status(404).json({ error: 'No match found in RocketReach', contact_name: contactName, linkedin_url: linkedinUrl || null });
     }
 
     if (!rrRes.ok) {
@@ -1422,7 +1431,14 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
         return (gradeOrder[a.grade] || 5) - (gradeOrder[b.grade] || 5);
       })[0];
 
-    // Update the contact with enriched data
+    // Resolve full name from RocketReach response
+    const rrFirstName = person.first_name || null;
+    const rrLastName = person.last_name || null;
+    const rrFullName = (rrFirstName && rrLastName)
+      ? `${rrFirstName} ${rrLastName}`
+      : person.name || bodyName || null;
+
+    // Update the contact with enriched data (including resolved name)
     await db.query(
       `UPDATE apollo_company_contacts SET
         linkedin_url = COALESCE($1, linkedin_url),
@@ -1431,8 +1447,10 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
         city = COALESCE($4, city),
         state = COALESCE($5, state),
         country = COALESCE($6, country),
+        last_name = COALESCE($7, last_name),
+        full_name = COALESCE($8, full_name),
         enriched = true
-       WHERE id = $7`,
+       WHERE id = $9`,
       [
         person.linkedin_url || null,
         bestEmail ? bestEmail.email : null,
@@ -1440,6 +1458,8 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
         person.city || null,
         person.state || null,
         person.country || null,
+        rrLastName,
+        rrFullName,
         contactId,
       ]
     );
@@ -1469,6 +1489,7 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
 });
 
 // POST /api/lp/apollo/contacts/enrich-batch - Batch enrich contacts for an LP target via RocketReach
+// Accepts optional body: { contact_overrides: { [contactId]: { linkedin_url, override_name } } }
 router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res) => {
   try {
     const rrApiKey = process.env.ROCKETREACH_API_KEY;
@@ -1477,6 +1498,7 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
     }
 
     const { lpId } = req.params;
+    const { contact_overrides = {} } = req.body || {};
     const { rows: contacts } = await db.query(
       'SELECT * FROM apollo_company_contacts WHERE lp_target_id = $1 AND (enriched = false OR enriched IS NULL)',
       [lpId]
@@ -1488,24 +1510,32 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
 
     let enriched = 0;
     let errors = 0;
-
     let skipped = 0;
 
     for (const contact of contacts.slice(0, 10)) { // Max 10 at a time to conserve credits
       try {
-        // Build name from full_name or first+last (handle null last_name from Apollo free tier)
-        const contactName = contact.full_name && contact.full_name !== contact.first_name
-          ? contact.full_name
-          : [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+        const overrides = contact_overrides[contact.id] || {};
 
-        if (!contactName && !contact.title) {
-          skipped++;
-          continue; // Skip contacts with no name or title to match on
+        // Build name from override, full_name, or first+last
+        const contactName = overrides.override_name
+          || (contact.full_name && contact.full_name !== contact.first_name ? contact.full_name : null)
+          || [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+
+        // Build RocketReach query — prioritize LinkedIn URL for reliable match
+        const linkedinUrl = overrides.linkedin_url || contact.linkedin_url;
+        const rrParams = new URLSearchParams();
+
+        if (linkedinUrl) {
+          rrParams.set('linkedin_url', linkedinUrl);
+        } else {
+          if (!contactName && !contact.title) {
+            skipped++;
+            continue; // Skip contacts with no name, title, or LinkedIn URL
+          }
+          rrParams.set('current_employer', contact.company_name);
+          if (contactName) rrParams.set('name', contactName);
+          if (contact.title) rrParams.set('current_title', contact.title);
         }
-
-        const rrParams = new URLSearchParams({ current_employer: contact.company_name });
-        if (contactName) rrParams.set('name', contactName);
-        if (contact.title) rrParams.set('current_title', contact.title);
 
         const rrRes = await fetch(`https://api.rocketreach.co/api/v2/person/lookup?${rrParams}`, {
           method: 'GET',
@@ -1524,6 +1554,13 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
                 return (gradeOrder[a.grade] || 5) - (gradeOrder[b.grade] || 5);
               })[0];
 
+            // Resolve full name from RocketReach
+            const rrFirstName = person.first_name || null;
+            const rrLastName = person.last_name || null;
+            const rrFullName = (rrFirstName && rrLastName)
+              ? `${rrFirstName} ${rrLastName}`
+              : person.name || overrides.override_name || null;
+
             await db.query(
               `UPDATE apollo_company_contacts SET
                 linkedin_url = COALESCE($1, linkedin_url),
@@ -1532,8 +1569,10 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
                 city = COALESCE($4, city),
                 state = COALESCE($5, state),
                 country = COALESCE($6, country),
+                last_name = COALESCE($7, last_name),
+                full_name = COALESCE($8, full_name),
                 enriched = true
-               WHERE id = $7`,
+               WHERE id = $9`,
               [
                 person.linkedin_url || null,
                 bestEmail ? bestEmail.email : null,
@@ -1541,6 +1580,8 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
                 person.city || null,
                 person.state || null,
                 person.country || null,
+                rrLastName,
+                rrFullName,
                 contact.id,
               ]
             );
