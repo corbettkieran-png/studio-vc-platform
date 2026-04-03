@@ -101,3 +101,9 @@ export const getApolloContacts = (lpId) => request(`/lp/apollo/contacts/${lpId}`
 export const getLPCompanies = () => request('/lp/companies');
 export const storeApolloContacts = (data) =>
   request('/lp/apollo/company-contacts', { method: 'POST', body: JSON.stringify(data) });
+
+// Known contacts (warm intro flags)
+export const flagKnownContact = (contactId, note) =>
+  request(`/lp/apollo/contacts/${contactId}/know`, { method: 'POST', body: JSON.stringify({ relationship_note: note }) });
+export const unflagKnownContact = (contactId) =>
+  request(`/lp/apollo/contacts/${contactId}/know`, { method: 'DELETE' });

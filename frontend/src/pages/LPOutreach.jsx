@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getLPTeam, addLPTeamMember, removeLPTeamMember, uploadLinkedInCSV,
   importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
-  runLPMatching, getLPStats, getApolloStatus, getApolloContacts
+  runLPMatching, getLPStats, getApolloStatus, getApolloContacts,
+  flagKnownContact, unflagKnownContact
 } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -686,69 +687,70 @@ export default function LPOutreach() {
               </div>
             )}
 
-            {/* Warm Intro Paths (Second-Degree Connections) */}
+            {/* Warm Intro Paths (Known Contacts at this Company) */}
             {detail.warm_intro_paths && detail.warm_intro_paths.length > 0 && (
               <div className="detail-section">
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ color: '#F59E0B' }}>🤝</span> Warm Intro Paths
                   <span style={{ fontSize: 11, background: '#F59E0B', color: 'white', padding: '2px 8px', borderRadius: 10 }}>
-                    {detail.warm_intro_paths.reduce((sum, p) => sum + p.connections_at_company.length, 0)} connection{detail.warm_intro_paths.reduce((sum, p) => sum + p.connections_at_company.length, 0) !== 1 ? 's' : ''}
+                    {detail.warm_intro_paths.reduce((sum, p) => sum + p.known_contacts.length, 0)} contact{detail.warm_intro_paths.reduce((sum, p) => sum + p.known_contacts.length, 0) !== 1 ? 's' : ''}
                   </span>
                 </h3>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-                  Your team's LinkedIn connections who work at <strong>{detail.company}</strong> — potential intro paths to this LP.
+                  People your team knows at <strong>{detail.company}</strong> who could make introductions.
                 </div>
                 {detail.warm_intro_paths.map((path, pi) => (
                   <div key={pi} style={{ marginBottom: 16 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                       via {path.team_member_name}
                     </div>
-                    {path.connections_at_company.map((conn, ci) => (
+                    {path.known_contacts.map((kc, ci) => (
                       <div key={ci} style={{
                         padding: 10, background: '#FFFBEB', borderRadius: 6, marginBottom: 6,
                         borderLeft: '3px solid #F59E0B', fontSize: 12
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <div>
-                            <div style={{ fontWeight: 600, color: '#92400E' }}>{conn.full_name}</div>
-                            {conn.position && <div style={{ color: '#78716C', marginTop: 2 }}>{conn.position}</div>}
-                            <div style={{ color: '#A3A3A3', marginTop: 2, fontSize: 11 }}>{conn.company}</div>
+                            <div style={{ fontWeight: 600, color: '#92400E' }}>{kc.full_name}</div>
+                            {kc.title && <div style={{ color: '#78716C', marginTop: 2 }}>{kc.title}</div>}
+                            {kc.seniority && (
+                              <span style={{
+                                display: 'inline-block', marginTop: 4,
+                                background: SENIORITY_COLORS[kc.seniority] || '#6B7280',
+                                color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600
+                              }}>
+                                {SENIORITY_LABELS[kc.seniority] || kc.seniority}
+                              </span>
+                            )}
                           </div>
-                          {conn.email && (
-                            <span style={{ fontSize: 10, color: '#059669', background: '#ECFDF5', padding: '2px 6px', borderRadius: 3 }}>
-                              Has email
-                            </span>
-                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                            {kc.email && (
+                              <span style={{ fontSize: 10, color: '#059669', background: '#ECFDF5', padding: '2px 6px', borderRadius: 3 }}>
+                                Has email
+                              </span>
+                            )}
+                            {kc.linkedin_url && (
+                              <a href={kc.linkedin_url} target="_blank" rel="noopener noreferrer"
+                                style={{ fontSize: 10, color: '#0077B5' }}>LinkedIn →</a>
+                            )}
+                          </div>
                         </div>
+                        {kc.relationship_note && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#92400E', fontStyle: 'italic' }}>
+                            "{kc.relationship_note}"
+                          </div>
+                        )}
                         <div style={{ marginTop: 6, fontSize: 11, color: '#92400E', display: 'flex', alignItems: 'center', gap: 4 }}>
                           <span style={{ opacity: 0.6 }}>{path.team_member_name}</span>
                           <span style={{ opacity: 0.4 }}>→</span>
-                          <span>{conn.full_name}</span>
+                          <span>{kc.full_name}</span>
                           <span style={{ opacity: 0.4 }}>→</span>
-                          <span style={{ fontWeight: 500 }}>{detail.full_name}</span>
+                          <span style={{ fontWeight: 500 }}>{detail.full_name || detail.name}</span>
                         </div>
                       </div>
                     ))}
                   </div>
                 ))}
-                {detail.warm_intro_paths[0]?.apollo_contacts_at_company?.length > 0 && (
-                  <div style={{ background: '#F5F3FF', borderRadius: 6, padding: 10, fontSize: 11, marginTop: 4 }}>
-                    <div style={{ fontWeight: 600, color: '#6366F1', marginBottom: 6 }}>
-                      Senior people at {detail.company} your connections may know:
-                    </div>
-                    {detail.warm_intro_paths[0].apollo_contacts_at_company.slice(0, 5).map((ac, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: i < 4 ? '1px solid #EDE9FE' : 'none' }}>
-                        <span>{ac.first_name} {ac.last_name} — {ac.title}</span>
-                        <span style={{
-                          background: ac.seniority === 'c_suite' ? '#7C3AED' : ac.seniority === 'vp' ? '#8B5CF6' : '#A78BFA',
-                          color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: 10
-                        }}>
-                          {ac.seniority === 'c_suite' ? 'C-Suite' : ac.seniority === 'vp' ? 'VP' : 'Director'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
 
@@ -766,12 +768,12 @@ export default function LPOutreach() {
                 <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Loading Apollo data...</div>
               ) : apolloContacts.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {apolloContacts
-                    .sort((a, b) => (SENIORITY_ORDER[a.seniority] ?? 99) - (SENIORITY_ORDER[b.seniority] ?? 99))
-                    .map((contact, i) => (
-                    <div key={i} style={{
-                      padding: 12, background: 'var(--card-bg)', borderRadius: 8,
-                      borderLeft: `3px solid ${SENIORITY_COLORS[contact.seniority] || '#6B7280'}`,
+                  {apolloContacts.map((contact, i) => {
+                    const isKnown = contact.known_by && contact.known_by.length > 0;
+                    return (
+                    <div key={contact.id || i} style={{
+                      padding: 12, background: isKnown ? '#FFFBEB' : 'var(--card-bg)', borderRadius: 8,
+                      borderLeft: `3px solid ${isKnown ? '#F59E0B' : (SENIORITY_COLORS[contact.seniority] || '#6B7280')}`,
                       fontSize: 12
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -801,14 +803,49 @@ export default function LPOutreach() {
                           📍 {[contact.city, contact.state, contact.country].filter(Boolean).join(', ')}
                         </div>
                       )}
-                      {contact.linkedin_url && (
-                        <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer"
-                          style={{ fontSize: 11, color: '#0077B5', marginTop: 4, display: 'inline-block' }}>
-                          View LinkedIn →
-                        </a>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                        {contact.linkedin_url && (
+                          <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer"
+                            style={{ fontSize: 11, color: '#0077B5' }}>
+                            View LinkedIn →
+                          </a>
+                        )}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              if (isKnown) {
+                                await unflagKnownContact(contact.id);
+                              } else {
+                                await flagKnownContact(contact.id);
+                              }
+                              // Reload Apollo contacts to reflect change
+                              const apolloData = await getApolloContacts(selectedTarget);
+                              setApolloContacts(apolloData.contacts || []);
+                              // Reload detail for warm intro paths
+                              const data = await getLPTarget(selectedTarget);
+                              setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], activity: data.activity_log });
+                            } catch (err) { console.error('Flag error:', err); }
+                          }}
+                          style={{
+                            marginLeft: 'auto',
+                            padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            border: isKnown ? '1px solid #F59E0B' : '1px solid var(--border-light)',
+                            background: isKnown ? '#F59E0B' : 'transparent',
+                            color: isKnown ? 'white' : 'var(--muted)',
+                          }}
+                        >
+                          {isKnown ? '✓ I know them' : 'I know them'}
+                        </button>
+                      </div>
+                      {isKnown && (
+                        <div style={{ marginTop: 6, fontSize: 11, color: '#B45309', fontStyle: 'italic' }}>
+                          Known by: {contact.known_by.map(k => k.team_member_name).join(', ')}
+                        </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13, background: 'var(--card-bg)', borderRadius: 8 }}>

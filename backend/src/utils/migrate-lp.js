@@ -137,7 +137,20 @@ CREATE TABLE IF NOT EXISTS apollo_company_cache (
   UNIQUE(company_name)
 );
 
+-- Known contacts: team members flag Apollo contacts they personally know
+-- This powers warm intro paths without needing LinkedIn CSV imports
+CREATE TABLE IF NOT EXISTS known_contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  apollo_contact_id UUID NOT NULL REFERENCES apollo_company_contacts(id) ON DELETE CASCADE,
+  team_member_id UUID NOT NULL REFERENCES team_members(id) ON DELETE CASCADE,
+  relationship_note TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(apollo_contact_id, team_member_id)
+);
+
 -- Indexes
+CREATE INDEX IF NOT EXISTS idx_known_contacts_apollo ON known_contacts(apollo_contact_id);
+CREATE INDEX IF NOT EXISTS idx_known_contacts_team ON known_contacts(team_member_id);
 CREATE INDEX IF NOT EXISTS idx_apollo_contacts_lp ON apollo_company_contacts(lp_target_id);
 CREATE INDEX IF NOT EXISTS idx_apollo_contacts_company ON apollo_company_contacts(company_name);
 CREATE INDEX IF NOT EXISTS idx_apollo_cache_company ON apollo_company_cache(company_name);

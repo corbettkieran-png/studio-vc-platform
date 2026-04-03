@@ -825,85 +825,48 @@ router.get('/targets/:id', authenticate, async (req, res) => {
       [id]
     );
 
-    // ── Second-degree / Warm Intro Paths ──
-    // Find LinkedIn connections who work at the same company as this LP target.
-    // These people can potentially introduce you to the LP target.
+    // ── Warm Intro Paths (powered by known_contacts + Apollo) ──
+    // Find Apollo contacts at this LP's company that a team member has flagged as "I know them"
     let warmIntroPaths = [];
-    if (lp.company) {
-      const companyNorm = lp.company.toLowerCase().trim();
+    const { rows: knownAtCompany } = await db.query(
+      `SELECT ac.id as contact_id, ac.first_name, ac.last_name, ac.full_name as contact_name,
+              ac.title, ac.seniority, ac.email, ac.linkedin_url,
+              kc.team_member_id, kc.relationship_note, kc.created_at as flagged_at,
+              tm.full_name as team_member_name
+       FROM known_contacts kc
+       JOIN apollo_company_contacts ac ON kc.apollo_contact_id = ac.id
+       JOIN team_members tm ON kc.team_member_id = tm.id
+       WHERE ac.lp_target_id = $1
+       ORDER BY
+         CASE ac.seniority WHEN 'c_suite' THEN 1 WHEN 'vp' THEN 2 WHEN 'director' THEN 3 WHEN 'manager' THEN 4 WHEN 'senior' THEN 5 ELSE 6 END,
+         ac.full_name`,
+      [id]
+    );
 
-      // Get all LinkedIn connections with a company field
-      const { rows: allConns } = await db.query(
-        `SELECT lc.id, lc.first_name, lc.last_name, lc.full_name, lc.email,
-                lc.company, lc.position, lc.team_member_id,
-                tm.full_name as team_member_name
-         FROM linkedin_connections lc
-         JOIN team_members tm ON lc.team_member_id = tm.id
-         WHERE lc.company IS NOT NULL AND lc.company != ''`
-      );
-
-      // Filter using fuzzy company matching (reuse existing function)
-      const matchingConns = allConns.filter(conn => {
-        const score = fuzzyMatchCompany(lp.company, conn.company);
-        return score >= 70;
-      });
-
-      // Also check: does the LinkedIn connection's name match the LP target directly?
-      // If so, they're a direct connection, not a warm intro path — exclude them.
-      const directConnIds = new Set(
-        connectors
-          .filter(c => c.match_type === 'direct_name' || c.match_type === 'direct_email')
-          .map(c => c.linkedin_connection_id)
-          .filter(Boolean)
-      );
-
-      const filteredConns = matchingConns.filter(conn => !directConnIds.has(conn.id));
-
-      // Get Apollo contacts at this company for cross-reference
-      const { rows: apolloAtCompany } = await db.query(
-        `SELECT first_name, last_name, title, seniority
-         FROM apollo_company_contacts
-         WHERE lp_target_id = $1
-         ORDER BY
-           CASE seniority
-             WHEN 'c_suite' THEN 1
-             WHEN 'vp' THEN 2
-             WHEN 'director' THEN 3
-             WHEN 'manager' THEN 4
-             WHEN 'senior' THEN 5
-             ELSE 6
-           END
-         LIMIT 10`,
-        [id]
-      );
-
+    if (knownAtCompany.length > 0) {
       // Group by team member
       const byTeamMember = {};
-      for (const conn of filteredConns) {
-        const tmId = conn.team_member_id;
+      for (const row of knownAtCompany) {
+        const tmId = row.team_member_id;
         if (!byTeamMember[tmId]) {
           byTeamMember[tmId] = {
             team_member_id: tmId,
-            team_member_name: conn.team_member_name,
-            connections_at_company: [],
+            team_member_name: row.team_member_name,
+            known_contacts: [],
           };
         }
-        byTeamMember[tmId].connections_at_company.push({
-          id: conn.id,
-          full_name: conn.full_name || `${conn.first_name || ''} ${conn.last_name || ''}`.trim(),
-          position: conn.position,
-          company: conn.company,
-          email: conn.email,
+        byTeamMember[tmId].known_contacts.push({
+          id: row.contact_id,
+          full_name: row.contact_name || `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+          title: row.title,
+          seniority: row.seniority,
+          email: row.email,
+          linkedin_url: row.linkedin_url,
+          relationship_note: row.relationship_note,
         });
       }
-
-      warmIntroPaths = Object.values(byTeamMember).map(path => ({
-        ...path,
-        apollo_contacts_at_company: apolloAtCompany,
-      }));
-
-      // Sort: most connections at company first
-      warmIntroPaths.sort((a, b) => b.connections_at_company.length - a.connections_at_company.length);
+      warmIntroPaths = Object.values(byTeamMember);
+      warmIntroPaths.sort((a, b) => b.known_contacts.length - a.known_contacts.length);
     }
 
     res.json({
@@ -1274,7 +1237,25 @@ router.get('/apollo/contacts/:lpId', authenticate, async (req, res) => {
   try {
     const { lpId } = req.params;
     const { rows: contacts } = await db.query(
-      `SELECT * FROM apollo_company_contacts WHERE lp_target_id = $1 ORDER BY seniority DESC, full_name`,
+      `SELECT ac.*,
+              COALESCE(
+                (SELECT json_agg(json_build_object(
+                  'team_member_id', kc.team_member_id,
+                  'team_member_name', tm.full_name,
+                  'relationship_note', kc.relationship_note,
+                  'flagged_at', kc.created_at
+                ))
+                FROM known_contacts kc
+                JOIN team_members tm ON kc.team_member_id = tm.id
+                WHERE kc.apollo_contact_id = ac.id),
+                '[]'::json
+              ) as known_by
+       FROM apollo_company_contacts ac
+       WHERE ac.lp_target_id = $1
+       ORDER BY
+         CASE WHEN EXISTS (SELECT 1 FROM known_contacts kc WHERE kc.apollo_contact_id = ac.id) THEN 0 ELSE 1 END,
+         CASE ac.seniority WHEN 'c_suite' THEN 1 WHEN 'vp' THEN 2 WHEN 'director' THEN 3 WHEN 'manager' THEN 4 WHEN 'senior' THEN 5 ELSE 6 END,
+         ac.full_name`,
       [lpId]
     );
     const { rows: cache } = await db.query(
@@ -1307,6 +1288,70 @@ router.get('/apollo/status', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Error fetching Apollo status:', err);
     res.status(500).json({ error: 'Failed to fetch Apollo status' });
+  }
+});
+
+// ── Known Contacts (Warm Intro Paths) ──────────────────────────
+
+// POST /api/lp/apollo/contacts/:contactId/know - Flag "I know this person"
+router.post('/apollo/contacts/:contactId/know', authenticate, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { relationship_note } = req.body || {};
+
+    // Get team_member_id for current user
+    const { rows: tm } = await db.query(
+      'SELECT id FROM team_members WHERE user_id = $1',
+      [req.user.id]
+    );
+    if (!tm.length) {
+      return res.status(400).json({ error: 'You must be added as a team member first' });
+    }
+    const teamMemberId = tm[0].id;
+
+    // Verify the Apollo contact exists
+    const { rows: contact } = await db.query(
+      'SELECT id FROM apollo_company_contacts WHERE id = $1',
+      [contactId]
+    );
+    if (!contact.length) {
+      return res.status(404).json({ error: 'Apollo contact not found' });
+    }
+
+    const { rows } = await db.query(
+      `INSERT INTO known_contacts (apollo_contact_id, team_member_id, relationship_note)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (apollo_contact_id, team_member_id)
+       DO UPDATE SET relationship_note = COALESCE($3, known_contacts.relationship_note)
+       RETURNING *`,
+      [contactId, teamMemberId, relationship_note || null]
+    );
+
+    res.json({ known_contact: rows[0] });
+  } catch (err) {
+    console.error('Error flagging known contact:', err);
+    res.status(500).json({ error: 'Failed to flag contact' });
+  }
+});
+
+// DELETE /api/lp/apollo/contacts/:contactId/know - Unflag
+router.delete('/apollo/contacts/:contactId/know', authenticate, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { rows: tm } = await db.query(
+      'SELECT id FROM team_members WHERE user_id = $1',
+      [req.user.id]
+    );
+    if (!tm.length) return res.status(400).json({ error: 'Not a team member' });
+
+    await db.query(
+      'DELETE FROM known_contacts WHERE apollo_contact_id = $1 AND team_member_id = $2',
+      [contactId, tm[0].id]
+    );
+    res.json({ removed: true });
+  } catch (err) {
+    console.error('Error removing known contact:', err);
+    res.status(500).json({ error: 'Failed to remove contact flag' });
   }
 });
 
