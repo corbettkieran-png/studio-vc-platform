@@ -1366,12 +1366,12 @@ router.delete('/apollo/contacts/:contactId/know', authenticate, async (req, res)
 // APOLLO DEEP ENRICHMENT (People Match - gets LinkedIn URLs, emails)
 // ============================================================
 
-// POST /api/lp/apollo/contacts/:contactId/enrich - Deep enrich a single Apollo contact
+// POST /api/lp/apollo/contacts/:contactId/enrich - Deep enrich a single contact via RocketReach
 router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res) => {
   try {
-    const apolloApiKey = process.env.APOLLO_API_KEY;
-    if (!apolloApiKey) {
-      return res.status(500).json({ error: 'APOLLO_API_KEY environment variable not set' });
+    const rrApiKey = process.env.ROCKETREACH_API_KEY;
+    if (!rrApiKey) {
+      return res.status(500).json({ error: 'ROCKETREACH_API_KEY environment variable not set' });
     }
 
     const { contactId } = req.params;
@@ -1381,53 +1381,59 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
     );
     if (!contact) return res.status(404).json({ error: 'Contact not found' });
 
-    // Call Apollo People Match API
-    const apolloRes = await fetch('https://api.apollo.io/api/v1/people/match', {
+    // Call RocketReach Person Lookup API
+    const rrRes = await fetch('https://api.rocketreach.co/api/v2/person/lookup', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-        'X-Api-Key': apolloApiKey,
+        'Api-Key': rrApiKey,
       },
       body: JSON.stringify({
-        first_name: contact.first_name,
-        last_name: contact.last_name,
-        organization_name: contact.company_name,
-        ...(contact.apollo_person_id && contact.apollo_person_id.length > 10 ? { id: contact.apollo_person_id } : {}),
+        name: `${contact.first_name} ${contact.last_name}`,
+        current_employer: contact.company_name,
       }),
     });
 
-    if (!apolloRes.ok) {
-      const errText = await apolloRes.text();
-      console.error('Apollo People Match error:', apolloRes.status, errText);
-      return res.status(502).json({ error: 'Apollo API error', status: apolloRes.status });
+    if (!rrRes.ok) {
+      const errText = await rrRes.text();
+      console.error('RocketReach lookup error:', rrRes.status, errText);
+      return res.status(502).json({ error: 'RocketReach API error', status: rrRes.status });
     }
 
-    const apolloData = await apolloRes.json();
-    const person = apolloData.person;
+    const person = await rrRes.json();
 
-    if (!person) {
-      return res.status(404).json({ error: 'No match found in Apollo' });
+    if (!person || person.status === 'failed') {
+      return res.status(404).json({ error: 'No match found in RocketReach' });
     }
+
+    // Extract best email (prefer professional, grade A/B)
+    const bestEmail = (person.emails || [])
+      .filter(e => e.smtp_valid !== 'invalid')
+      .sort((a, b) => {
+        const gradeOrder = { A: 0, B: 1, C: 2, D: 3, F: 4 };
+        return (gradeOrder[a.grade] || 5) - (gradeOrder[b.grade] || 5);
+      })[0];
 
     // Update the contact with enriched data
-    const updates = {
-      linkedin_url: person.linkedin_url || contact.linkedin_url,
-      email: person.email || contact.email,
-      title: person.title || contact.title,
-      city: person.city || contact.city,
-      state: person.state || contact.state,
-      country: person.country || contact.country,
-      enriched: true,
-    };
-
     await db.query(
       `UPDATE apollo_company_contacts SET
-        linkedin_url = $1, email = $2, title = $3,
-        city = $4, state = $5, country = $6, enriched = true
+        linkedin_url = COALESCE($1, linkedin_url),
+        email = COALESCE($2, email),
+        title = COALESCE($3, title),
+        city = COALESCE($4, city),
+        state = COALESCE($5, state),
+        country = COALESCE($6, country),
+        enriched = true
        WHERE id = $7`,
-      [updates.linkedin_url, updates.email, updates.title,
-       updates.city, updates.state, updates.country, contactId]
+      [
+        person.linkedin_url || null,
+        bestEmail ? bestEmail.email : null,
+        person.current_title || null,
+        person.city || null,
+        person.state || null,
+        person.country || null,
+        contactId,
+      ]
     );
 
     // Return enriched contact
@@ -1438,32 +1444,28 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
 
     res.json({
       contact: updated,
-      apollo_match: {
+      enrichment_source: 'rocketreach',
+      rocketreach_match: {
         linkedin_url: person.linkedin_url,
-        email: person.email,
-        title: person.title,
-        headline: person.headline,
-        photo_url: person.photo_url,
-        employment_history: (person.employment_history || []).slice(0, 5),
-        organization: person.organization ? {
-          name: person.organization.name,
-          website_url: person.organization.website_url,
-          industry: person.organization.industry,
-        } : null,
+        email: bestEmail ? bestEmail.email : null,
+        email_grade: bestEmail ? bestEmail.grade : null,
+        title: person.current_title,
+        employer: person.current_employer,
+        phones: (person.phones || []).slice(0, 3),
       },
     });
   } catch (err) {
-    console.error('Error enriching Apollo contact:', err);
+    console.error('Error enriching contact via RocketReach:', err);
     res.status(500).json({ error: 'Failed to enrich contact', detail: err.message });
   }
 });
 
-// POST /api/lp/apollo/contacts/enrich-batch - Enrich multiple contacts for an LP target
+// POST /api/lp/apollo/contacts/enrich-batch - Batch enrich contacts for an LP target via RocketReach
 router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res) => {
   try {
-    const apolloApiKey = process.env.APOLLO_API_KEY;
-    if (!apolloApiKey) {
-      return res.status(500).json({ error: 'APOLLO_API_KEY environment variable not set' });
+    const rrApiKey = process.env.ROCKETREACH_API_KEY;
+    if (!rrApiKey) {
+      return res.status(500).json({ error: 'ROCKETREACH_API_KEY environment variable not set' });
     }
 
     const { lpId } = req.params;
@@ -1479,26 +1481,30 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
     let enriched = 0;
     let errors = 0;
 
-    for (const contact of contacts.slice(0, 10)) { // Max 10 at a time to be conservative
+    for (const contact of contacts.slice(0, 10)) { // Max 10 at a time to conserve credits
       try {
-        const apolloRes = await fetch('https://api.apollo.io/api/v1/people/match', {
+        const rrRes = await fetch('https://api.rocketreach.co/api/v2/person/lookup', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'X-Api-Key': apolloApiKey,
+            'Api-Key': rrApiKey,
           },
           body: JSON.stringify({
-            first_name: contact.first_name,
-            last_name: contact.last_name,
-            organization_name: contact.company_name,
-            ...(contact.apollo_person_id && contact.apollo_person_id.length > 10 ? { id: contact.apollo_person_id } : {}),
+            name: `${contact.first_name} ${contact.last_name}`,
+            current_employer: contact.company_name,
           }),
         });
 
-        if (apolloRes.ok) {
-          const data = await apolloRes.json();
-          if (data.person) {
+        if (rrRes.ok) {
+          const person = await rrRes.json();
+          if (person && person.status !== 'failed') {
+            const bestEmail = (person.emails || [])
+              .filter(e => e.smtp_valid !== 'invalid')
+              .sort((a, b) => {
+                const gradeOrder = { A: 0, B: 1, C: 2, D: 3, F: 4 };
+                return (gradeOrder[a.grade] || 5) - (gradeOrder[b.grade] || 5);
+              })[0];
+
             await db.query(
               `UPDATE apollo_company_contacts SET
                 linkedin_url = COALESCE($1, linkedin_url),
@@ -1510,21 +1516,27 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
                 enriched = true
                WHERE id = $7`,
               [
-                data.person.linkedin_url, data.person.email, data.person.title,
-                data.person.city, data.person.state, data.person.country, contact.id,
+                person.linkedin_url || null,
+                bestEmail ? bestEmail.email : null,
+                person.current_title || null,
+                person.city || null,
+                person.state || null,
+                person.country || null,
+                contact.id,
               ]
             );
             enriched++;
           }
         }
       } catch (e) {
+        console.error('RocketReach batch enrich error for contact:', contact.id, e.message);
         errors++;
       }
-      // Small delay to avoid rate limiting
-      await new Promise(r => setTimeout(r, 200));
+      // Delay between requests to respect rate limits
+      await new Promise(r => setTimeout(r, 300));
     }
 
-    res.json({ enriched, errors, total: contacts.length });
+    res.json({ enriched, errors, total: contacts.length, source: 'rocketreach' });
   } catch (err) {
     console.error('Error batch enriching contacts:', err);
     res.status(500).json({ error: 'Failed to batch enrich contacts' });
