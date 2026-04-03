@@ -1386,18 +1386,11 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
       ? contact.full_name
       : [contact.first_name, contact.last_name].filter(Boolean).join(' ');
 
-    if (!contactName || contactName.trim().split(' ').length < 2) {
-      return res.status(400).json({
-        error: 'Insufficient name data for enrichment — need first and last name',
-        contact_name: contactName,
-      });
-    }
+    // Build RocketReach query params — use title to help match when only first name available
+    const rrParams = new URLSearchParams({ current_employer: contact.company_name });
+    if (contactName) rrParams.set('name', contactName);
+    if (contact.title) rrParams.set('current_title', contact.title);
 
-    // Call RocketReach Person Lookup API (GET with query params)
-    const rrParams = new URLSearchParams({
-      name: contactName,
-      current_employer: contact.company_name,
-    });
     const rrRes = await fetch(`https://api.rocketreach.co/api/v2/person/lookup?${rrParams}`, {
       method: 'GET',
       headers: {
@@ -1505,15 +1498,15 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
           ? contact.full_name
           : [contact.first_name, contact.last_name].filter(Boolean).join(' ');
 
-        if (!contactName || contactName.trim().split(' ').length < 2) {
+        if (!contactName && !contact.title) {
           skipped++;
-          continue; // Skip contacts without full names
+          continue; // Skip contacts with no name or title to match on
         }
 
-        const rrParams = new URLSearchParams({
-          name: contactName,
-          current_employer: contact.company_name,
-        });
+        const rrParams = new URLSearchParams({ current_employer: contact.company_name });
+        if (contactName) rrParams.set('name', contactName);
+        if (contact.title) rrParams.set('current_title', contact.title);
+
         const rrRes = await fetch(`https://api.rocketreach.co/api/v2/person/lookup?${rrParams}`, {
           method: 'GET',
           headers: {
