@@ -1381,17 +1381,16 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
     );
     if (!contact) return res.status(404).json({ error: 'Contact not found' });
 
-    // Call RocketReach Person Lookup API
-    const rrRes = await fetch('https://api.rocketreach.co/api/v2/person/lookup', {
-      method: 'POST',
+    // Call RocketReach Person Lookup API (GET with query params)
+    const rrParams = new URLSearchParams({
+      name: `${contact.first_name} ${contact.last_name}`,
+      current_employer: contact.company_name,
+    });
+    const rrRes = await fetch(`https://api.rocketreach.co/api/v2/person/lookup?${rrParams}`, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
         'Api-Key': rrApiKey,
       },
-      body: JSON.stringify({
-        name: `${contact.first_name} ${contact.last_name}`,
-        current_employer: contact.company_name,
-      }),
     });
 
     if (!rrRes.ok) {
@@ -1483,16 +1482,15 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
 
     for (const contact of contacts.slice(0, 10)) { // Max 10 at a time to conserve credits
       try {
-        const rrRes = await fetch('https://api.rocketreach.co/api/v2/person/lookup', {
-          method: 'POST',
+        const rrParams = new URLSearchParams({
+          name: `${contact.first_name} ${contact.last_name}`,
+          current_employer: contact.company_name,
+        });
+        const rrRes = await fetch(`https://api.rocketreach.co/api/v2/person/lookup?${rrParams}`, {
+          method: 'GET',
           headers: {
-            'Content-Type': 'application/json',
             'Api-Key': rrApiKey,
           },
-          body: JSON.stringify({
-            name: `${contact.first_name} ${contact.last_name}`,
-            current_employer: contact.company_name,
-          }),
         });
 
         if (rrRes.ok) {
