@@ -188,7 +188,7 @@ export default function LPOutreach() {
     const loadDetail = async () => {
       try {
         const data = await getLPTarget(selectedTarget);
-        setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, activity: data.activity_log });
+        setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], activity: data.activity_log });
         // Load Apollo contacts for this LP
         setApolloLoading(true);
         try {
@@ -648,7 +648,7 @@ export default function LPOutreach() {
                       try {
                         await updateLPTarget(detail.id, { outreach_status: key });
                         const updated = await getLPTarget(detail.id);
-                        setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, activity: updated.activity_log });
+                        setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], activity: updated.activity_log });
                         loadTargets();
                       } catch (err) {
                         alert(err.message);
@@ -683,6 +683,72 @@ export default function LPOutreach() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Warm Intro Paths (Second-Degree Connections) */}
+            {detail.warm_intro_paths && detail.warm_intro_paths.length > 0 && (
+              <div className="detail-section">
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: '#F59E0B' }}>🤝</span> Warm Intro Paths
+                  <span style={{ fontSize: 11, background: '#F59E0B', color: 'white', padding: '2px 8px', borderRadius: 10 }}>
+                    {detail.warm_intro_paths.reduce((sum, p) => sum + p.connections_at_company.length, 0)} connection{detail.warm_intro_paths.reduce((sum, p) => sum + p.connections_at_company.length, 0) !== 1 ? 's' : ''}
+                  </span>
+                </h3>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+                  Your team's LinkedIn connections who work at <strong>{detail.company}</strong> — potential intro paths to this LP.
+                </div>
+                {detail.warm_intro_paths.map((path, pi) => (
+                  <div key={pi} style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                      via {path.team_member_name}
+                    </div>
+                    {path.connections_at_company.map((conn, ci) => (
+                      <div key={ci} style={{
+                        padding: 10, background: '#FFFBEB', borderRadius: 6, marginBottom: 6,
+                        borderLeft: '3px solid #F59E0B', fontSize: 12
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#92400E' }}>{conn.full_name}</div>
+                            {conn.position && <div style={{ color: '#78716C', marginTop: 2 }}>{conn.position}</div>}
+                            <div style={{ color: '#A3A3A3', marginTop: 2, fontSize: 11 }}>{conn.company}</div>
+                          </div>
+                          {conn.email && (
+                            <span style={{ fontSize: 10, color: '#059669', background: '#ECFDF5', padding: '2px 6px', borderRadius: 3 }}>
+                              Has email
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ marginTop: 6, fontSize: 11, color: '#92400E', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ opacity: 0.6 }}>{path.team_member_name}</span>
+                          <span style={{ opacity: 0.4 }}>→</span>
+                          <span>{conn.full_name}</span>
+                          <span style={{ opacity: 0.4 }}>→</span>
+                          <span style={{ fontWeight: 500 }}>{detail.full_name}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {detail.warm_intro_paths[0]?.apollo_contacts_at_company?.length > 0 && (
+                  <div style={{ background: '#F5F3FF', borderRadius: 6, padding: 10, fontSize: 11, marginTop: 4 }}>
+                    <div style={{ fontWeight: 600, color: '#6366F1', marginBottom: 6 }}>
+                      Senior people at {detail.company} your connections may know:
+                    </div>
+                    {detail.warm_intro_paths[0].apollo_contacts_at_company.slice(0, 5).map((ac, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: i < 4 ? '1px solid #EDE9FE' : 'none' }}>
+                        <span>{ac.first_name} {ac.last_name} — {ac.title}</span>
+                        <span style={{
+                          background: ac.seniority === 'c_suite' ? '#7C3AED' : ac.seniority === 'vp' ? '#8B5CF6' : '#A78BFA',
+                          color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: 10
+                        }}>
+                          {ac.seniority === 'c_suite' ? 'C-Suite' : ac.seniority === 'vp' ? 'VP' : 'Director'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -798,7 +864,7 @@ export default function LPOutreach() {
                     setActivityAction('email_sent');
                     setActivityDetails('');
                     const updated = await getLPTarget(detail.id);
-                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, activity: updated.activity_log });
+                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], activity: updated.activity_log });
                   } catch (err) {
                     alert(err.message);
                   }
@@ -828,7 +894,7 @@ export default function LPOutreach() {
                     await updateLPTarget(detail.id, { notes: (detail.notes || '') + '\n' + noteText });
                     setNoteText('');
                     const updated = await getLPTarget(detail.id);
-                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, activity: updated.activity_log });
+                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], activity: updated.activity_log });
                   } catch (err) {
                     alert(err.message);
                   }

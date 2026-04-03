@@ -806,7 +806,8 @@ router.get('/targets/:id', authenticate, async (req, res) => {
     // Get all connectors for this LP
     const { rows: connectors } = await db.query(
       `SELECT
-        tm.id, tm.full_name, lcm.match_type, lcm.match_confidence
+        tm.id, tm.full_name, lcm.match_type, lcm.match_confidence,
+        lcm.linkedin_connection_id
        FROM lp_connection_matches lcm
        JOIN team_members tm ON lcm.team_member_id = tm.id
        WHERE lcm.lp_target_id = $1
@@ -824,9 +825,91 @@ router.get('/targets/:id', authenticate, async (req, res) => {
       [id]
     );
 
+    // ── Second-degree / Warm Intro Paths ──
+    // Find LinkedIn connections who work at the same company as this LP target.
+    // These people can potentially introduce you to the LP target.
+    let warmIntroPaths = [];
+    if (lp.company) {
+      const companyNorm = lp.company.toLowerCase().trim();
+
+      // Get all LinkedIn connections with a company field
+      const { rows: allConns } = await db.query(
+        `SELECT lc.id, lc.first_name, lc.last_name, lc.full_name, lc.email,
+                lc.company, lc.position, lc.team_member_id,
+                tm.full_name as team_member_name
+         FROM linkedin_connections lc
+         JOIN team_members tm ON lc.team_member_id = tm.id
+         WHERE lc.company IS NOT NULL AND lc.company != ''`
+      );
+
+      // Filter using fuzzy company matching (reuse existing function)
+      const matchingConns = allConns.filter(conn => {
+        const score = fuzzyMatchCompany(lp.company, conn.company);
+        return score >= 70;
+      });
+
+      // Also check: does the LinkedIn connection's name match the LP target directly?
+      // If so, they're a direct connection, not a warm intro path — exclude them.
+      const directConnIds = new Set(
+        connectors
+          .filter(c => c.match_type === 'direct_name' || c.match_type === 'direct_email')
+          .map(c => c.linkedin_connection_id)
+          .filter(Boolean)
+      );
+
+      const filteredConns = matchingConns.filter(conn => !directConnIds.has(conn.id));
+
+      // Get Apollo contacts at this company for cross-reference
+      const { rows: apolloAtCompany } = await db.query(
+        `SELECT first_name, last_name, title, seniority
+         FROM apollo_company_contacts
+         WHERE lp_target_id = $1
+         ORDER BY
+           CASE seniority
+             WHEN 'c_suite' THEN 1
+             WHEN 'vp' THEN 2
+             WHEN 'director' THEN 3
+             WHEN 'manager' THEN 4
+             WHEN 'senior' THEN 5
+             ELSE 6
+           END
+         LIMIT 10`,
+        [id]
+      );
+
+      // Group by team member
+      const byTeamMember = {};
+      for (const conn of filteredConns) {
+        const tmId = conn.team_member_id;
+        if (!byTeamMember[tmId]) {
+          byTeamMember[tmId] = {
+            team_member_id: tmId,
+            team_member_name: conn.team_member_name,
+            connections_at_company: [],
+          };
+        }
+        byTeamMember[tmId].connections_at_company.push({
+          id: conn.id,
+          full_name: conn.full_name || `${conn.first_name || ''} ${conn.last_name || ''}`.trim(),
+          position: conn.position,
+          company: conn.company,
+          email: conn.email,
+        });
+      }
+
+      warmIntroPaths = Object.values(byTeamMember).map(path => ({
+        ...path,
+        apollo_contacts_at_company: apolloAtCompany,
+      }));
+
+      // Sort: most connections at company first
+      warmIntroPaths.sort((a, b) => b.connections_at_company.length - a.connections_at_company.length);
+    }
+
     res.json({
       lp_target: lp,
       connectors,
+      warm_intro_paths: warmIntroPaths,
       activity_log: activity,
     });
   } catch (err) {
