@@ -109,8 +109,11 @@ export const unflagKnownContact = (contactId) =>
   request(`/lp/apollo/contacts/${contactId}/know`, { method: 'DELETE' });
 
 // Apollo Deep Enrichment (People Match - gets LinkedIn URLs, emails)
-export const enrichApolloContact = (contactId) =>
-  request(`/lp/apollo/contacts/${contactId}/enrich`, { method: 'POST' });
+export const enrichApolloContact = (contactId, { linkedin_url, override_name } = {}) =>
+  request(`/lp/apollo/contacts/${contactId}/enrich`, {
+    method: 'POST',
+    body: JSON.stringify({ linkedin_url, override_name }),
+  });
 export const enrichApolloContactsBatch = (lpId) =>
   request(`/lp/apollo/contacts/enrich-batch/${lpId}`, { method: 'POST' });
 

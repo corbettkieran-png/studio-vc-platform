@@ -922,7 +922,10 @@ export default function LPOutreach() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 13 }}>
-                            {contact.first_name} {contact.last_name}
+                            {contact.full_name || `${contact.first_name} ${contact.last_name}`}
+                            {contact.full_name && contact.last_name && contact.last_name.includes('***') && (
+                              <span style={{ fontSize: 9, color: '#059669', marginLeft: 6, fontWeight: 400 }}>resolved</span>
+                            )}
                           </div>
                           <div style={{ color: 'var(--muted)', marginTop: 2 }}>{contact.title}</div>
                           <div style={{ color: 'var(--muted)', marginTop: 2 }}>{contact.company_name}</div>
@@ -937,7 +940,9 @@ export default function LPOutreach() {
                             </span>
                           )}
                           {contact.email && (
-                            <span style={{ fontSize: 11, color: '#059669' }}>✓ Has email</span>
+                            <a href={`mailto:${contact.email}`} style={{ fontSize: 11, color: '#059669', textDecoration: 'none' }} title={contact.email}>
+                              {contact.email}
+                            </a>
                           )}
                         </div>
                       </div>
@@ -953,15 +958,24 @@ export default function LPOutreach() {
                             View LinkedIn →
                           </a>
                         )}
-                        {contact.enriched && (
+                        {contact.enriched && contact.email ? (
                           <span style={{ fontSize: 10, color: '#059669', background: '#ECFDF5', padding: '2px 6px', borderRadius: 3 }}>Enriched</span>
-                        )}
+                        ) : contact.enriched && !contact.email ? (
+                          <span style={{ fontSize: 10, color: '#D97706', background: '#FFFBEB', padding: '2px 6px', borderRadius: 3 }}>Enriched · No email</span>
+                        ) : contact.full_name && contact.last_name && contact.last_name.includes('***') ? (
+                          <span style={{ fontSize: 10, color: '#6366F1', background: '#EEF2FF', padding: '2px 6px', borderRadius: 3 }}>Name resolved</span>
+                        ) : contact.last_name && contact.last_name.includes('***') ? (
+                          <span style={{ fontSize: 10, color: '#9CA3AF', background: '#F3F4F6', padding: '2px 6px', borderRadius: 3 }}>Obfuscated</span>
+                        ) : null}
                         {!contact.enriched && (
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
                               try {
-                                await enrichApolloContact(contact.id);
+                                await enrichApolloContact(contact.id, {
+                                  linkedin_url: contact.linkedin_url || undefined,
+                                  override_name: contact.full_name || undefined,
+                                });
                                 const apolloData = await getApolloContacts(selectedTarget);
                                 setApolloContacts(apolloData.contacts || []);
                               } catch (err) {
@@ -973,7 +987,7 @@ export default function LPOutreach() {
                               border: '1px solid #6366F1', background: 'transparent', color: '#6366F1', fontWeight: 600
                             }}
                           >
-                            Enrich
+                            {contact.linkedin_url ? 'Enrich via RocketReach' : 'Enrich'}
                           </button>
                         )}
                         <button
