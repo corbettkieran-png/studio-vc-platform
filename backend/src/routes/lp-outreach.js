@@ -1408,13 +1408,39 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
     });
 
     if (rrRes.status === 404) {
-      return res.status(404).json({ error: 'No match found in RocketReach', contact_name: contactName, linkedin_url: linkedinUrl || null });
+      // Still save override data even though RocketReach didn't find a match
+      if (bodyName || linkedinUrl) {
+        const nameParts = bodyName ? bodyName.split(' ') : [];
+        const overrideLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+        await db.query(
+          `UPDATE apollo_company_contacts SET
+            linkedin_url = COALESCE($1, linkedin_url),
+            last_name = COALESCE($2, last_name),
+            full_name = COALESCE($3, full_name)
+           WHERE id = $4`,
+          [linkedinUrl || null, overrideLastName, bodyName || null, contactId]
+        );
+      }
+      return res.status(404).json({ error: 'No match found in RocketReach', contact_name: contactName, linkedin_url: linkedinUrl || null, override_saved: !!(bodyName || linkedinUrl) });
     }
 
     if (!rrRes.ok) {
       const errText = await rrRes.text();
       console.error('RocketReach lookup error:', rrRes.status, errText);
-      return res.status(502).json({ error: 'RocketReach API error', status: rrRes.status });
+      // Save override data even when RocketReach is rate-limited or unavailable
+      if (bodyName || linkedinUrl) {
+        const nameParts = bodyName ? bodyName.split(' ') : [];
+        const overrideLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+        await db.query(
+          `UPDATE apollo_company_contacts SET
+            linkedin_url = COALESCE($1, linkedin_url),
+            last_name = COALESCE($2, last_name),
+            full_name = COALESCE($3, full_name)
+           WHERE id = $4`,
+          [linkedinUrl || null, overrideLastName, bodyName || null, contactId]
+        );
+      }
+      return res.status(502).json({ error: 'RocketReach API error', status: rrRes.status, override_saved: !!(bodyName || linkedinUrl) });
     }
 
     const person = await rrRes.json();
@@ -1485,6 +1511,39 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
   } catch (err) {
     console.error('Error enriching contact via RocketReach:', err);
     res.status(500).json({ error: 'Failed to enrich contact', detail: err.message });
+  }
+});
+
+// PATCH /api/lp/apollo/contacts/batch-update - Batch update contact names and LinkedIn URLs without RocketReach
+// Body: { updates: [{ id, full_name, linkedin_url }] }
+router.patch('/apollo/contacts/batch-update', authenticate, async (req, res) => {
+  try {
+    const { updates } = req.body;
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ error: 'updates array required' });
+    }
+
+    const results = [];
+    for (const u of updates) {
+      if (!u.id) continue;
+      const nameParts = u.full_name ? u.full_name.split(' ') : [];
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+
+      await db.query(
+        `UPDATE apollo_company_contacts SET
+          linkedin_url = COALESCE($1, linkedin_url),
+          last_name = COALESCE($2, last_name),
+          full_name = COALESCE($3, full_name)
+         WHERE id = $4`,
+        [u.linkedin_url || null, lastName, u.full_name || null, u.id]
+      );
+      results.push({ id: u.id, full_name: u.full_name, updated: true });
+    }
+
+    res.json({ updated: results.length, results });
+  } catch (err) {
+    console.error('Error batch updating contacts:', err);
+    res.status(500).json({ error: 'Failed to batch update contacts', detail: err.message });
   }
 });
 
