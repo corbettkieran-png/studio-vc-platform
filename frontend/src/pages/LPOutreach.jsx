@@ -120,6 +120,85 @@ export default function LPOutreach() {
   const [apolloStats, setApolloStats] = useState(null);
   const [apolloContacts, setApolloContacts] = useState([]);
   const [apolloLoading, setApolloLoading] = useState(false);
+  const [emailDraft, setEmailDraft] = useState(null);
+  const [emailDraftType, setEmailDraftType] = useState('cold');
+  const [showEmailDraft, setShowEmailDraft] = useState(false);
+  const [emailCopied, setEmailCopied] = useState(false);
+  const [contactFilter, setContactFilter] = useState('all'); // all, c_suite, vp, director, has_email, known
+
+  // Generate email draft based on LP target data
+  const generateEmailDraft = (type = 'cold') => {
+    if (!detail) return;
+    const firstName = detail.full_name?.split(' ')[0] || 'there';
+    const company = detail.company || 'your firm';
+    const connectors = detail.connectors || [];
+    const warmPaths = detail.warm_intro_paths || [];
+    const sectors = detail.sector_interest || [];
+    const fundType = detail.fund_type || '';
+    const enrichment = detail.linkedin_enrichment;
+
+    const sectorText = sectors.length > 0
+      ? sectors.slice(0, 3).map(s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ')
+      : 'technology';
+
+    let subject = '';
+    let body = '';
+
+    if (type === 'warm_intro' && connectors.length > 0) {
+      const connector = connectors[0];
+      subject = `Introduction via ${connector.name} — Studio VC`;
+      body = `Hi ${firstName},
+
+${connector.name} suggested I reach out. I'm a partner at Studio VC, an early-stage seed fund focused on ${sectorText}.
+
+${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I` : 'I'} think there could be strong alignment between our deal flow and your investment thesis.${sectors.length > 0 ? ` We're seeing compelling opportunities in ${sectorText} that may fit your mandate.` : ''}
+
+Would you have 15 minutes this week or next for a brief intro call?
+
+Best,
+Kieran`;
+    } else if (type === 'warm_intro_path' && warmPaths.length > 0) {
+      const path = warmPaths[0];
+      subject = `${path.contact_name} at ${company} — Studio VC Introduction`;
+      body = `Hi ${firstName},
+
+I understand we share a mutual connection in ${path.contact_name}${path.contact_title ? ` (${path.contact_title})` : ''} at ${company}. I'm a partner at Studio VC, where we invest at the seed stage in ${sectorText}.
+
+${fundType ? `With ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I` : 'I'} believe there could be a strong fit for co-investment or LP participation.${detail.estimated_aum ? '' : ''} We typically deploy into pre-seed and seed rounds with a strong emphasis on founder quality and market timing.
+
+I'd welcome the chance to share our pipeline and thesis. Would a brief call work for you?
+
+Best,
+Kieran`;
+    } else if (type === 'follow_up') {
+      subject = `Following up — Studio VC`;
+      body = `Hi ${firstName},
+
+I wanted to follow up on my earlier note. We've been making strong progress at Studio VC and have several active deals in ${sectorText} that I think would be of interest to ${company}.
+
+Happy to share our latest deck and portfolio update at your convenience.
+
+Best,
+Kieran`;
+    } else {
+      // Cold outreach
+      subject = `Studio VC — Seed-Stage Investment Opportunity`;
+      body = `Hi ${firstName},
+
+I'm Kieran, a partner at Studio VC. We're a seed-stage venture fund investing in ${sectorText}.
+
+${fundType ? `I came across ${company} and given your focus on ${fundType.replace(/_/g, ' ')}, I believe there's` : `I believe there's`} meaningful overlap between our deal flow and what ${company} looks for in early-stage opportunities.${enrichment?.headline ? ` Given your background in ${enrichment.headline.toLowerCase()}, I think you'd find our thesis particularly relevant.` : ''}
+
+We're currently deploying our fund and would love to explore whether a partnership makes sense. Would you have 15 minutes for a quick call?
+
+Best,
+Kieran`;
+    }
+
+    setEmailDraft({ subject, body, to: detail.email || '', type });
+    setShowEmailDraft(true);
+    setEmailCopied(false);
+  };
 
   // Load dashboard stats
   const loadStats = useCallback(async () => {
@@ -786,6 +865,109 @@ export default function LPOutreach() {
               </div>
             </div>
 
+            {/* Email Draft */}
+            <div className="detail-section">
+              <h3>Draft Outreach Email</h3>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: showEmailDraft ? 12 : 0 }}>
+                <button
+                  onClick={() => generateEmailDraft('cold')}
+                  style={{
+                    padding: '5px 12px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                    border: '1px solid #003B76', background: emailDraftType === 'cold' && showEmailDraft ? '#003B76' : 'transparent',
+                    color: emailDraftType === 'cold' && showEmailDraft ? 'white' : '#003B76'
+                  }}>
+                  Cold Outreach
+                </button>
+                {detail.connectors && detail.connectors.length > 0 && (
+                  <button
+                    onClick={() => generateEmailDraft('warm_intro')}
+                    style={{
+                      padding: '5px 12px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                      border: '1px solid #059669', background: emailDraftType === 'warm_intro' && showEmailDraft ? '#059669' : 'transparent',
+                      color: emailDraftType === 'warm_intro' && showEmailDraft ? 'white' : '#059669'
+                    }}>
+                    Warm Intro
+                  </button>
+                )}
+                {detail.warm_intro_paths && detail.warm_intro_paths.length > 0 && (
+                  <button
+                    onClick={() => generateEmailDraft('warm_intro_path')}
+                    style={{
+                      padding: '5px 12px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                      border: '1px solid #7C3AED', background: emailDraftType === 'warm_intro_path' && showEmailDraft ? '#7C3AED' : 'transparent',
+                      color: emailDraftType === 'warm_intro_path' && showEmailDraft ? 'white' : '#7C3AED'
+                    }}>
+                    Mutual Contact
+                  </button>
+                )}
+                <button
+                  onClick={() => generateEmailDraft('follow_up')}
+                  style={{
+                    padding: '5px 12px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                    border: '1px solid #F59E0B', background: emailDraftType === 'follow_up' && showEmailDraft ? '#F59E0B' : 'transparent',
+                    color: emailDraftType === 'follow_up' && showEmailDraft ? 'white' : '#F59E0B'
+                  }}>
+                  Follow Up
+                </button>
+              </div>
+              {showEmailDraft && emailDraft && (
+                <div style={{ background: 'var(--card-bg)', borderRadius: 8, padding: 12, border: '1px solid var(--border-light)' }}>
+                  {emailDraft.to && (
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>
+                      To: <span style={{ color: 'var(--text)' }}>{emailDraft.to}</span>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                    Subject: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{emailDraft.subject}</span>
+                  </div>
+                  <textarea
+                    value={emailDraft.body}
+                    onChange={(e) => setEmailDraft({ ...emailDraft, body: e.target.value })}
+                    style={{
+                      width: '100%', minHeight: 180, padding: 10, borderRadius: 6,
+                      border: '1px solid var(--border-light)', background: 'var(--bg)',
+                      color: 'var(--text)', fontSize: 12, lineHeight: 1.6, resize: 'vertical',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`Subject: ${emailDraft.subject}\n\n${emailDraft.body}`);
+                        setEmailCopied(true);
+                        setTimeout(() => setEmailCopied(false), 2000);
+                      }}
+                      style={{
+                        padding: '5px 14px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                        border: 'none', background: emailCopied ? '#059669' : '#003B76', color: 'white'
+                      }}>
+                      {emailCopied ? '✓ Copied' : 'Copy to Clipboard'}
+                    </button>
+                    {emailDraft.to && (
+                      <a
+                        href={`mailto:${emailDraft.to}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`}
+                        style={{
+                          padding: '5px 14px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                          border: '1px solid #003B76', background: 'transparent', color: '#003B76',
+                          textDecoration: 'none', display: 'inline-block'
+                        }}>
+                        Open in Mail
+                      </a>
+                    )}
+                    <button
+                      onClick={() => setShowEmailDraft(false)}
+                      style={{
+                        padding: '5px 14px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                        border: '1px solid var(--border-light)', background: 'transparent', color: 'var(--muted)',
+                        marginLeft: 'auto'
+                      }}>
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Connectors */}
             {detail.connectors && detail.connectors.length > 0 && (
               <div className="detail-section">
@@ -907,11 +1089,39 @@ export default function LPOutreach() {
                   Enrich All Contacts (LinkedIn + Email)
                 </button>
               )}
+              {apolloContacts.length > 0 && (
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+                  {[
+                    { key: 'all', label: 'All' },
+                    { key: 'c_suite', label: 'C-Suite' },
+                    { key: 'vp', label: 'VP+' },
+                    { key: 'has_email', label: 'Has Email' },
+                    { key: 'known', label: 'Known' },
+                  ].map(f => (
+                    <button key={f.key} onClick={() => setContactFilter(f.key)} style={{
+                      padding: '3px 10px', borderRadius: 12, fontSize: 10, cursor: 'pointer', fontWeight: 600,
+                      border: contactFilter === f.key ? 'none' : '1px solid var(--border-light)',
+                      background: contactFilter === f.key ? '#6366F1' : 'transparent',
+                      color: contactFilter === f.key ? 'white' : 'var(--muted)',
+                    }}>{f.label}</button>
+                  ))}
+                </div>
+              )}
               {apolloLoading ? (
                 <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Loading Apollo data...</div>
               ) : apolloContacts.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {apolloContacts.map((contact, i) => {
+                  {apolloContacts
+                    .filter(contact => {
+                      if (contactFilter === 'all') return true;
+                      if (contactFilter === 'c_suite') return contact.seniority === 'c_suite';
+                      if (contactFilter === 'vp') return contact.seniority === 'c_suite' || contact.seniority === 'vp';
+                      if (contactFilter === 'has_email') return !!contact.email;
+                      if (contactFilter === 'known') return contact.known_by && contact.known_by.length > 0;
+                      return true;
+                    })
+                    .sort((a, b) => (SENIORITY_ORDER[a.seniority] || 99) - (SENIORITY_ORDER[b.seniority] || 99))
+                    .map((contact, i) => {
                     const isKnown = contact.known_by && contact.known_by.length > 0;
                     return (
                     <div key={contact.id || i} style={{
