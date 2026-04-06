@@ -629,6 +629,7 @@ Kieran`;
   // UPLOAD & SETUP TAB
   const renderUploadSetup = () => {
     return (
+      <>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
         {/* Team Management */}
         <div>
@@ -1002,6 +1003,7 @@ Kieran`;
           </div>
         )}
       </div>
+      </>
     );
   };
 
