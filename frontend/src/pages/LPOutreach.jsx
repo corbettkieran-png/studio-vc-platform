@@ -4,7 +4,8 @@ import {
   importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
   runLPMatching, getLPStats, getApolloStatus, getApolloContacts,
   flagKnownContact, unflagKnownContact, enrichLPTarget,
-  enrichApolloContact, enrichApolloContactsBatch
+  enrichApolloContact, enrichApolloContactsBatch,
+  getClaySettings, saveClaySettings, exportToClay, importClayCSV, getClayWebhookUrl
 } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -128,6 +129,15 @@ export default function LPOutreach() {
   const [statusFilter, setStatusFilter] = useState('all'); // outreach status filter for LP list
   const [pageSize] = useState(50);
   const [page, setPage] = useState(0);
+  // Clay integration state
+  const [claySettings, setClaySettings] = useState(null);
+  const [claySyncLog, setClaySyncLog] = useState([]);
+  const [clayWebhookUrl, setClayWebhookUrl] = useState('');
+  const [clayFormUrl, setClayFormUrl] = useState('');
+  const [clayFormSecret, setClayFormSecret] = useState('');
+  const [clayFormApiKey, setClayFormApiKey] = useState('');
+  const [clayExporting, setClayExporting] = useState(false);
+  const [clayConfigSaved, setClayConfigSaved] = useState(false);
 
   // Generate email draft based on LP target data
   const generateEmailDraft = (type = 'cold') => {
@@ -251,12 +261,32 @@ Kieran`;
     }
   }, []);
 
+  // Load Clay settings
+  const loadClaySettings = useCallback(async () => {
+    try {
+      const data = await getClaySettings();
+      setClaySettings(data.settings);
+      setClaySyncLog(data.sync_log || []);
+      if (data.settings) {
+        setClayFormUrl(data.settings.clay_table_webhook_url || '');
+        setClayFormSecret(data.settings.clay_webhook_secret || '');
+        setClayFormApiKey(''); // Don't prefill API key for security
+      }
+      // Also get our webhook URL
+      const wh = await getClayWebhookUrl();
+      setClayWebhookUrl(wh.webhook_url);
+    } catch (err) {
+      console.error('Load Clay settings error:', err);
+    }
+  }, []);
+
   // Initial loads
   useEffect(() => {
     loadStats();
     loadTeamMembers();
     loadApolloStats();
-  }, [loadStats, loadTeamMembers, loadApolloStats]);
+    loadClaySettings();
+  }, [loadStats, loadTeamMembers, loadApolloStats, loadClaySettings]);
 
   useEffect(() => {
     loadTargets();
@@ -751,6 +781,226 @@ Kieran`;
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Clay Integration Section */}
+      <div style={{ marginTop: 32 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', color: 'white', padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700 }}>CLAY</span>
+          Enrichment Integration
+        </h3>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          {/* Clay Config */}
+          <div className="card">
+            <div className="card-header">Clay Configuration</div>
+            <div className="card-body">
+              <div className="form-group">
+                <label>Clay Table Webhook URL</label>
+                <input type="text" placeholder="https://app.clay.com/api/v1/webhooks/..." value={clayFormUrl}
+                  onChange={(e) => setClayFormUrl(e.target.value)}
+                  style={{ padding: 8, border: '1px solid var(--border-light)', borderRadius: 4, width: '100%', fontSize: 12 }} />
+                <span className="hint">Found in your Clay table → Sources → Webhook</span>
+              </div>
+              <div className="form-group">
+                <label>Webhook Secret (optional)</label>
+                <input type="password" placeholder="Secret for verifying incoming Clay callbacks" value={clayFormSecret}
+                  onChange={(e) => setClayFormSecret(e.target.value)}
+                  style={{ padding: 8, border: '1px solid var(--border-light)', borderRadius: 4, width: '100%', fontSize: 12 }} />
+                <span className="hint">Protects the callback endpoint — add this as a header in Clay's HTTP action</span>
+              </div>
+              <div className="form-group">
+                <label>Clay API Key (optional)</label>
+                <input type="password" placeholder="For authenticated Clay webhook pushes" value={clayFormApiKey}
+                  onChange={(e) => setClayFormApiKey(e.target.value)}
+                  style={{ padding: 8, border: '1px solid var(--border-light)', borderRadius: 4, width: '100%', fontSize: 12 }} />
+                {claySettings?.clay_api_key_masked && (
+                  <span className="hint">Current: {claySettings.clay_api_key_masked}</span>
+                )}
+              </div>
+              <button className="btn btn-primary" onClick={async () => {
+                try {
+                  const payload = { clay_table_webhook_url: clayFormUrl };
+                  if (clayFormSecret) payload.clay_webhook_secret = clayFormSecret;
+                  if (clayFormApiKey) payload.clay_api_key = clayFormApiKey;
+                  await saveClaySettings(payload);
+                  setClayConfigSaved(true);
+                  setTimeout(() => setClayConfigSaved(false), 2000);
+                  loadClaySettings();
+                } catch (err) { alert(err.message); }
+              }}>
+                {clayConfigSaved ? '✓ Saved' : 'Save Settings'}
+              </button>
+
+              {/* Callback URL */}
+              {clayWebhookUrl && (
+                <div style={{ marginTop: 16, padding: 12, background: '#F0FDF4', borderRadius: 6, border: '1px solid #BBF7D0' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#166534', marginBottom: 4 }}>YOUR CALLBACK URL</div>
+                  <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#166534', wordBreak: 'break-all' }}>{clayWebhookUrl}</div>
+                  <div style={{ fontSize: 10, color: '#15803D', marginTop: 4 }}>
+                    Add this as an HTTP POST action in Clay to push enriched data back automatically.
+                  </div>
+                  <button onClick={() => {
+                    navigator.clipboard.writeText(clayWebhookUrl);
+                  }} style={{
+                    marginTop: 6, padding: '3px 10px', borderRadius: 4, fontSize: 10, cursor: 'pointer',
+                    border: '1px solid #166534', background: 'transparent', color: '#166534', fontWeight: 600
+                  }}>Copy URL</button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Clay Actions */}
+          <div>
+            {/* Export to Clay */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-header">Push to Clay</div>
+              <div className="card-body">
+                <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+                  Export LP targets to your Clay table for waterfall enrichment. Clay will find emails, phone numbers, LinkedIn profiles, and company data across 75+ providers.
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="btn btn-sm" disabled={clayExporting || !clayFormUrl}
+                    style={{ background: '#6366F1', color: 'white', border: 'none', opacity: (clayExporting || !clayFormUrl) ? 0.5 : 1 }}
+                    onClick={async () => {
+                      setClayExporting(true);
+                      try {
+                        const result = await exportToClay({ filter: 'all' });
+                        alert(`Exported ${result.pushed} of ${result.total_records} records to Clay.${result.errors ? ` (${result.errors} errors)` : ''}`);
+                        loadClaySettings();
+                      } catch (err) { alert(err.message); }
+                      setClayExporting(false);
+                    }}>
+                    {clayExporting ? 'Exporting...' : 'Export All LPs'}
+                  </button>
+                  <button className="btn btn-sm" disabled={clayExporting || !clayFormUrl}
+                    style={{ background: '#8B5CF6', color: 'white', border: 'none', opacity: (clayExporting || !clayFormUrl) ? 0.5 : 1 }}
+                    onClick={async () => {
+                      setClayExporting(true);
+                      try {
+                        const result = await exportToClay({ filter: 'unenriched' });
+                        alert(`Exported ${result.pushed} unenriched records to Clay.`);
+                        loadClaySettings();
+                      } catch (err) { alert(err.message); }
+                      setClayExporting(false);
+                    }}>
+                    {clayExporting ? 'Exporting...' : 'Export Unenriched Only'}
+                  </button>
+                  <button className="btn btn-sm" disabled={clayExporting || !clayFormUrl}
+                    style={{ background: '#A855F7', color: 'white', border: 'none', opacity: (clayExporting || !clayFormUrl) ? 0.5 : 1 }}
+                    onClick={async () => {
+                      setClayExporting(true);
+                      try {
+                        const result = await exportToClay({ filter: 'all', include_contacts: true });
+                        alert(`Exported ${result.pushed} records (LPs + Apollo contacts) to Clay.`);
+                        loadClaySettings();
+                      } catch (err) { alert(err.message); }
+                      setClayExporting(false);
+                    }}>
+                    {clayExporting ? 'Exporting...' : 'Export LPs + Contacts'}
+                  </button>
+                </div>
+                {!clayFormUrl && (
+                  <div style={{ fontSize: 11, color: '#D97706', marginTop: 8 }}>Configure Clay webhook URL first →</div>
+                )}
+                {claySettings?.last_export_at && (
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+                    Last export: {timeAgo(claySettings.last_export_at)} · {claySettings.export_count} total records exported
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Import from Clay */}
+            <div className="card">
+              <div className="card-header">Import from Clay</div>
+              <div className="card-body">
+                <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+                  Upload an enriched CSV exported from your Clay table. Maps enriched fields (email, phone, LinkedIn) back to your LP targets automatically.
+                </p>
+                <label style={{ cursor: 'pointer', display: 'inline-block' }}>
+                  <input type="file" accept=".csv" style={{ display: 'none' }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        const result = await importClayCSV(formData);
+                        alert(`Imported ${result.updated} records from Clay CSV.\n${result.matched_by_name} matched by name.\n${result.skipped} skipped.`);
+                        loadClaySettings();
+                        loadTargets();
+                      } catch (err) { alert(err.message); }
+                    }} />
+                  <span className="btn btn-sm" style={{ background: '#059669', color: 'white', border: 'none' }}>Upload Clay CSV</span>
+                </label>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>
+                  Or set up Clay's HTTP action to push enriched data to the callback URL automatically.
+                </div>
+                {claySettings?.last_import_at && (
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+                    Last import: {timeAgo(claySettings.last_import_at)} · {claySettings.import_count} total records imported
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sync Log */}
+        {claySyncLog.length > 0 && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-header">Sync History</div>
+            <div className="card-body" style={{ padding: 0 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Direction</th>
+                    <th>Records</th>
+                    <th>Status</th>
+                    <th>Details</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {claySyncLog.map((log) => {
+                    const details = typeof log.details === 'string' ? JSON.parse(log.details) : (log.details || {});
+                    return (
+                      <tr key={log.id}>
+                        <td>
+                          <span style={{
+                            fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                            background: log.direction === 'export' ? '#EDE9FE' : '#ECFDF5',
+                            color: log.direction === 'export' ? '#6366F1' : '#059669'
+                          }}>
+                            {log.direction === 'export' ? '→ Export' : '← Import'}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 13, fontWeight: 600 }}>{log.records_count}</td>
+                        <td>
+                          <span style={{
+                            fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 3,
+                            background: log.status === 'success' ? '#ECFDF5' : '#FEF3C7',
+                            color: log.status === 'success' ? '#059669' : '#D97706'
+                          }}>
+                            {log.status}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {details.source === 'csv_upload' ? 'CSV upload' :
+                           details.filter ? `Filter: ${details.filter}` :
+                           details.total_received ? `Received: ${details.total_received}` : '—'}
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--muted)' }}>{timeAgo(log.created_at)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     );
   };

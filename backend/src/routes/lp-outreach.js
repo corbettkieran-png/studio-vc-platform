@@ -1896,5 +1896,558 @@ router.get('/companies', authenticate, async (req, res) => {
   }
 });
 
+// ============================================================
+// Clay Integration
+// ============================================================
+
+// Clay settings table auto-migration
+(async () => {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS clay_settings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        clay_table_webhook_url TEXT,
+        clay_webhook_secret VARCHAR(255),
+        clay_api_key VARCHAR(500),
+        last_export_at TIMESTAMPTZ,
+        last_import_at TIMESTAMPTZ,
+        export_count INT DEFAULT 0,
+        import_count INT DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS clay_sync_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        direction VARCHAR(20) NOT NULL CHECK (direction IN ('export', 'import')),
+        records_count INT DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'pending',
+        details JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_clay_sync_log_dir ON clay_sync_log(direction, created_at DESC);
+    `);
+  } catch (err) {
+    console.error('Clay migration warning:', err.message);
+  }
+})();
+
+// GET /api/lp/clay/settings — Get current Clay config
+router.get('/clay/settings', authenticate, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM clay_settings LIMIT 1');
+    const settings = rows[0] || null;
+    // Mask API key for frontend
+    if (settings && settings.clay_api_key) {
+      settings.clay_api_key_masked = settings.clay_api_key.slice(0, 6) + '***' + settings.clay_api_key.slice(-4);
+    }
+    const { rows: logs } = await db.query(
+      'SELECT * FROM clay_sync_log ORDER BY created_at DESC LIMIT 10'
+    );
+    res.json({ settings, sync_log: logs });
+  } catch (err) {
+    console.error('Error fetching Clay settings:', err);
+    res.status(500).json({ error: 'Failed to fetch Clay settings' });
+  }
+});
+
+// POST /api/lp/clay/settings — Save Clay config
+router.post('/clay/settings', authenticate, async (req, res) => {
+  try {
+    const { clay_table_webhook_url, clay_webhook_secret, clay_api_key } = req.body;
+
+    // Upsert — there should only ever be one row
+    const { rows: existing } = await db.query('SELECT id FROM clay_settings LIMIT 1');
+    if (existing.length > 0) {
+      const updates = [];
+      const vals = [];
+      let idx = 1;
+      if (clay_table_webhook_url !== undefined) { updates.push(`clay_table_webhook_url = $${idx++}`); vals.push(clay_table_webhook_url); }
+      if (clay_webhook_secret !== undefined) { updates.push(`clay_webhook_secret = $${idx++}`); vals.push(clay_webhook_secret); }
+      if (clay_api_key !== undefined) { updates.push(`clay_api_key = $${idx++}`); vals.push(clay_api_key); }
+      updates.push(`updated_at = NOW()`);
+      vals.push(existing[0].id);
+      await db.query(
+        `UPDATE clay_settings SET ${updates.join(', ')} WHERE id = $${idx}`,
+        vals
+      );
+    } else {
+      await db.query(
+        `INSERT INTO clay_settings (clay_table_webhook_url, clay_webhook_secret, clay_api_key) VALUES ($1, $2, $3)`,
+        [clay_table_webhook_url || null, clay_webhook_secret || null, clay_api_key || null]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error saving Clay settings:', err);
+    res.status(500).json({ error: 'Failed to save Clay settings' });
+  }
+});
+
+// POST /api/lp/clay/export — Push LP targets to Clay table webhook
+router.post('/clay/export', authenticate, async (req, res) => {
+  try {
+    const { rows: settingsRows } = await db.query('SELECT * FROM clay_settings LIMIT 1');
+    const settings = settingsRows[0];
+    if (!settings || !settings.clay_table_webhook_url) {
+      return res.status(400).json({ error: 'Clay webhook URL not configured. Add it in Clay Settings.' });
+    }
+
+    // Optional filter: only export certain statuses or unenriched
+    const { filter = 'all', include_contacts = false } = req.body;
+
+    let query = 'SELECT * FROM lp_targets';
+    const params = [];
+    if (filter === 'unenriched') {
+      query += ' WHERE email IS NULL OR email = \'\'';
+    } else if (filter === 'active') {
+      query += ` WHERE outreach_status IN ('not_started', 'identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions')`;
+    }
+    query += ' ORDER BY fit_score DESC';
+
+    const { rows: lpTargets } = await db.query(query, params);
+
+    // Optionally include Apollo contacts that need email enrichment
+    let apolloContacts = [];
+    if (include_contacts) {
+      const { rows } = await db.query(
+        `SELECT acc.*, lt.company as lp_company, lt.full_name as lp_name
+         FROM apollo_company_contacts acc
+         JOIN lp_targets lt ON acc.lp_target_id = lt.id
+         WHERE acc.email IS NULL OR acc.email = ''
+         ORDER BY acc.seniority, acc.company_name`
+      );
+      apolloContacts = rows;
+    }
+
+    // Format records for Clay table
+    // Each record becomes a row in the Clay table
+    const clayRecords = lpTargets.map(lp => ({
+      // Unique identifier so Clay can match back
+      platform_id: lp.id,
+      record_type: 'lp_target',
+      full_name: lp.full_name,
+      email: lp.email || '',
+      company: lp.company || '',
+      title: lp.title || '',
+      linkedin_url: lp.linkedin_url || '',
+      phone: lp.phone || '',
+      fund_type: lp.fund_type || '',
+      estimated_aum: lp.estimated_aum || '',
+      geographic_focus: lp.geographic_focus || '',
+      sector_interest: (lp.sector_interest || []).join(', '),
+      fit_score: lp.fit_score || 0,
+      outreach_status: lp.outreach_status || 'not_started',
+    }));
+
+    // Add Apollo contacts if requested
+    const contactRecords = apolloContacts.map(c => ({
+      platform_id: c.id,
+      record_type: 'apollo_contact',
+      full_name: c.full_name || `${c.first_name} ${c.last_name}`,
+      email: c.email || '',
+      company: c.company_name || '',
+      title: c.title || '',
+      linkedin_url: c.linkedin_url || '',
+      seniority: c.seniority || '',
+      lp_company: c.lp_company || '',
+      lp_name: c.lp_name || '',
+    }));
+
+    const allRecords = [...clayRecords, ...contactRecords];
+
+    // Push to Clay in batches of 50 (Clay webhook best practice)
+    const batchSize = 50;
+    let pushed = 0;
+    const errors = [];
+
+    for (let i = 0; i < allRecords.length; i += batchSize) {
+      const batch = allRecords.slice(i, i + batchSize);
+      try {
+        const response = await fetch(settings.clay_table_webhook_url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(settings.clay_api_key ? { 'Authorization': `Bearer ${settings.clay_api_key}` } : {}),
+          },
+          body: JSON.stringify(batch.length === 1 ? batch[0] : batch),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${response.status} - ${errText.slice(0, 200)}`);
+        } else {
+          pushed += batch.length;
+        }
+      } catch (fetchErr) {
+        errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${fetchErr.message}`);
+      }
+    }
+
+    // Update settings
+    await db.query(
+      'UPDATE clay_settings SET last_export_at = NOW(), export_count = export_count + $1 WHERE id = $2',
+      [pushed, settings.id]
+    );
+
+    // Log sync
+    await db.query(
+      `INSERT INTO clay_sync_log (direction, records_count, status, details) VALUES ('export', $1, $2, $3)`,
+      [pushed, errors.length > 0 ? 'partial' : 'success', JSON.stringify({
+        total_records: allRecords.length,
+        lp_targets: clayRecords.length,
+        apollo_contacts: contactRecords.length,
+        pushed,
+        errors: errors.slice(0, 5),
+        filter,
+      })]
+    );
+
+    res.json({
+      success: true,
+      total_records: allRecords.length,
+      pushed,
+      errors: errors.length,
+      error_details: errors.slice(0, 5),
+    });
+  } catch (err) {
+    console.error('Error exporting to Clay:', err);
+    res.status(500).json({ error: 'Failed to export to Clay', detail: err.message });
+  }
+});
+
+// POST /api/lp/clay/webhook — Receive enriched data from Clay (HTTP action callback)
+// Clay sends enriched records back here after waterfall enrichment
+// This endpoint does NOT require JWT auth — it uses the webhook secret instead
+router.post('/clay/webhook', async (req, res) => {
+  try {
+    // Verify webhook secret if configured
+    const { rows: settingsRows } = await db.query('SELECT * FROM clay_settings LIMIT 1');
+    const settings = settingsRows[0];
+
+    if (settings && settings.clay_webhook_secret) {
+      const authHeader = req.headers['authorization'] || req.headers['x-webhook-secret'] || '';
+      const token = authHeader.replace('Bearer ', '');
+      if (token !== settings.clay_webhook_secret) {
+        return res.status(401).json({ error: 'Invalid webhook secret' });
+      }
+    }
+
+    // Clay can send a single record or an array
+    const records = Array.isArray(req.body) ? req.body : [req.body];
+    let updated = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const record of records) {
+      try {
+        const platformId = record.platform_id || record.id;
+        const recordType = record.record_type || 'lp_target';
+
+        if (!platformId) {
+          skipped++;
+          continue;
+        }
+
+        if (recordType === 'lp_target') {
+          // Update LP target with enriched data from Clay
+          const updates = [];
+          const vals = [];
+          let idx = 1;
+
+          // Email (primary value from Clay enrichment)
+          if (record.enriched_email || record.email_found || record.work_email || record.personal_email) {
+            const email = record.enriched_email || record.email_found || record.work_email || record.personal_email;
+            updates.push(`email = COALESCE(NULLIF($${idx}, ''), email)`);
+            vals.push(email);
+            idx++;
+          }
+
+          // Phone
+          if (record.enriched_phone || record.phone_found || record.direct_phone) {
+            const phone = record.enriched_phone || record.phone_found || record.direct_phone;
+            updates.push(`phone = COALESCE(NULLIF($${idx}, ''), phone)`);
+            vals.push(phone);
+            idx++;
+          }
+
+          // LinkedIn URL
+          if (record.enriched_linkedin_url || record.linkedin_url_found) {
+            const url = record.enriched_linkedin_url || record.linkedin_url_found;
+            updates.push(`linkedin_url = COALESCE(NULLIF($${idx}, ''), linkedin_url)`);
+            vals.push(url);
+            idx++;
+          }
+
+          // Title (might get a better/updated title)
+          if (record.enriched_title || record.current_title) {
+            const title = record.enriched_title || record.current_title;
+            updates.push(`title = COALESCE(NULLIF($${idx}, ''), title)`);
+            vals.push(title);
+            idx++;
+          }
+
+          // Fund type / AUM from Clay enrichment columns
+          if (record.enriched_fund_type) {
+            updates.push(`fund_type = COALESCE(NULLIF($${idx}, ''), fund_type)`);
+            vals.push(record.enriched_fund_type);
+            idx++;
+          }
+          if (record.enriched_aum) {
+            updates.push(`estimated_aum = COALESCE(NULLIF($${idx}, ''), estimated_aum)`);
+            vals.push(record.enriched_aum);
+            idx++;
+          }
+
+          // Notes from Clay (e.g., AI-generated context)
+          if (record.clay_notes || record.enrichment_notes) {
+            const notes = record.clay_notes || record.enrichment_notes;
+            updates.push(`notes = COALESCE(notes || E'\\n', '') || '[Clay] ' || $${idx}`);
+            vals.push(notes);
+            idx++;
+          }
+
+          if (updates.length > 0) {
+            updates.push('updated_at = NOW()');
+            vals.push(platformId);
+            await db.query(
+              `UPDATE lp_targets SET ${updates.join(', ')} WHERE id = $${idx}`,
+              vals
+            );
+
+            // Log activity
+            await db.query(
+              `INSERT INTO lp_activity_log (lp_target_id, action, details) VALUES ($1, 'clay_enrichment', $2)`,
+              [platformId, JSON.stringify({
+                fields_updated: updates.length - 1,
+                source: 'clay_webhook',
+                timestamp: new Date().toISOString(),
+              })]
+            );
+
+            updated++;
+          } else {
+            skipped++;
+          }
+
+        } else if (recordType === 'apollo_contact') {
+          // Update Apollo contact with enriched data
+          const updates = [];
+          const vals = [];
+          let idx = 1;
+
+          if (record.enriched_email || record.email_found || record.work_email) {
+            const email = record.enriched_email || record.email_found || record.work_email;
+            updates.push(`email = COALESCE(NULLIF($${idx}, ''), email)`);
+            vals.push(email);
+            idx++;
+            updates.push('enriched = true');
+          }
+
+          if (record.enriched_linkedin_url || record.linkedin_url_found) {
+            updates.push(`linkedin_url = COALESCE(NULLIF($${idx}, ''), linkedin_url)`);
+            vals.push(record.enriched_linkedin_url || record.linkedin_url_found);
+            idx++;
+          }
+
+          if (record.enriched_title || record.current_title) {
+            updates.push(`title = COALESCE(NULLIF($${idx}, ''), title)`);
+            vals.push(record.enriched_title || record.current_title);
+            idx++;
+          }
+
+          if (record.enriched_full_name || record.full_name_resolved) {
+            updates.push(`full_name = COALESCE(NULLIF($${idx}, ''), full_name)`);
+            vals.push(record.enriched_full_name || record.full_name_resolved);
+            idx++;
+          }
+
+          if (updates.length > 0) {
+            vals.push(platformId);
+            await db.query(
+              `UPDATE apollo_company_contacts SET ${updates.join(', ')} WHERE id = $${idx}`,
+              vals
+            );
+            updated++;
+          } else {
+            skipped++;
+          }
+        }
+      } catch (recErr) {
+        errors.push(recErr.message);
+      }
+    }
+
+    // Log sync
+    await db.query(
+      `INSERT INTO clay_sync_log (direction, records_count, status, details) VALUES ('import', $1, $2, $3)`,
+      [updated, errors.length > 0 ? 'partial' : 'success', JSON.stringify({
+        total_received: records.length,
+        updated,
+        skipped,
+        errors: errors.slice(0, 5),
+      })]
+    );
+
+    // Update settings
+    if (settings) {
+      await db.query(
+        'UPDATE clay_settings SET last_import_at = NOW(), import_count = import_count + $1 WHERE id = $2',
+        [updated, settings.id]
+      );
+    }
+
+    // Recalculate fit scores for updated targets
+    if (updated > 0) {
+      const { rows: allTargets } = await db.query('SELECT * FROM lp_targets');
+      for (const lp of allTargets) {
+        const newScore = computeFitScore(lp);
+        if (newScore !== lp.fit_score) {
+          await db.query('UPDATE lp_targets SET fit_score = $1 WHERE id = $2', [newScore, lp.id]);
+        }
+      }
+    }
+
+    res.json({ success: true, updated, skipped, errors: errors.length });
+  } catch (err) {
+    console.error('Error processing Clay webhook:', err);
+    res.status(500).json({ error: 'Failed to process Clay webhook', detail: err.message });
+  }
+});
+
+// POST /api/lp/clay/import-csv — Import enriched CSV from Clay (manual upload)
+// For users who prefer to download from Clay and upload directly
+router.post('/clay/import-csv', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'CSV file required' });
+
+    const csvContent = req.file.buffer.toString('utf-8');
+    const rows = parseCSV(csvContent);
+
+    if (rows.length === 0) return res.status(400).json({ error: 'No data found in CSV' });
+
+    let updated = 0;
+    let skipped = 0;
+    let matched = 0;
+
+    for (const row of rows) {
+      // Try to match by platform_id first, then by name+company
+      let lpId = row.platform_id || row.id || null;
+
+      if (!lpId) {
+        // Fuzzy match by name + company
+        const name = row.full_name || row.name || `${row.first_name || ''} ${row.last_name || ''}`.trim();
+        const company = row.company || row.organization || '';
+        if (!name) { skipped++; continue; }
+
+        const { rows: candidates } = await db.query(
+          `SELECT id, full_name, company FROM lp_targets WHERE LOWER(full_name) = LOWER($1)`,
+          [name]
+        );
+
+        if (candidates.length === 1) {
+          lpId = candidates[0].id;
+          matched++;
+        } else if (candidates.length > 1 && company) {
+          // Disambiguate by company
+          const match = candidates.find(c =>
+            fuzzyMatchCompany(c.company, company) >= 75
+          );
+          if (match) {
+            lpId = match.id;
+            matched++;
+          } else {
+            skipped++;
+            continue;
+          }
+        } else {
+          skipped++;
+          continue;
+        }
+      }
+
+      // Build update from Clay CSV columns
+      const updates = [];
+      const vals = [];
+      let idx = 1;
+
+      // Map common Clay enrichment column names to our schema
+      const emailVal = row.enriched_email || row.email_found || row.work_email || row.personal_email || row.email || '';
+      if (emailVal) {
+        updates.push(`email = COALESCE(NULLIF($${idx}, ''), email)`);
+        vals.push(emailVal);
+        idx++;
+      }
+
+      const phoneVal = row.enriched_phone || row.phone_found || row.direct_phone || row.phone || '';
+      if (phoneVal) {
+        updates.push(`phone = COALESCE(NULLIF($${idx}, ''), phone)`);
+        vals.push(phoneVal);
+        idx++;
+      }
+
+      const linkedinVal = row.enriched_linkedin_url || row.linkedin_url || row.linkedin || '';
+      if (linkedinVal) {
+        updates.push(`linkedin_url = COALESCE(NULLIF($${idx}, ''), linkedin_url)`);
+        vals.push(linkedinVal);
+        idx++;
+      }
+
+      const titleVal = row.enriched_title || row.current_title || row.title || '';
+      if (titleVal) {
+        updates.push(`title = COALESCE(NULLIF($${idx}, ''), title)`);
+        vals.push(titleVal);
+        idx++;
+      }
+
+      if (updates.length > 0) {
+        updates.push('updated_at = NOW()');
+        vals.push(lpId);
+        await db.query(
+          `UPDATE lp_targets SET ${updates.join(', ')} WHERE id = $${idx}`,
+          vals
+        );
+        updated++;
+      } else {
+        skipped++;
+      }
+    }
+
+    // Log sync
+    await db.query(
+      `INSERT INTO clay_sync_log (direction, records_count, status, details) VALUES ('import', $1, 'success', $2)`,
+      [updated, JSON.stringify({
+        source: 'csv_upload',
+        total_rows: rows.length,
+        updated,
+        matched_by_name: matched,
+        skipped,
+      })]
+    );
+
+    res.json({
+      success: true,
+      total_rows: rows.length,
+      updated,
+      matched_by_name: matched,
+      skipped,
+    });
+  } catch (err) {
+    console.error('Error importing Clay CSV:', err);
+    res.status(500).json({ error: 'Failed to import Clay CSV', detail: err.message });
+  }
+});
+
+// GET /api/lp/clay/webhook-url — Return the platform's webhook URL for Clay to call back
+router.get('/clay/webhook-url', authenticate, async (req, res) => {
+  const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+  res.json({
+    webhook_url: `${baseUrl}/api/lp/clay/webhook`,
+    instructions: 'Add this URL as an HTTP POST action in your Clay table. Map your enriched columns to the expected field names (enriched_email, enriched_phone, enriched_linkedin_url, etc.). Include platform_id and record_type in the payload.',
+  });
+});
+
 module.exports = router;
 // RocketReach GET fix deployed

@@ -124,3 +124,13 @@ export const enrichLinkedInProfile = (linkedin_url, lp_target_id, apollo_contact
   request('/lp/linkedin/enrich', { method: 'POST', body: JSON.stringify({ linkedin_url, lp_target_id, apollo_contact_id }) });
 export const getLinkedInEnrichment = (targetId) =>
   request(`/lp/linkedin/enrichment/${targetId}`);
+
+// Clay Integration
+export const getClaySettings = () => request('/lp/clay/settings');
+export const saveClaySettings = (data) =>
+  request('/lp/clay/settings', { method: 'POST', body: JSON.stringify(data) });
+export const exportToClay = (data = {}) =>
+  request('/lp/clay/export', { method: 'POST', body: JSON.stringify(data) });
+export const importClayCSV = (formData) =>
+  request('/lp/clay/import-csv', { method: 'POST', body: formData });
+export const getClayWebhookUrl = () => request('/lp/clay/webhook-url');
