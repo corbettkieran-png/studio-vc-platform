@@ -22,7 +22,11 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'https://app.clay.com',
+    'https://studio-vc-platform.vercel.app',
+  ],
   credentials: true,
 }));
 app.use(express.json());
