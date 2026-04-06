@@ -125,6 +125,9 @@ export default function LPOutreach() {
   const [showEmailDraft, setShowEmailDraft] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
   const [contactFilter, setContactFilter] = useState('all'); // all, c_suite, vp, director, has_email, known
+  const [statusFilter, setStatusFilter] = useState('all'); // outreach status filter for LP list
+  const [pageSize] = useState(50);
+  const [page, setPage] = useState(0);
 
   // Generate email draft based on LP target data
   const generateEmailDraft = (type = 'cold') => {
@@ -290,6 +293,26 @@ Kieran`;
 
     return (
       <>
+        {/* LinkedIn Export Banner */}
+        {stats.team_member_connection_counts?.reduce((sum, t) => sum + (t.connections_count || 0), 0) === 0 && (
+          <div style={{
+            background: 'linear-gradient(135deg, #EFF6FF, #DBEAFE)',
+            border: '1px solid #93C5FD',
+            borderRadius: 10, padding: '14px 20px', marginBottom: 20,
+            display: 'flex', alignItems: 'center', gap: 12
+          }}>
+            <span style={{ fontSize: 20 }}>🔗</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#1E40AF', marginBottom: 2 }}>
+                LinkedIn Connection Export Pending
+              </div>
+              <div style={{ fontSize: 12, color: '#3B82F6' }}>
+                Your LinkedIn data archive has been requested and should be ready within 24 hours. Once downloaded, upload the Connections.csv in Upload & Setup to activate connection matching across all {stats.total_lps} LP targets.
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="stats-row">
           <div className="stat-card hl">
             <div className="stat-value">{stats.total_lps}</div>
@@ -313,21 +336,37 @@ Kieran`;
           </div>
         </div>
 
-        {/* Status Breakdown */}
+        {/* Pipeline Funnel */}
         {stats.by_status && Object.keys(stats.by_status).length > 0 && (
           <div style={{ marginTop: 24 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Outreach Status Breakdown</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
-              {Object.entries(stats.by_status).map(([status, count]) => (
-                <div key={status} className="card" style={{ padding: 16, textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--navy)', marginBottom: 4 }}>
-                    {count}
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Outreach Pipeline</h3>
+            <div className="card" style={{ padding: 20 }}>
+              {Object.entries(OUTREACH_STATUS_LABELS).map(([status, label]) => {
+                const count = stats.by_status[status] || 0;
+                const pct = stats.total_lps > 0 ? (count / stats.total_lps) * 100 : 0;
+                return (
+                  <div key={status} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0',
+                    cursor: 'pointer', borderRadius: 4
+                  }}
+                  onClick={() => { setStatusFilter(status); setTab('lp-list'); setPage(0); }}
+                  >
+                    <div style={{ width: 110, fontSize: 12, fontWeight: 500, color: 'var(--dark)', flexShrink: 0 }}>
+                      {label}
+                    </div>
+                    <div style={{ flex: 1, height: 22, background: '#F3F4F6', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                      <div style={{
+                        height: '100%', background: OUTREACH_STATUS_COLORS[status] || '#9CA3AF',
+                        width: `${Math.max(pct, count > 0 ? 2 : 0)}%`, borderRadius: 4,
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                    <div style={{ width: 36, fontSize: 13, fontWeight: 600, color: 'var(--dark)', textAlign: 'right' }}>
+                      {count}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                    {OUTREACH_STATUS_LABELS[status] || status}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -387,14 +426,61 @@ Kieran`;
 
   // LP LIST TAB
   const renderLPList = () => {
+    const filtered = targets.filter(t => {
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'active') return ['identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions'].includes(t.outreach_status);
+      if (statusFilter === 'connected') return t.connection_strength && t.connection_strength !== 'none';
+      if (statusFilter === 'has_email') return !!t.email;
+      return t.outreach_status === statusFilter;
+    });
+    const totalPages = Math.ceil(filtered.length / pageSize);
+    const paginated = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
     return (
       <>
+        {/* Status filter bar */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
+          {[
+            { key: 'all', label: 'All', color: '#374151' },
+            { key: 'active', label: 'Active Pipeline', color: '#003B76' },
+            { key: 'not_started', label: 'Not Started', color: '#9CA3AF' },
+            { key: 'connected', label: 'Has Connection', color: '#10B981' },
+            { key: 'has_email', label: 'Has Email', color: '#059669' },
+            { key: 'meeting_scheduled', label: 'Meetings', color: '#003B76' },
+            { key: 'committed', label: 'Committed', color: '#059669' },
+            { key: 'passed', label: 'Passed', color: '#D1D5DB' },
+          ].map(f => {
+            const isActive = statusFilter === f.key;
+            const count = f.key === 'all' ? targets.length
+              : f.key === 'active' ? targets.filter(t => ['identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions'].includes(t.outreach_status)).length
+              : f.key === 'connected' ? targets.filter(t => t.connection_strength && t.connection_strength !== 'none').length
+              : f.key === 'has_email' ? targets.filter(t => !!t.email).length
+              : targets.filter(t => t.outreach_status === f.key).length;
+            return (
+              <button key={f.key} onClick={() => { setStatusFilter(f.key); setPage(0); }} style={{
+                padding: '5px 12px', borderRadius: 16, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                border: isActive ? 'none' : '1px solid var(--border-light)',
+                background: isActive ? f.color : 'transparent',
+                color: isActive ? (f.color === '#D1D5DB' ? '#374151' : 'white') : 'var(--muted)',
+                transition: 'all 0.15s',
+              }}>
+                {f.label} <span style={{ opacity: 0.7, fontWeight: 400 }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="table-box">
           <div className="table-toolbar">
-            <div className="search-input">
-              <span>🔍</span>
-              <input placeholder="Search LP name, company..." value={search}
-                onChange={(e) => setSearch(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="search-input">
+                <span>🔍</span>
+                <input placeholder="Search LP name, company..." value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+              </span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
@@ -424,11 +510,14 @@ Kieran`;
               </tr>
             </thead>
             <tbody>
-              {targets.map((t) => (
+              {paginated.map((t) => (
                 <tr key={t.id} onClick={() => setSelectedTarget(t.id)} style={{ cursor: 'pointer' }}>
                   <td>
                     <div style={{ fontWeight: 500 }}>{t.full_name || t.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{t.company}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                      {t.company}
+                      {t.email && <span style={{ marginLeft: 8, fontSize: 10, color: '#059669' }}>✉</span>}
+                    </div>
                   </td>
                   <td>
                     <FitScoreBar score={t.fit_score || 0} />
@@ -460,13 +549,48 @@ Kieran`;
                   </td>
                 </tr>
               ))}
-              {!targets.length && (
+              {!paginated.length && (
                 <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
-                  {loading ? 'Loading...' : 'No LP targets found'}
+                  {loading ? 'Loading...' : statusFilter !== 'all' ? 'No LPs match this filter' : 'No LP targets found'}
                 </td></tr>
               )}
             </tbody>
           </table>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '10px 18px', borderTop: '1px solid var(--border-light)', fontSize: 12
+            }}>
+              <span style={{ color: 'var(--muted)' }}>
+                Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, filtered.length)} of {filtered.length}
+              </span>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 4, fontSize: 11, border: '1px solid var(--border-light)',
+                    background: page === 0 ? 'var(--card-bg)' : '#fff', cursor: page === 0 ? 'default' : 'pointer',
+                    color: page === 0 ? 'var(--border-light)' : 'var(--dark)'
+                  }}>← Prev</button>
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button key={i} onClick={() => setPage(i)} style={{
+                    padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: page === i ? 700 : 400,
+                    border: page === i ? '1px solid var(--navy)' : '1px solid var(--border-light)',
+                    background: page === i ? 'var(--navy)' : '#fff',
+                    color: page === i ? '#fff' : 'var(--dark)', cursor: 'pointer', minWidth: 28
+                  }}>{i + 1}</button>
+                ))}
+                <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 4, fontSize: 11, border: '1px solid var(--border-light)',
+                    background: page >= totalPages - 1 ? 'var(--card-bg)' : '#fff',
+                    cursor: page >= totalPages - 1 ? 'default' : 'pointer',
+                    color: page >= totalPages - 1 ? 'var(--border-light)' : 'var(--dark)'
+                  }}>Next →</button>
+              </div>
+            </div>
+          )}
         </div>
       </>
     );
@@ -639,15 +763,50 @@ Kieran`;
       <>
         <div className="detail-overlay" onClick={() => setSelectedTarget(null)} />
         <div className="detail-panel open" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
-          <div className="detail-header">
-            <div>
-              <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{detail.full_name || detail.name}</h2>
-              <p style={{ fontSize: 13, color: 'var(--muted)' }}>{detail.company}</p>
+          <div className="detail-header" style={{ flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 2 }}>{detail.full_name || detail.name}</h2>
+                <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 0 }}>
+                  {detail.title ? `${detail.title} · ` : ''}{detail.company}
+                </p>
+              </div>
+              <button onClick={() => setSelectedTarget(null)} style={{
+                background: 'none', border: 'none', fontSize: 20, cursor: 'pointer',
+                color: 'var(--muted)'
+              }}>✕</button>
             </div>
-            <button onClick={() => setSelectedTarget(null)} style={{
-              background: 'none', border: 'none', fontSize: 20, cursor: 'pointer',
-              color: 'var(--muted)'
-            }}>✕</button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
+              <StatusBadge
+                status={OUTREACH_STATUS_LABELS[detail.outreach_status] || 'Not Started'}
+                color={OUTREACH_STATUS_COLORS[detail.outreach_status] || '#9CA3AF'}
+              />
+              {detail.fit_score > 0 && (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 4,
+                  background: getFitScoreColor(detail.fit_score) + '18',
+                  color: getFitScoreColor(detail.fit_score)
+                }}>
+                  Fit: {detail.fit_score}
+                </span>
+              )}
+              {detail.email && (
+                <a href={`mailto:${detail.email}`} style={{
+                  fontSize: 11, color: '#059669', textDecoration: 'none',
+                  background: '#ECFDF5', padding: '4px 8px', borderRadius: 4
+                }}>
+                  {detail.email}
+                </a>
+              )}
+              {detail.linkedin_url && (
+                <a href={detail.linkedin_url} target="_blank" rel="noopener noreferrer" style={{
+                  fontSize: 11, color: '#0077B5', textDecoration: 'none',
+                  background: '#EFF6FF', padding: '4px 8px', borderRadius: 4
+                }}>
+                  LinkedIn →
+                </a>
+              )}
+            </div>
           </div>
 
           <div className="detail-body">
