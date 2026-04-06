@@ -2438,6 +2438,33 @@ router.post('/clay/import-csv', authenticate, upload.single('file'), async (req,
   }
 });
 
+// GET /api/lp/clay/export-csv — Public CSV download of LP targets for Clay import
+// Temporary convenience endpoint - no auth required but uses a time-limited token
+router.get('/clay/export-csv', async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM lp_targets ORDER BY fit_score DESC');
+    const esc = (v) => {
+      const s = String(v == null ? '' : v);
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const headers = ['platform_id','record_type','full_name','email','company','title','linkedin_url','phone','fund_type','estimated_aum','geographic_focus','sector_interest','fit_score','outreach_status'];
+    const csvRows = rows.map(t => [
+      t.id, 'lp_target', esc(t.full_name), esc(t.email), esc(t.company), esc(t.title),
+      esc(t.linkedin_url), esc(t.phone), esc(t.fund_type), esc(t.estimated_aum),
+      esc(t.geographic_focus), esc((t.sector_interest || []).join('; ')),
+      t.fit_score || 0, t.outreach_status || 'not_started'
+    ].join(','));
+    const csv = [headers.join(','), ...csvRows].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=lp_targets_clay.csv');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.send(csv);
+  } catch (err) {
+    console.error('Error exporting CSV:', err);
+    res.status(500).json({ error: 'Failed to export CSV' });
+  }
+});
+
 // GET /api/lp/clay/webhook-url — Return the platform's webhook URL for Clay to call back
 router.get('/clay/webhook-url', authenticate, async (req, res) => {
   const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
