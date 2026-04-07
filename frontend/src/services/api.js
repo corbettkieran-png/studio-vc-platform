@@ -47,7 +47,8 @@ export const submitDeck = (formData) =>
   request('/submissions', { method: 'POST', body: formData });
 
 export const getSubmissions = (params = {}) => {
-  const qs = new URLSearchParams(params).toString();
+  const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''));
+  const qs = new URLSearchParams(clean).toString();
   return request(`/submissions?${qs}`);
 };
 
