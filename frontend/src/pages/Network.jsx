@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getContactsLeaderboard,
   getContacts,
@@ -37,12 +37,21 @@ export default function Network() {
   const [tab, setTab] = useState('leaderboard');
   const [leaderboard, setLeaderboard] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [contactsTotal, setContactsTotal] = useState(0);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [strengthFilter, setStrengthFilter] = useState('');
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(true);
+  const reqIdRef = useRef(0);
+
+  // Debounce search input — avoid hammering the API on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const loadLeaderboard = useCallback(async () => {
     try {
@@ -54,17 +63,21 @@ export default function Network() {
   }, []);
 
   const loadContacts = useCallback(async () => {
+    const myReq = ++reqIdRef.current;
     try {
       const data = await getContacts({
-        search,
+        search: debouncedSearch,
         strength: strengthFilter,
         limit: 200,
       });
+      // Drop stale responses if a newer request started
+      if (myReq !== reqIdRef.current) return;
       setContacts(data.contacts || []);
+      setContactsTotal(data.total || 0);
     } catch (e) {
       console.error(e);
     }
-  }, [search, strengthFilter]);
+  }, [debouncedSearch, strengthFilter]);
 
   useEffect(() => {
     setLoading(true);
@@ -97,8 +110,8 @@ export default function Network() {
     }
   };
 
-  // Aggregate stats
-  const totalContacts = contacts.length;
+  // Aggregate stats — use server-reported total, not the page slice
+  const totalContacts = contactsTotal;
   const totalSourced = leaderboard.reduce((acc, r) => acc + parseInt(r.deals_sourced || 0), 0);
   const totalAdvanced = leaderboard.reduce((acc, r) => acc + parseInt(r.deals_advanced || 0), 0);
 

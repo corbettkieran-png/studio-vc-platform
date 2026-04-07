@@ -439,10 +439,22 @@ router.get('/analytics/overview', authenticate, async (req, res) => {
 
 // PATCH /api/submissions/:id/intro-source — set or change the referring contact
 router.patch('/:id/intro-source', authenticate, async (req, res) => {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid submission id' });
   try {
     const { contact_id, full_name, email, company, title, notes, relationship_strength } = req.body;
+    if (relationship_strength && !['close','warm','weak','cold'].includes(relationship_strength)) {
+      return res.status(400).json({ error: 'Invalid relationship_strength' });
+    }
 
     let resolvedId = contact_id || null;
+    if (resolvedId && !UUID_RE.test(resolvedId)) {
+      return res.status(400).json({ error: 'Invalid contact_id' });
+    }
+    if (resolvedId) {
+      const { rowCount } = await db.query('SELECT 1 FROM contacts WHERE id = $1', [resolvedId]);
+      if (!rowCount) return res.status(404).json({ error: 'Contact not found' });
+    }
 
     // If no contact_id given, try to find or create one
     if (!resolvedId && (full_name || email)) {

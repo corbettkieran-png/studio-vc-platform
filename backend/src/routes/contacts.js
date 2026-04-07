@@ -7,6 +7,12 @@ const router = express.Router();
 // All contacts routes require auth
 router.use(authenticate);
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VALID_STRENGTHS = ['close', 'warm', 'weak', 'cold'];
+
+// Escape % and _ so user input is treated literally inside ILIKE
+const escapeLike = (s) => String(s).replace(/[\\%_]/g, (c) => '\\' + c);
+
 // GET /api/contacts — list / search
 router.get('/', async (req, res) => {
   try {
@@ -16,12 +22,12 @@ router.get('/', async (req, res) => {
     const params = [];
     let i = 1;
 
-    if (search) {
+    if (search?.trim()) {
       where.push(`(full_name ILIKE $${i} OR email ILIKE $${i} OR company ILIKE $${i})`);
-      params.push(`%${search}%`);
+      params.push(`%${escapeLike(search.trim())}%`);
       i++;
     }
-    if (strength) {
+    if (strength && VALID_STRENGTHS.includes(strength)) {
       where.push(`relationship_strength = $${i}`);
       params.push(strength);
       i++;
@@ -34,25 +40,32 @@ router.get('/', async (req, res) => {
     const lim = Math.min(parseInt(limit) || 50, 200);
     const off = parseInt(offset) || 0;
 
+    // Single query: aggregate deal counts via LEFT JOIN (faster than per-row subqueries)
+    // and use a window function to return total count alongside the page.
     const { rows } = await db.query(
-      `SELECT c.*,
-        (SELECT COUNT(*) FROM submissions WHERE intro_source_contact_id = c.id) AS deals_sourced,
-        (SELECT COUNT(*) FROM submissions
-          WHERE intro_source_contact_id = c.id
-            AND status IN ('reviewing','contacted')) AS deals_advanced
-       FROM contacts c
-       ${whereClause}
-       ORDER BY ${sortCol} ASC
-       LIMIT ${lim} OFFSET ${off}`,
+      `SELECT c.id, c.full_name, c.email, c.company, c.title, c.linkedin_url,
+              c.relationship_strength, c.source, c.notes, c.created_at, c.updated_at,
+              COALESCE(stats.deals_sourced, 0) AS deals_sourced,
+              COALESCE(stats.deals_advanced, 0) AS deals_advanced,
+              COUNT(*) OVER() AS total_count
+         FROM contacts c
+         LEFT JOIN (
+           SELECT intro_source_contact_id,
+                  COUNT(*) AS deals_sourced,
+                  COUNT(*) FILTER (WHERE status IN ('reviewing','contacted')) AS deals_advanced
+             FROM submissions
+            WHERE intro_source_contact_id IS NOT NULL
+            GROUP BY intro_source_contact_id
+         ) stats ON stats.intro_source_contact_id = c.id
+         ${whereClause}
+         ORDER BY ${sortCol} ASC
+         LIMIT ${lim} OFFSET ${off}`,
       params
     );
 
-    const { rows: countRows } = await db.query(
-      `SELECT COUNT(*) AS total FROM contacts ${whereClause}`,
-      params
-    );
-
-    res.json({ contacts: rows, total: parseInt(countRows[0].total) });
+    const total = rows.length ? parseInt(rows[0].total_count) : 0;
+    rows.forEach((r) => delete r.total_count);
+    res.json({ contacts: rows, total });
   } catch (err) {
     console.error('Contacts list error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -92,6 +105,7 @@ router.get('/leaderboard', async (req, res) => {
 
 // GET /api/contacts/:id — single contact + sourced deals
 router.get('/:id', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid contact id' });
   try {
     const { rows } = await db.query('SELECT * FROM contacts WHERE id = $1', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -121,6 +135,9 @@ router.post('/', async (req, res) => {
 
     if (!full_name?.trim()) {
       return res.status(400).json({ error: 'full_name required' });
+    }
+    if (relationship_strength && !VALID_STRENGTHS.includes(relationship_strength)) {
+      return res.status(400).json({ error: 'Invalid relationship_strength' });
     }
 
     // De-dupe by lowercase email if provided
@@ -155,6 +172,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(rows[0]);
   } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'A contact with that email already exists' });
     console.error('Contact create error:', err);
     res.status(500).json({ error: 'Server error' });
   }
@@ -162,7 +180,18 @@ router.post('/', async (req, res) => {
 
 // PATCH /api/contacts/:id — update
 router.patch('/:id', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid contact id' });
   try {
+    if (
+      'relationship_strength' in req.body &&
+      req.body.relationship_strength &&
+      !VALID_STRENGTHS.includes(req.body.relationship_strength)
+    ) {
+      return res.status(400).json({ error: 'Invalid relationship_strength' });
+    }
+
+    // full_name is NOT NULL in the schema — protect against accidental clearing
+    const required = new Set(['full_name', 'relationship_strength']);
     const allowed = [
       'full_name', 'email', 'company', 'title', 'linkedin_url',
       'relationship_strength', 'notes',
@@ -171,11 +200,18 @@ router.patch('/:id', async (req, res) => {
     const params = [];
     let i = 1;
     for (const k of allowed) {
-      if (k in req.body) {
+      if (!(k in req.body)) continue; // skip undefined keys instead of nullifying
+      const v = req.body[k];
+      if (required.has(k)) {
+        if (v == null || (typeof v === 'string' && !v.trim())) continue; // never null required cols
         sets.push(`${k} = $${i}`);
-        params.push(req.body[k] || null);
-        i++;
+        params.push(typeof v === 'string' ? v.trim() : v);
+      } else {
+        // For optional cols, treat empty string as explicit clear
+        sets.push(`${k} = $${i}`);
+        params.push(v == null || (typeof v === 'string' && !v.trim()) ? null : (typeof v === 'string' ? v.trim() : v));
       }
+      i++;
     }
     if (!sets.length) return res.status(400).json({ error: 'No fields to update' });
 
@@ -189,6 +225,7 @@ router.patch('/:id', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'A contact with that email already exists' });
     console.error('Contact update error:', err);
     res.status(500).json({ error: 'Server error' });
   }
@@ -196,6 +233,7 @@ router.patch('/:id', async (req, res) => {
 
 // DELETE /api/contacts/:id
 router.delete('/:id', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid contact id' });
   try {
     const { rowCount } = await db.query('DELETE FROM contacts WHERE id = $1', [req.params.id]);
     if (!rowCount) return res.status(404).json({ error: 'Not found' });
