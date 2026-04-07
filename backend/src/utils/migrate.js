@@ -112,6 +112,45 @@ ALTER TABLE submissions ADD COLUMN IF NOT EXISTS deck_analysis_status VARCHAR(50
 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS deck_analysis_error TEXT;
 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS deck_analyzed_at TIMESTAMPTZ;
 
+-- ============================================================
+-- Relationship intelligence: contacts + intro source tracking
+-- ============================================================
+CREATE TABLE IF NOT EXISTS contacts (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name           VARCHAR(255) NOT NULL,
+  email               VARCHAR(255),
+  company             VARCHAR(255),
+  title               VARCHAR(255),
+  linkedin_url        VARCHAR(500),
+  -- close | warm | weak | cold (cold = inbound / no real relationship)
+  relationship_strength VARCHAR(20) DEFAULT 'warm'
+                      CHECK (relationship_strength IN ('close','warm','weak','cold')),
+  -- manual | apollo | linkedin | gmail | calendar
+  source              VARCHAR(20) DEFAULT 'manual',
+  external_id         VARCHAR(255),
+  notes               TEXT,
+  enriched_data       JSONB,
+  created_by          UUID REFERENCES users(id),
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_email_lower
+  ON contacts (LOWER(email)) WHERE email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts (LOWER(full_name));
+CREATE INDEX IF NOT EXISTS idx_contacts_strength ON contacts (relationship_strength);
+
+-- Link submissions to the contact who referred them
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS intro_source_contact_id UUID
+  REFERENCES contacts(id) ON DELETE SET NULL;
+-- Free-text fallback for intros captured on the public form before contact creation
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS intro_source_raw_name VARCHAR(255);
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS intro_source_raw_email VARCHAR(255);
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS intro_source_notes TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_submissions_intro_source
+  ON submissions (intro_source_contact_id);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status);
 CREATE INDEX IF NOT EXISTS idx_submissions_sector ON submissions(sector);

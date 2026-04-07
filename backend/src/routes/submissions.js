@@ -53,6 +53,7 @@ router.post('/', (req, res) => {
         founder_name, founder_email, founder_phone, founder_linkedin,
         company_name, one_liner, website, sector, stage,
         arr, mrr, yoy_growth, fundraising_amount,
+        intro_source_name, intro_source_email, intro_source_notes,
       } = req.body;
 
       // Validate required fields
@@ -68,14 +69,44 @@ router.post('/', (req, res) => {
       const deckFile = req.files?.deck?.[0];
       const videoFile = req.files?.video?.[0];
 
+      // Resolve intro source: try existing contact by email, else create stub
+      let introContactId = null;
+      const introName = intro_source_name?.trim();
+      const introEmail = intro_source_email?.trim();
+      if (introName || introEmail) {
+        try {
+          if (introEmail) {
+            const existing = await db.query(
+              'SELECT id FROM contacts WHERE LOWER(email) = LOWER($1) LIMIT 1',
+              [introEmail]
+            );
+            if (existing.rows.length) {
+              introContactId = existing.rows[0].id;
+            }
+          }
+          if (!introContactId && introName) {
+            const created = await db.query(
+              `INSERT INTO contacts (full_name, email, source, relationship_strength)
+               VALUES ($1, $2, 'inbound_form', 'cold')
+               RETURNING id`,
+              [introName, introEmail || null]
+            );
+            introContactId = created.rows[0].id;
+          }
+        } catch (e) {
+          console.error('Intro source resolution error:', e.message);
+        }
+      }
+
       const { rows } = await db.query(
         `INSERT INTO submissions
          (founder_name, founder_email, founder_phone, founder_linkedin,
           company_name, one_liner, website, sector, stage,
           arr, mrr, yoy_growth, fundraising_amount,
           deck_filename, deck_path, video_filename, video_path,
-          status, match_score, rejection_reasons)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          status, match_score, rejection_reasons,
+          intro_source_contact_id, intro_source_raw_name, intro_source_raw_email, intro_source_notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
          RETURNING id, company_name, status`,
         [
           founder_name, founder_email, founder_phone || null, founder_linkedin || null,
@@ -86,6 +117,10 @@ router.post('/', (req, res) => {
           screenResult.status,
           JSON.stringify(screenResult.checks),
           JSON.stringify(screenResult.rejectionReasons),
+          introContactId,
+          introName || null,
+          introEmail || null,
+          intro_source_notes?.trim() || null,
         ]
       );
 
@@ -211,7 +246,20 @@ router.get('/stats', authenticate, async (req, res) => {
 // GET /api/submissions/:id
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM submissions WHERE id = $1', [req.params.id]);
+    const { rows } = await db.query(
+      `SELECT s.*,
+              c.id   AS intro_contact_id,
+              c.full_name AS intro_contact_name,
+              c.email     AS intro_contact_email,
+              c.company   AS intro_contact_company,
+              c.title     AS intro_contact_title,
+              c.linkedin_url AS intro_contact_linkedin,
+              c.relationship_strength AS intro_contact_strength
+       FROM submissions s
+       LEFT JOIN contacts c ON c.id = s.intro_source_contact_id
+       WHERE s.id = $1`,
+      [req.params.id]
+    );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
 
     // Get notes
@@ -385,6 +433,69 @@ router.get('/analytics/overview', authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error('Analytics error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PATCH /api/submissions/:id/intro-source — set or change the referring contact
+router.patch('/:id/intro-source', authenticate, async (req, res) => {
+  try {
+    const { contact_id, full_name, email, company, title, notes, relationship_strength } = req.body;
+
+    let resolvedId = contact_id || null;
+
+    // If no contact_id given, try to find or create one
+    if (!resolvedId && (full_name || email)) {
+      if (email) {
+        const existing = await db.query(
+          'SELECT id FROM contacts WHERE LOWER(email) = LOWER($1) LIMIT 1',
+          [email]
+        );
+        if (existing.rows.length) resolvedId = existing.rows[0].id;
+      }
+      if (!resolvedId && full_name) {
+        const created = await db.query(
+          `INSERT INTO contacts
+            (full_name, email, company, title, relationship_strength, source, created_by)
+           VALUES ($1,$2,$3,$4,$5,'manual',$6)
+           RETURNING id`,
+          [
+            full_name.trim(),
+            email?.trim() || null,
+            company?.trim() || null,
+            title?.trim() || null,
+            relationship_strength || 'warm',
+            req.user.id,
+          ]
+        );
+        resolvedId = created.rows[0].id;
+      }
+    }
+
+    const { rowCount } = await db.query(
+      `UPDATE submissions
+       SET intro_source_contact_id = $1,
+           intro_source_notes = COALESCE($2, intro_source_notes),
+           updated_at = NOW()
+       WHERE id = $3`,
+      [resolvedId, notes?.trim() || null, req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+
+    await db.query(
+      `INSERT INTO activity_log (submission_id, user_id, action, details)
+       VALUES ($1, $2, 'intro_source_set', $3)`,
+      [req.params.id, req.user.id, JSON.stringify({ contact_id: resolvedId })]
+    );
+
+    // Return joined view
+    const { rows } = await db.query(
+      `SELECT c.* FROM contacts c WHERE c.id = $1`,
+      [resolvedId]
+    );
+    res.json({ ok: true, contact: rows[0] || null });
+  } catch (err) {
+    console.error('Intro source update error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

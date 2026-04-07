@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSubmissions, getStats, updateStatus, addNote, addProgressCheck, getActivity, analyzeSubmission } from '../services/api';
+import { getSubmissions, getStats, updateStatus, addNote, addProgressCheck, getActivity, analyzeSubmission, setIntroSource, getContacts } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
 const STATUS_LABELS = {
@@ -99,6 +99,20 @@ export default function CRM() {
       setNoteText('');
       const { getSubmission } = await import('../services/api');
       setDetail(await getSubmission(detail.id));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const refreshDetail = async (id) => {
+    const { getSubmission } = await import('../services/api');
+    setDetail(await getSubmission(id));
+  };
+
+  const handleSetIntroSource = async (id, payload) => {
+    try {
+      await setIntroSource(id, payload);
+      await refreshDetail(id);
     } catch (err) {
       alert(err.message);
     }
@@ -329,6 +343,12 @@ export default function CRM() {
                 </div>
               </div>
 
+              {/* Intro Source */}
+              <IntroSourceSection
+                detail={detail}
+                onSave={(payload) => handleSetIntroSource(detail.id, payload)}
+              />
+
               {/* AI Deck Analysis */}
               <div className="detail-section">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -492,5 +512,209 @@ export default function CRM() {
         </>
       )}
     </>
+  );
+}
+
+// ─── Intro Source Section ──────────────────────────────────────────
+function IntroSourceSection({ detail, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ full_name: '', email: '', company: '', title: '', relationship_strength: 'warm', notes: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) { setSearchResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const data = await getContacts({ search: searchQuery, limit: 8 });
+        if (!cancelled) setSearchResults(data.contacts || []);
+      } catch (e) {
+        // silent
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [searchQuery]);
+
+  const startEdit = () => {
+    setForm({
+      full_name: detail.intro_contact_name || detail.intro_source_raw_name || '',
+      email: detail.intro_contact_email || detail.intro_source_raw_email || '',
+      company: detail.intro_contact_company || '',
+      title: detail.intro_contact_title || '',
+      relationship_strength: detail.intro_contact_strength || 'warm',
+      notes: detail.intro_source_notes || '',
+    });
+    setEditing(true);
+  };
+
+  const pickContact = (c) => {
+    onSave({ contact_id: c.id, notes: form.notes });
+    setEditing(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const saveNew = () => {
+    if (!form.full_name.trim()) return;
+    onSave({
+      full_name: form.full_name,
+      email: form.email,
+      company: form.company,
+      title: form.title,
+      relationship_strength: form.relationship_strength,
+      notes: form.notes,
+    });
+    setEditing(false);
+  };
+
+  const clearSource = () => {
+    if (!confirm('Clear intro source?')) return;
+    onSave({ contact_id: null });
+  };
+
+  const strengthColor = {
+    close: '#0a7f3f', warm: '#b8860b', weak: '#888', cold: '#8a1f1f',
+  };
+  const hasContact = !!detail.intro_contact_id;
+  const hasRaw = !hasContact && (detail.intro_source_raw_name || detail.intro_source_raw_email);
+
+  return (
+    <div className="detail-section">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <h3 style={{ margin: 0 }}>Intro Source</h3>
+        {!editing && (
+          <button className="btn btn-secondary btn-sm" onClick={startEdit}>
+            {hasContact || hasRaw ? 'Edit' : 'Add Source'}
+          </button>
+        )}
+      </div>
+
+      {!editing && !hasContact && !hasRaw && (
+        <p style={{ fontSize: 13, color: 'var(--muted)' }}>Inbound — no referrer captured.</p>
+      )}
+
+      {!editing && hasContact && (
+        <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+            <strong>{detail.intro_contact_name}</strong>
+            <span style={{ padding: '2px 8px', background: strengthColor[detail.intro_contact_strength] || '#888', color: 'white', borderRadius: 4, fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>
+              {detail.intro_contact_strength}
+            </span>
+          </div>
+          {(detail.intro_contact_title || detail.intro_contact_company) && (
+            <div style={{ color: 'var(--muted)' }}>
+              {detail.intro_contact_title}{detail.intro_contact_title && detail.intro_contact_company ? ' · ' : ''}{detail.intro_contact_company}
+            </div>
+          )}
+          {detail.intro_contact_email && <div>{detail.intro_contact_email}</div>}
+          {detail.intro_contact_linkedin && (
+            <div><a href={detail.intro_contact_linkedin} target="_blank" rel="noopener">LinkedIn →</a></div>
+          )}
+          {detail.intro_source_notes && (
+            <div style={{ marginTop: 6, padding: 8, background: 'var(--card-bg)', borderRadius: 4, fontSize: 12 }}>
+              {detail.intro_source_notes}
+            </div>
+          )}
+          <button className="btn btn-secondary btn-sm" onClick={clearSource} style={{ marginTop: 8 }}>Clear</button>
+        </div>
+      )}
+
+      {!editing && hasRaw && (
+        <div style={{ fontSize: 13 }}>
+          <div><strong>{detail.intro_source_raw_name || '—'}</strong></div>
+          {detail.intro_source_raw_email && <div style={{ color: 'var(--muted)' }}>{detail.intro_source_raw_email}</div>}
+          {detail.intro_source_notes && <div style={{ marginTop: 4 }}>{detail.intro_source_notes}</div>}
+          <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+            Captured from intake form. Click Edit to convert to a tracked contact.
+          </p>
+        </div>
+      )}
+
+      {editing && (
+        <div style={{ fontSize: 13 }}>
+          <div className="form-group" style={{ marginBottom: 8 }}>
+            <label style={{ fontSize: 11, color: 'var(--muted)' }}>SEARCH EXISTING CONTACTS</label>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Type a name, email, or company..."
+              style={{ width: '100%', padding: 6, fontSize: 13 }}
+            />
+            {searching && <div style={{ fontSize: 11, color: 'var(--muted)' }}>Searching…</div>}
+            {searchResults.length > 0 && (
+              <div style={{ border: '1px solid var(--border, #ddd)', borderRadius: 4, maxHeight: 180, overflowY: 'auto', marginTop: 4 }}>
+                {searchResults.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => pickContact(c)}
+                    style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid var(--border, #eee)' }}
+                  >
+                    <div style={{ fontWeight: 500 }}>{c.full_name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                      {c.email}{c.company ? ` · ${c.company}` : ''} · {c.deals_sourced || 0} deals
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border, #eee)', paddingTop: 8, marginTop: 8 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>OR CREATE NEW</div>
+            <input
+              value={form.full_name}
+              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+              placeholder="Full name *"
+              style={{ width: '100%', padding: 6, marginBottom: 4 }}
+            />
+            <input
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="Email"
+              style={{ width: '100%', padding: 6, marginBottom: 4 }}
+            />
+            <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+              <input
+                value={form.company}
+                onChange={(e) => setForm({ ...form, company: e.target.value })}
+                placeholder="Company"
+                style={{ flex: 1, padding: 6 }}
+              />
+              <input
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="Title"
+                style={{ flex: 1, padding: 6 }}
+              />
+            </div>
+            <select
+              value={form.relationship_strength}
+              onChange={(e) => setForm({ ...form, relationship_strength: e.target.value })}
+              style={{ width: '100%', padding: 6, marginBottom: 4 }}
+            >
+              <option value="close">Close — direct relationship</option>
+              <option value="warm">Warm — known, occasional contact</option>
+              <option value="weak">Weak — loose connection</option>
+              <option value="cold">Cold — inbound / no real relationship</option>
+            </select>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Notes (how you know them, context, etc.)"
+              style={{ width: '100%', padding: 6, minHeight: 50 }}
+            />
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <button className="btn btn-primary btn-sm" onClick={saveNew}>Save</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

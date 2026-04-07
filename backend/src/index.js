@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const submissionRoutes = require('./routes/submissions');
 const activityRoutes = require('./routes/activity');
 const lpOutreachRoutes = require('./routes/lp-outreach');
+const contactsRoutes = require('./routes/contacts');
 const { processEmailQueue } = require('./services/email');
 const db = require('./config/db');
 const bcrypt = require('bcryptjs');
@@ -40,11 +41,54 @@ app.use('/api/auth', authRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/lp', lpOutreachRoutes);
+app.use('/api/contacts', contactsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Auto-migrate idempotent schema additions on every boot
+async function autoMigrate() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS contacts (
+        id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        full_name           VARCHAR(255) NOT NULL,
+        email               VARCHAR(255),
+        company             VARCHAR(255),
+        title               VARCHAR(255),
+        linkedin_url        VARCHAR(500),
+        relationship_strength VARCHAR(20) DEFAULT 'warm'
+                            CHECK (relationship_strength IN ('close','warm','weak','cold')),
+        source              VARCHAR(20) DEFAULT 'manual',
+        external_id         VARCHAR(255),
+        notes               TEXT,
+        enriched_data       JSONB,
+        created_by          UUID REFERENCES users(id),
+        created_at          TIMESTAMPTZ DEFAULT NOW(),
+        updated_at          TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_email_lower
+        ON contacts (LOWER(email)) WHERE email IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts (LOWER(full_name));
+      CREATE INDEX IF NOT EXISTS idx_contacts_strength ON contacts (relationship_strength);
+
+      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS intro_source_contact_id UUID
+        REFERENCES contacts(id) ON DELETE SET NULL;
+      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS intro_source_raw_name VARCHAR(255);
+      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS intro_source_raw_email VARCHAR(255);
+      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS intro_source_notes TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_submissions_intro_source
+        ON submissions (intro_source_contact_id);
+    `);
+    console.log('Auto-migrate: contacts schema applied.');
+  } catch (err) {
+    console.error('Auto-migrate error:', err.message);
+  }
+}
+autoMigrate();
 
 // Auto-seed if users table is empty
 async function autoSeed() {

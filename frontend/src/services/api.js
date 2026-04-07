@@ -68,6 +68,24 @@ export const addProgressCheck = (id, data) =>
 export const analyzeSubmission = (id) =>
   request(`/submissions/${id}/analyze`, { method: 'POST' });
 
+export const setIntroSource = (id, data) =>
+  request(`/submissions/${id}/intro-source`, { method: 'PATCH', body: JSON.stringify(data) });
+
+// Contacts (intro source CRM)
+export const getContacts = (params = {}) => {
+  const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''));
+  const qs = new URLSearchParams(clean).toString();
+  return request(`/contacts?${qs}`);
+};
+export const getContact = (id) => request(`/contacts/${id}`);
+export const createContact = (data) =>
+  request('/contacts', { method: 'POST', body: JSON.stringify(data) });
+export const updateContact = (id, data) =>
+  request(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const deleteContact = (id) =>
+  request(`/contacts/${id}`, { method: 'DELETE' });
+export const getContactsLeaderboard = () => request('/contacts/leaderboard');
+
 export const getAnalytics = () => request('/submissions/analytics/overview');
 
 // Activity

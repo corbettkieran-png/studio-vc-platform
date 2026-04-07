@@ -5,6 +5,7 @@ import SubmitDeck from './pages/SubmitDeck';
 import CRM from './pages/CRM';
 import Analytics from './pages/Analytics';
 import LPOutreach from './pages/LPOutreach';
+import Network from './pages/Network';
 import Layout from './components/Layout';
 
 function ProtectedRoute({ children }) {
@@ -30,6 +31,9 @@ function AppRoutes() {
       } />
       <Route path="/lp-outreach" element={
         <ProtectedRoute><Layout><LPOutreach /></Layout></ProtectedRoute>
+      } />
+      <Route path="/network" element={
+        <ProtectedRoute><Layout><Network /></Layout></ProtectedRoute>
       } />
 
       {/* Default redirect */}

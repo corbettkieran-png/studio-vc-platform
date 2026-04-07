@@ -21,6 +21,9 @@ export default function Layout({ children }) {
           <NavLink to="/analytics" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
             <span className="icon">📊</span> Analytics
           </NavLink>
+          <NavLink to="/network" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
+            <span className="icon">🕸️</span> Network
+          </NavLink>
           <NavLink to="/lp-outreach" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
             <span className="icon">🤝</span> LP Outreach
           </NavLink>
