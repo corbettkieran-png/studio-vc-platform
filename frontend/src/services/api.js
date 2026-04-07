@@ -65,6 +65,9 @@ export const addNote = (id, content) =>
 export const addProgressCheck = (id, data) =>
   request(`/submissions/${id}/progress-check`, { method: 'POST', body: JSON.stringify(data) });
 
+export const analyzeSubmission = (id) =>
+  request(`/submissions/${id}/analyze`, { method: 'POST' });
+
 export const getAnalytics = () => request('/submissions/analytics/overview');
 
 // Activity

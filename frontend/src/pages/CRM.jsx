@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSubmissions, getStats, updateStatus, addNote, addProgressCheck, getActivity } from '../services/api';
+import { getSubmissions, getStats, updateStatus, addNote, addProgressCheck, getActivity, analyzeSubmission } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
 const STATUS_LABELS = {
@@ -39,6 +39,7 @@ export default function CRM() {
   const [noteText, setNoteText] = useState('');
   const [activityFeed, setActivityFeed] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const statusesByTab = {
     matched: 'matched',
@@ -100,6 +101,19 @@ export default function CRM() {
       setDetail(await getSubmission(detail.id));
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleAnalyzeDeck = async (id) => {
+    setAnalyzing(true);
+    try {
+      await analyzeSubmission(id);
+      const { getSubmission } = await import('../services/api');
+      setDetail(await getSubmission(id));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -313,6 +327,92 @@ export default function CRM() {
                     <span style={{ fontSize: 13, color: 'var(--muted)' }}>No materials uploaded</span>
                   )}
                 </div>
+              </div>
+
+              {/* AI Deck Analysis */}
+              <div className="detail-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <h3 style={{ margin: 0 }}>AI Investment Memo</h3>
+                  {detail.deck_path && (
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleAnalyzeDeck(detail.id)} disabled={analyzing}>
+                      {analyzing ? 'Analyzing…' : (detail.deck_analysis ? 'Re-analyze' : 'Analyze Deck')}
+                    </button>
+                  )}
+                </div>
+                {!detail.deck_path && (
+                  <p style={{ fontSize: 13, color: 'var(--muted)' }}>No deck uploaded — nothing to analyze.</p>
+                )}
+                {detail.deck_path && !detail.deck_analysis && detail.deck_analysis_status === 'running' && (
+                  <p style={{ fontSize: 13, color: 'var(--muted)' }}>Analysis in progress…</p>
+                )}
+                {detail.deck_path && !detail.deck_analysis && detail.deck_analysis_status === 'failed' && (
+                  <p style={{ fontSize: 13, color: 'var(--red, #b00)' }}>Analysis failed: {detail.deck_analysis_error || 'Unknown error'}</p>
+                )}
+                {detail.deck_path && !detail.deck_analysis && !detail.deck_analysis_status && (
+                  <p style={{ fontSize: 13, color: 'var(--muted)' }}>Not yet analyzed.</p>
+                )}
+                {detail.deck_analysis && (() => {
+                  const a = typeof detail.deck_analysis === 'string' ? JSON.parse(detail.deck_analysis) : detail.deck_analysis;
+                  const recColor = a.recommendation === 'strong_interest' ? '#0a7f3f' : a.recommendation === 'explore' ? '#b8860b' : '#8a1f1f';
+                  const recLabel = { strong_interest: 'Strong Interest', explore: 'Explore', pass: 'Pass' }[a.recommendation] || a.recommendation;
+                  return (
+                    <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ padding: '4px 10px', background: recColor, color: 'white', borderRadius: 4, fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>{recLabel}</span>
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>Confidence: {a.confidence}</span>
+                      </div>
+                      <div style={{ marginBottom: 10 }}><strong>Summary:</strong> {a.summary}</div>
+                      {a.recommendation_rationale && (
+                        <div style={{ marginBottom: 10, padding: 10, background: 'var(--card-bg)', borderRadius: 6 }}>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>RATIONALE</div>
+                          {a.recommendation_rationale}
+                        </div>
+                      )}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                        <div><strong>Problem:</strong> {a.problem}</div>
+                        <div><strong>Solution:</strong> {a.solution}</div>
+                        <div><strong>Market:</strong> {a.market}</div>
+                        <div><strong>Model:</strong> {a.business_model}</div>
+                        <div><strong>Team:</strong> {a.team}</div>
+                        <div><strong>Differentiation:</strong> {a.differentiation}</div>
+                      </div>
+                      {a.traction && (
+                        <div style={{ marginBottom: 10 }}>
+                          <strong>Traction:</strong>{' '}
+                          ARR: {a.traction.arr} · MRR: {a.traction.mrr} · Growth: {a.traction.growth} · Customers: {a.traction.customers}
+                          {a.traction.other && a.traction.other !== 'Not disclosed' && ` · ${a.traction.other}`}
+                        </div>
+                      )}
+                      {a.strengths?.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                          <strong>Strengths:</strong>
+                          <ul style={{ margin: '4px 0 0 18px' }}>{a.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                        </div>
+                      )}
+                      {a.risks?.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                          <strong>Risks:</strong>
+                          <ul style={{ margin: '4px 0 0 18px' }}>{a.risks.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                        </div>
+                      )}
+                      {a.diligence_questions?.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                          <strong>Diligence Questions:</strong>
+                          <ol style={{ margin: '4px 0 0 18px' }}>{a.diligence_questions.map((q, i) => <li key={i}>{q}</li>)}</ol>
+                        </div>
+                      )}
+                      {a.competitors?.length > 0 && (
+                        <div style={{ marginBottom: 8 }}><strong>Competitors:</strong> {a.competitors.join(', ')}</div>
+                      )}
+                      {a.ask && <div style={{ marginBottom: 8 }}><strong>Ask:</strong> {a.ask}</div>}
+                      {a.confidence_rationale && (
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+                          {a.confidence_rationale}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Progress Checks (rejected only) */}

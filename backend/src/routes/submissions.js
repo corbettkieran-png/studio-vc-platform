@@ -6,6 +6,7 @@ const db = require('../config/db');
 const { authenticate } = require('../middleware/auth');
 const { getConfig, screenSubmission } = require('../services/screening');
 const { notifyNewSubmission, notifyStatusChange } = require('../services/email');
+const { analyzeSubmission } = require('../services/deckAnalysis');
 
 const router = express.Router();
 
@@ -106,6 +107,13 @@ router.post('/', (req, res) => {
         { company_name, founder_name, sector, stage, arr },
         screenResult
       ).catch((e) => console.error('Notification error:', e));
+
+      // AI deck analysis (async, non-blocking)
+      if (deckFile) {
+        analyzeSubmission(submission.id).catch((e) =>
+          console.error('Deck analysis error:', e)
+        );
+      }
 
       res.status(201).json({
         id: submission.id,
@@ -377,6 +385,23 @@ router.get('/analytics/overview', authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error('Analytics error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/submissions/:id/analyze — re-run AI deck analysis
+router.post('/:id/analyze', authenticate, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, deck_path FROM submissions WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    if (!rows[0].deck_path) return res.status(400).json({ error: 'No deck uploaded for this submission' });
+
+    // Fire off synchronously so caller sees result
+    const result = await analyzeSubmission(req.params.id);
+    if (!result.ok) return res.status(500).json({ error: result.error || result.reason || 'Analysis failed' });
+    res.json({ ok: true, analysis: result.analysis });
+  } catch (err) {
+    console.error('Re-analyze error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

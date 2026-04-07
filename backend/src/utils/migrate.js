@@ -106,6 +106,12 @@ CREATE TABLE IF NOT EXISTS screening_config (
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Add AI deck analysis column (idempotent)
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS deck_analysis JSONB;
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS deck_analysis_status VARCHAR(50);
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS deck_analysis_error TEXT;
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS deck_analyzed_at TIMESTAMPTZ;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status);
 CREATE INDEX IF NOT EXISTS idx_submissions_sector ON submissions(sector);
