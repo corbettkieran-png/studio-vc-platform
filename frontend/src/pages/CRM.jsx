@@ -309,12 +309,12 @@ export default function CRM() {
                 <h3>Materials</h3>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {detail.deck_path && (
-                    <a href={`/${detail.deck_path}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">
+                    <a href={`/uploads/${detail.deck_path.split(/[\\/]/).pop()}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">
                       📄 View Deck
                     </a>
                   )}
                   {detail.video_path && (
-                    <a href={`/${detail.video_path}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">
+                    <a href={`/uploads/${detail.video_path.split(/[\\/]/).pop()}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">
                       ▶ Watch Video
                     </a>
                   )}
