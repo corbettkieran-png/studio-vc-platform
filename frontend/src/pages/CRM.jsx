@@ -30,7 +30,7 @@ function timeAgo(dateStr) {
 
 export default function CRM() {
   const { user } = useAuth();
-  const [tab, setTab] = useState('pipeline');
+  const [tab, setTab] = useState('matched');
   const [stats, setStats] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [search, setSearch] = useState('');
@@ -40,15 +40,18 @@ export default function CRM() {
   const [activityFeed, setActivityFeed] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const pipelineStatuses = 'matched,reviewing,contacted,passed';
-  const rejectedStatuses = 'rejected';
+  const statusesByTab = {
+    matched: 'matched',
+    pipeline: 'reviewing,contacted,passed',
+    rejected: 'rejected',
+  };
 
   const loadData = useCallback(async () => {
     try {
       const [statsData, subData] = await Promise.all([
         getStats(),
         getSubmissions({
-          status: tab === 'pipeline' ? pipelineStatuses : rejectedStatuses,
+          status: statusesByTab[tab],
           search: search || undefined,
         }),
       ]);
@@ -117,7 +120,8 @@ export default function CRM() {
     }
   };
 
-  const pipelineCount = stats ? parseInt(stats.matched) + parseInt(stats.reviewing) + parseInt(stats.contacted) + parseInt(stats.passed) : 0;
+  const matchedCount = stats ? parseInt(stats.matched) : 0;
+  const pipelineCount = stats ? parseInt(stats.reviewing) + parseInt(stats.contacted) + parseInt(stats.passed || 0) : 0;
   const rejectedCount = stats ? parseInt(stats.rejected) : 0;
 
   return (
@@ -160,6 +164,9 @@ export default function CRM() {
 
         {/* Tabs */}
         <div className="tab-bar">
+          <button className={`tab-btn ${tab === 'matched' ? 'active' : ''}`} onClick={() => setTab('matched')}>
+            Matched <span className="cnt">{matchedCount}</span>
+          </button>
           <button className={`tab-btn ${tab === 'pipeline' ? 'active' : ''}`} onClick={() => setTab('pipeline')}>
             Pipeline <span className="cnt">{pipelineCount}</span>
           </button>
