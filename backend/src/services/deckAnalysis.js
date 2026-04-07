@@ -10,6 +10,7 @@ const db = require('../config/db');
 
 let Anthropic;
 let pdfParse;
+let AdmZip;
 try {
   Anthropic = require('@anthropic-ai/sdk');
 } catch (e) {
@@ -19,6 +20,11 @@ try {
   pdfParse = require('pdf-parse');
 } catch (e) {
   console.warn('[deckAnalysis] pdf-parse not installed — PDF extraction disabled');
+}
+try {
+  AdmZip = require('adm-zip');
+} catch (e) {
+  console.warn('[deckAnalysis] adm-zip not installed — PPTX extraction disabled');
 }
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
@@ -34,20 +40,52 @@ function getClient() {
   return new Anthropic({ apiKey: key });
 }
 
+function extractPptxText(deckPath) {
+  if (!AdmZip) return '';
+  try {
+    const zip = new AdmZip(deckPath);
+    const entries = zip.getEntries();
+    // Collect slide XML in order (slide1.xml, slide2.xml, ...)
+    const slides = entries
+      .filter((e) => /ppt\/slides\/slide\d+\.xml$/.test(e.entryName))
+      .sort((a, b) => {
+        const na = parseInt(a.entryName.match(/slide(\d+)\.xml/)[1]);
+        const nb = parseInt(b.entryName.match(/slide(\d+)\.xml/)[1]);
+        return na - nb;
+      });
+
+    const parts = [];
+    slides.forEach((entry, i) => {
+      const xml = entry.getData().toString('utf8');
+      // Extract <a:t>...</a:t> text runs
+      const matches = xml.match(/<a:t[^>]*>([^<]*)<\/a:t>/g) || [];
+      const text = matches.map((m) => m.replace(/<[^>]+>/g, '')).join(' ').trim();
+      if (text) parts.push(`[Slide ${i + 1}]\n${text}`);
+    });
+    return parts.join('\n\n');
+  } catch (e) {
+    console.error('[deckAnalysis] PPTX extract failed:', e.message);
+    return '';
+  }
+}
+
 async function extractDeckText(deckPath) {
   if (!deckPath) return '';
   const ext = path.extname(deckPath).toLowerCase();
-  if (ext !== '.pdf') {
-    // For PPTX/KEY we'd need additional parsers — skip for v1
-    return '';
-  }
-  if (!pdfParse) return '';
   try {
-    const buf = fs.readFileSync(deckPath);
-    const parsed = await pdfParse(buf);
-    return (parsed.text || '').slice(0, MAX_TEXT_CHARS);
+    if (ext === '.pdf') {
+      if (!pdfParse) return '';
+      const buf = fs.readFileSync(deckPath);
+      const parsed = await pdfParse(buf);
+      return (parsed.text || '').slice(0, MAX_TEXT_CHARS);
+    }
+    if (ext === '.pptx') {
+      return extractPptxText(deckPath).slice(0, MAX_TEXT_CHARS);
+    }
+    // .ppt and .key not supported without heavier deps
+    return '';
   } catch (e) {
-    console.error('[deckAnalysis] PDF extract failed:', e.message);
+    console.error('[deckAnalysis] Extract failed:', e.message);
     return '';
   }
 }
