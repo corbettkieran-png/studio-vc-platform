@@ -1421,13 +1421,13 @@ router.post('/apollo/live-search/:lpId', authenticate, async (req, res) => {
 // POST /api/lp/apollo/bulk-enrich — enrich every LP target without contacts
 // Body: { only_missing?: true, limit?: 50 }
 router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
-  if (!apollo.hasKey()) {
+  const { only_missing = true, limit = 50, dry_run = false } = req.body || {};
+  if (!dry_run && !apollo.hasKey()) {
     return res.status(503).json({
       error: 'APOLLO_API_KEY not configured. Set it in Railway environment variables.',
     });
   }
   try {
-    const { only_missing = true, limit = 50 } = req.body || {};
     const sql = only_missing
       ? `SELECT t.* FROM lp_targets t
           WHERE t.company IS NOT NULL
@@ -1436,7 +1436,17 @@ router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
           LIMIT $1`
       : `SELECT * FROM lp_targets WHERE company IS NOT NULL
           ORDER BY COALESCE(fit_score, 0) DESC LIMIT $1`;
-    const { rows: targets } = await db.query(sql, [Math.min(parseInt(limit) || 50, 200)]);
+    const capped = Math.min(parseInt(limit) || 50, 1000);
+    const { rows: targets } = await db.query(sql, [capped]);
+
+    if (dry_run) {
+      return res.json({
+        ok: true,
+        dry_run: true,
+        queue_size: targets.length,
+        targets: targets.map((t) => ({ id: t.id, company: t.company, fit_score: t.fit_score })),
+      });
+    }
 
     const results = [];
     let totalInserted = 0;
