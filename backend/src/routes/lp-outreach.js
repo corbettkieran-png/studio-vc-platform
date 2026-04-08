@@ -1432,7 +1432,7 @@ router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
       ? `SELECT t.* FROM lp_targets t
           WHERE t.company IS NOT NULL
             AND NOT EXISTS (SELECT 1 FROM apollo_company_contacts c WHERE c.lp_target_id = t.id)
-          ORDER BY COALESCE(t.fit_score, 0) DESC, t.created_at DESC
+          ORDER BY COALESCE(t.fit_score, 0) DESC, t.imported_at DESC NULLS LAST
           LIMIT $1`
       : `SELECT * FROM lp_targets WHERE company IS NOT NULL
           ORDER BY COALESCE(fit_score, 0) DESC LIMIT $1`;
