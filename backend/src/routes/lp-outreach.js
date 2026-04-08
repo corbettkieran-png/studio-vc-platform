@@ -3,6 +3,7 @@ const multer = require('multer');
 const { v4: uuid } = require('uuid');
 const db = require('../config/db');
 const { authenticate } = require('../middleware/auth');
+const apollo = require('../services/apollo');
 
 const router = express.Router();
 
@@ -1296,6 +1297,176 @@ router.get('/apollo/status', authenticate, async (req, res) => {
     console.error('Error fetching Apollo status:', err);
     res.status(500).json({ error: 'Failed to fetch Apollo status' });
   }
+});
+
+// ── Live Apollo enrichment (server-side, requires APOLLO_API_KEY) ──
+
+// Internal helper: search Apollo for a single LP target and persist results.
+// Returns { inserted, total_found, skipped_reason? }
+async function enrichSingleLpTarget(lpTarget, opts = {}) {
+  const { perPage = 25 } = opts;
+  if (!lpTarget?.company) {
+    return { inserted: 0, total_found: 0, skipped_reason: 'no_company' };
+  }
+
+  const { people, company_info } = await apollo.searchPeopleAtCompany(
+    lpTarget.company,
+    { perPage }
+  );
+
+  if (!people.length) {
+    return { inserted: 0, total_found: 0, skipped_reason: 'no_people_found' };
+  }
+
+  const client = await db.pool.connect();
+  let inserted = 0;
+  try {
+    await client.query('BEGIN');
+
+    // Upsert company cache
+    if (company_info) {
+      await client.query(
+        `INSERT INTO apollo_company_cache
+          (id, company_name, domain, industry, employee_count, revenue_range,
+           apollo_org_id, total_people_found, senior_contacts_found, last_searched_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, NOW())
+         ON CONFLICT (company_name) DO UPDATE SET
+           domain = EXCLUDED.domain, industry = EXCLUDED.industry,
+           employee_count = EXCLUDED.employee_count, revenue_range = EXCLUDED.revenue_range,
+           apollo_org_id = EXCLUDED.apollo_org_id,
+           total_people_found = EXCLUDED.total_people_found,
+           senior_contacts_found = EXCLUDED.senior_contacts_found,
+           last_searched_at = NOW()`,
+        [
+          uuid(), lpTarget.company, company_info.domain, company_info.industry,
+          company_info.employee_count, company_info.revenue_range,
+          company_info.apollo_org_id, company_info.total_people_found,
+          company_info.senior_contacts_found,
+        ]
+      );
+    }
+
+    for (const p of people) {
+      try {
+        const result = await client.query(
+          `INSERT INTO apollo_company_contacts
+            (id, lp_target_id, company_name, apollo_person_id, first_name, last_name,
+             full_name, title, seniority, linkedin_url, email, city, state, country, match_type)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'apollo_live')
+           ON CONFLICT (lp_target_id, apollo_person_id) DO UPDATE SET
+             title = EXCLUDED.title, seniority = EXCLUDED.seniority,
+             linkedin_url = COALESCE(EXCLUDED.linkedin_url, apollo_company_contacts.linkedin_url),
+             email = COALESCE(EXCLUDED.email, apollo_company_contacts.email),
+             full_name = EXCLUDED.full_name
+           RETURNING (xmax = 0) AS inserted`,
+          [
+            uuid(), lpTarget.id, lpTarget.company, p.apollo_person_id,
+            p.first_name, p.last_name, p.full_name, p.title, p.seniority,
+            p.linkedin_url, p.email, p.city, p.state, p.country,
+          ]
+        );
+        if (result.rows[0]?.inserted) inserted++;
+      } catch (e) {
+        // Skip duplicates / individual errors
+      }
+    }
+
+    // Update LP target rollup
+    const { rows: countRows } = await client.query(
+      'SELECT COUNT(*) AS count FROM apollo_company_contacts WHERE lp_target_id = $1',
+      [lpTarget.id]
+    );
+    const totalContacts = parseInt(countRows[0].count) || 0;
+    if (totalContacts > 0) {
+      await client.query(
+        `UPDATE lp_targets
+           SET total_connectors = $1,
+               connection_strength = COALESCE(NULLIF(connection_strength,''), 'apollo_match'),
+               updated_at = NOW()
+         WHERE id = $2`,
+        [totalContacts, lpTarget.id]
+      );
+    }
+
+    await client.query('COMMIT');
+    return { inserted, total_found: people.length };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// POST /api/lp/apollo/live-search/:lpId — call Apollo live for one LP target
+router.post('/apollo/live-search/:lpId', authenticate, async (req, res) => {
+  if (!apollo.hasKey()) {
+    return res.status(503).json({
+      error: 'APOLLO_API_KEY not configured. Set it in Railway environment variables to enable live enrichment.',
+    });
+  }
+  try {
+    const { rows } = await db.query('SELECT * FROM lp_targets WHERE id = $1', [req.params.lpId]);
+    if (!rows.length) return res.status(404).json({ error: 'LP target not found' });
+
+    const result = await enrichSingleLpTarget(rows[0], { perPage: req.body?.per_page || 25 });
+    res.json({ ok: true, lp_target_id: rows[0].id, company: rows[0].company, ...result });
+  } catch (err) {
+    if (err.code === 'NO_API_KEY') return res.status(503).json({ error: err.message });
+    console.error('Apollo live-search error:', err);
+    res.status(500).json({ error: err.message || 'Apollo search failed' });
+  }
+});
+
+// POST /api/lp/apollo/bulk-enrich — enrich every LP target without contacts
+// Body: { only_missing?: true, limit?: 50 }
+router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
+  if (!apollo.hasKey()) {
+    return res.status(503).json({
+      error: 'APOLLO_API_KEY not configured. Set it in Railway environment variables.',
+    });
+  }
+  try {
+    const { only_missing = true, limit = 50 } = req.body || {};
+    const sql = only_missing
+      ? `SELECT t.* FROM lp_targets t
+          WHERE t.company IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM apollo_company_contacts c WHERE c.lp_target_id = t.id)
+          ORDER BY COALESCE(t.fit_score, 0) DESC, t.created_at DESC
+          LIMIT $1`
+      : `SELECT * FROM lp_targets WHERE company IS NOT NULL
+          ORDER BY COALESCE(fit_score, 0) DESC LIMIT $1`;
+    const { rows: targets } = await db.query(sql, [Math.min(parseInt(limit) || 50, 200)]);
+
+    const results = [];
+    let totalInserted = 0;
+    for (const t of targets) {
+      try {
+        const r = await enrichSingleLpTarget(t, { perPage: 25 });
+        totalInserted += r.inserted || 0;
+        results.push({ id: t.id, company: t.company, ...r });
+      } catch (e) {
+        results.push({ id: t.id, company: t.company, error: e.message });
+      }
+      // Small delay to be polite to Apollo's rate limits
+      await new Promise((r2) => setTimeout(r2, 250));
+    }
+
+    res.json({
+      ok: true,
+      processed: results.length,
+      total_inserted: totalInserted,
+      results,
+    });
+  } catch (err) {
+    console.error('Apollo bulk-enrich error:', err);
+    res.status(500).json({ error: err.message || 'Bulk enrich failed' });
+  }
+});
+
+// GET /api/lp/apollo/key-status — does the backend have a key?
+router.get('/apollo/key-status', authenticate, (req, res) => {
+  res.json({ has_key: apollo.hasKey() });
 });
 
 // ── Known Contacts (Warm Intro Paths) ──────────────────────────

@@ -124,6 +124,19 @@ export const getLPCompanies = () => request('/lp/companies');
 export const storeApolloContacts = (data) =>
   request('/lp/apollo/company-contacts', { method: 'POST', body: JSON.stringify(data) });
 
+// Live Apollo enrichment (server-side, requires APOLLO_API_KEY on Railway)
+export const getApolloKeyStatus = () => request('/lp/apollo/key-status');
+export const apolloLiveSearch = (lpId, perPage = 25) =>
+  request(`/lp/apollo/live-search/${lpId}`, {
+    method: 'POST',
+    body: JSON.stringify({ per_page: perPage }),
+  });
+export const apolloBulkEnrich = (limit = 50) =>
+  request('/lp/apollo/bulk-enrich', {
+    method: 'POST',
+    body: JSON.stringify({ only_missing: true, limit }),
+  });
+
 // Known contacts (warm intro flags)
 export const flagKnownContact = (contactId, note) =>
   request(`/lp/apollo/contacts/${contactId}/know`, { method: 'POST', body: JSON.stringify({ relationship_note: note }) });

@@ -3,6 +3,7 @@ import {
   getLPTeam, addLPTeamMember, removeLPTeamMember, uploadLinkedInCSV,
   importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
   runLPMatching, getLPStats, getApolloStatus, getApolloContacts,
+  getApolloKeyStatus, apolloLiveSearch, apolloBulkEnrich,
   flagKnownContact, unflagKnownContact, enrichLPTarget,
   enrichApolloContact, enrichApolloContactsBatch,
   getClaySettings, saveClaySettings, exportToClay, importClayCSV, getClayWebhookUrl
@@ -121,6 +122,8 @@ export default function LPOutreach() {
   const [apolloStats, setApolloStats] = useState(null);
   const [apolloContacts, setApolloContacts] = useState([]);
   const [apolloLoading, setApolloLoading] = useState(false);
+  const [apolloKeyStatus, setApolloKeyStatus] = useState(null);
+  const [apolloBulkRunning, setApolloBulkRunning] = useState(false);
   const [emailDraft, setEmailDraft] = useState(null);
   const [emailDraftType, setEmailDraftType] = useState('cold');
   const [showEmailDraft, setShowEmailDraft] = useState(false);
@@ -251,6 +254,16 @@ Kieran`;
     }
   }, []);
 
+  // Load Apollo key status (does the backend have an APOLLO_API_KEY?)
+  const loadApolloKey = useCallback(async () => {
+    try {
+      const data = await getApolloKeyStatus();
+      setApolloKeyStatus(data);
+    } catch (err) {
+      console.error('Apollo key status error:', err);
+    }
+  }, []);
+
   // Load Apollo stats
   const loadApolloStats = useCallback(async () => {
     try {
@@ -285,8 +298,29 @@ Kieran`;
     loadStats();
     loadTeamMembers();
     loadApolloStats();
+    loadApolloKey();
     loadClaySettings();
-  }, [loadStats, loadTeamMembers, loadApolloStats, loadClaySettings]);
+  }, [loadStats, loadTeamMembers, loadApolloStats, loadApolloKey, loadClaySettings]);
+
+  const runApolloBulkEnrich = async () => {
+    if (apolloBulkRunning) return;
+    if (!apolloKeyStatus?.has_key) {
+      alert('Apollo API key not configured on the backend. Add APOLLO_API_KEY in Railway → Variables and redeploy.');
+      return;
+    }
+    if (!confirm('Run Apollo live search for all LP targets without contacts? This calls the Apollo API and may take a few minutes.')) return;
+    setApolloBulkRunning(true);
+    try {
+      const result = await apolloBulkEnrich(50);
+      alert(`Apollo bulk enrich complete:\n${result.processed} LPs processed\n${result.total_inserted} contacts inserted`);
+      await loadApolloStats();
+      await loadStats();
+    } catch (err) {
+      alert('Bulk enrich failed: ' + err.message);
+    } finally {
+      setApolloBulkRunning(false);
+    }
+  };
 
   useEffect(() => {
     loadTargets();
@@ -427,6 +461,25 @@ Kieran`;
               {apolloStats.companies_searched > 0
                 ? `${Math.round((apolloStats.companies_searched / apolloStats.total_companies) * 100)}% of LP companies enriched via Apollo`
                 : 'Apollo enrichment in progress — senior contacts are being mapped to your LP targets'}
+            </div>
+            <div style={{
+              marginTop: 12, padding: 10, borderRadius: 6,
+              background: apolloKeyStatus?.has_key ? '#ecfdf5' : '#fff7ed',
+              border: `1px solid ${apolloKeyStatus?.has_key ? '#10b981' : '#fb923c'}`,
+              fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            }}>
+              <span>
+                {apolloKeyStatus?.has_key
+                  ? '✓ Apollo API key detected — live enrichment is enabled.'
+                  : '⚠ APOLLO_API_KEY not set on the backend. Live enrichment is disabled. Add it in Railway → Variables.'}
+              </span>
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={!apolloKeyStatus?.has_key || apolloBulkRunning}
+                onClick={runApolloBulkEnrich}
+              >
+                {apolloBulkRunning ? 'Enriching…' : 'Run Live Apollo Enrich (missing only)'}
+              </button>
             </div>
           </div>
         )}
@@ -1517,6 +1570,28 @@ Kieran`;
                     }}>{f.label}</button>
                   ))}
                 </div>
+              )}
+              {apolloContacts.length === 0 && !apolloLoading && apolloKeyStatus?.has_key && (
+                <button
+                  className="btn btn-sm"
+                  style={{ marginBottom: 10, background: '#6366F1', color: 'white', border: 'none', fontSize: 11 }}
+                  onClick={async () => {
+                    setApolloLoading(true);
+                    try {
+                      const res = await apolloLiveSearch(selectedTarget, 25);
+                      const apolloData = await getApolloContacts(selectedTarget);
+                      setApolloContacts(apolloData.contacts || []);
+                      await loadApolloStats();
+                      if (!res.inserted) alert(`Apollo found ${res.total_found || 0} senior people. ${res.skipped_reason || 'No new contacts inserted.'}`);
+                    } catch (err) {
+                      alert('Apollo live search failed: ' + err.message);
+                    } finally {
+                      setApolloLoading(false);
+                    }
+                  }}
+                >
+                  ⚡ Search Apollo Live
+                </button>
               )}
               {apolloLoading ? (
                 <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Loading Apollo data...</div>
