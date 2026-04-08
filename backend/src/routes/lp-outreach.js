@@ -1444,7 +1444,7 @@ router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
         ok: true,
         dry_run: true,
         queue_size: targets.length,
-        targets: targets.map((t) => ({ id: t.id, company: t.company, fit_score: t.fit_score })),
+        targets: targets.map((t) => ({ id: t.id, company: t.company, fit_score: t.fit_score, email: t.email, full_name: t.full_name })),
       });
     }
 
