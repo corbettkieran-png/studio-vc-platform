@@ -515,9 +515,9 @@ router.patch('/:id/intro-source', authenticate, async (req, res) => {
 // POST /api/submissions/:id/analyze — re-run AI deck analysis
 router.post('/:id/analyze', authenticate, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT id, deck_path FROM submissions WHERE id = $1', [req.params.id]);
+    const { rows } = await db.query('SELECT * FROM submissions WHERE id = $1', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    if (!rows[0].deck_path) return res.status(400).json({ error: 'No deck uploaded for this submission' });
+    // Allow analysis without a deck — deckAnalysis handles missing deck_path gracefully
 
     // Fire off synchronously so caller sees result
     const result = await analyzeSubmission(req.params.id);
