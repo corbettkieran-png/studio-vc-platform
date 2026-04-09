@@ -1,22 +1,21 @@
-const nodemailer = require('nodemailer');
 const db = require('../config/db');
 
-let transporter = null;
-
-function getTransporter() {
-  if (transporter) return transporter;
-  if (!process.env.SMTP_HOST) return null;
-
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT) || 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+// Send via Resend HTTP API — avoids SMTP port blocks on Railway
+async function sendViaResend(to, subject, html) {
+  const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
+  if (!apiKey) throw new Error('RESEND_API_KEY not set');
+  const from = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ from, to, subject, html }),
   });
-  return transporter;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || JSON.stringify(data));
+  return data;
 }
 
 // Queue an email for sending
@@ -29,8 +28,8 @@ async function queueEmail(to, subject, body) {
 
 // Process pending emails
 async function processEmailQueue() {
-  const t = getTransporter();
-  if (!t) return;
+  const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
+  if (!apiKey) return;
 
   const { rows } = await db.query(
     `SELECT * FROM email_queue WHERE status = 'pending' AND attempts < 3 ORDER BY created_at LIMIT 10`
@@ -38,12 +37,7 @@ async function processEmailQueue() {
 
   for (const email of rows) {
     try {
-      await t.sendMail({
-        from: process.env.EMAIL_FROM || 'deals@studiovc.com',
-        to: email.to_email,
-        subject: email.subject,
-        html: email.body,
-      });
+      await sendViaResend(email.to_email, email.subject, email.body);
       await db.query(
         `UPDATE email_queue SET status = 'sent', sent_at = NOW() WHERE id = $1`,
         [email.id]
