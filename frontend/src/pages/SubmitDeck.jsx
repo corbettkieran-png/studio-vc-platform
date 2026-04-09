@@ -45,7 +45,6 @@ export default function SubmitDeck() {
     founder_name: '', founder_email: '', founder_phone: '', founder_linkedin: '',
     company_name: '', one_liner: '', website: '', sector: '', stage: '',
     arr: '', yoy_growth: '', fundraising_amount: '',
-    intro_source_name: '', intro_source_email: '', intro_source_notes: '',
   });
   const [deck, setDeck] = useState(null);
   const [video, setVideo] = useState(null);
@@ -128,7 +127,7 @@ export default function SubmitDeck() {
                 : `We've received your submission for ${result.company}. While it doesn't match our current focus areas, we'll keep it in our records and may reach out if our thesis evolves.`
               }
             </p>
-            <button className="btn btn-primary" onClick={() => { setResult(null); setForm({ founder_name: '', founder_email: '', founder_phone: '', founder_linkedin: '', company_name: '', one_liner: '', website: '', sector: '', stage: '', arr: '', yoy_growth: '', fundraising_amount: '', intro_source_name: '', intro_source_email: '', intro_source_notes: '' }); setDeck(null); removeVideo(); }}>
+            <button className="btn btn-primary" onClick={() => { setResult(null); setForm({ founder_name: '', founder_email: '', founder_phone: '', founder_linkedin: '', company_name: '', one_liner: '', website: '', sector: '', stage: '', arr: '', yoy_growth: '', fundraising_amount: '' }); setDeck(null); removeVideo(); }}>
               Submit Another
             </button>
           </div>
@@ -141,7 +140,8 @@ export default function SubmitDeck() {
     <div className="submit-page">
       <div className="submit-hero">
         <h1>Studio VC</h1>
-        <p className="subtitle">We invest in exceptional seed-stage founders building the future of finance, enterprise software, and AI.</p>
+        <div className="submit-hero-title">Invest. Collaborate. Build.</div>
+        <p className="subtitle">We partner with exceptional seed-stage founders building transformative companies in fintech, enterprise AI, and beyond.</p>
       </div>
 
       <form className="submit-form" onSubmit={handleSubmit}>
@@ -221,24 +221,6 @@ export default function SubmitDeck() {
         <div className="form-group">
           <label>Fundraising Amount</label>
           <input value={form.fundraising_amount} onChange={update('fundraising_amount')} placeholder="e.g. $2M" />
-        </div>
-
-        <h2 style={{ fontSize: 20, color: 'var(--navy)', marginBottom: 4, marginTop: 32 }}>How did you hear about us?</h2>
-        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>Optional, but warm intros move faster through our pipeline.</p>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>Referrer Name</label>
-            <input value={form.intro_source_name} onChange={update('intro_source_name')} placeholder="Who referred you?" />
-          </div>
-          <div className="form-group">
-            <label>Referrer Email</label>
-            <input type="email" value={form.intro_source_email} onChange={update('intro_source_email')} placeholder="referrer@example.com" />
-          </div>
-        </div>
-        <div className="form-group">
-          <label>Context (optional)</label>
-          <input value={form.intro_source_notes} onChange={update('intro_source_notes')} placeholder="e.g. former colleague, met at YC demo day" />
         </div>
 
         <h2 style={{ fontSize: 20, color: 'var(--navy)', marginBottom: 4, marginTop: 32 }}>Upload Materials</h2>

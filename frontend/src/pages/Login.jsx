@@ -27,8 +27,8 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1>Studio VC</h1>
-        <p className="subtitle">Deal Flow Platform</p>
+        <div className="login-brand">Studio VC</div>
+        <p className="subtitle">Invest. Collaborate. Build.</p>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Email</label>
@@ -42,11 +42,11 @@ export default function Login() {
           </div>
           {error && <p style={{ color: 'var(--error)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={loading}
-            style={{ width: '100%', justifyContent: 'center', padding: '12px 0', fontSize: 14 }}>
-            {loading ? 'Signing in...' : 'Sign In'}
+            style={{ width: '100%', justifyContent: 'center', padding: '13px 0' }}>
+            {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
-        <p style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'var(--muted)' }}>
+        <p style={{ textAlign: 'center', marginTop: 28, fontSize: 11, color: 'var(--muted)', letterSpacing: '0.3px' }}>
           Demo: kieran@studiovc.com / demo123
         </p>
       </div>
