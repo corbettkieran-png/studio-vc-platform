@@ -140,6 +140,34 @@ async function autoSeed() {
 }
 autoSeed();
 
+// Auto-seed LP targets if table is empty
+async function autoSeedLPTargets() {
+  try {
+    const { rows } = await db.query('SELECT COUNT(*) FROM lp_targets');
+    if (parseInt(rows[0].count) > 0) return;  // already seeded
+
+    const lpData = require('./data/lp_seed.json');
+    console.log(`Auto-seeding ${lpData.length} LP targets...`);
+    let inserted = 0;
+    for (const r of lpData) {
+      const sectors = r.sector_interest && r.sector_interest.length > 0 ? r.sector_interest : null;
+      await db.query(
+        `INSERT INTO lp_targets
+         (id, full_name, email, company, fund_type, sector_interest, geographic_focus, outreach_status, fit_score)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, NULL)
+         ON CONFLICT DO NOTHING`,
+        [r.full_name || null, r.email || null, r.company, r.fund_type || null,
+         sectors, r.geographic_focus || null, r.outreach_status || 'not_started']
+      );
+      inserted++;
+    }
+    console.log(`LP auto-seed complete: ${inserted} records.`);
+  } catch (err) {
+    console.error('LP auto-seed error:', err.message);
+  }
+}
+autoSeedLPTargets();
+
 // Process email queue every 30 seconds
 setInterval(processEmailQueue, 30000);
 
