@@ -83,6 +83,11 @@ async function autoMigrate() {
       CREATE INDEX IF NOT EXISTS idx_submissions_intro_source
         ON submissions (intro_source_contact_id);
     `);
+    // One-time: update admin email from old seed value to correct address
+    await db.query(`
+      UPDATE users SET email = 'kcorbett@studio.vc'
+      WHERE email = 'kieran@studiovc.com'
+    `);
     console.log('Auto-migrate: contacts schema applied.');
   } catch (err) {
     console.error('Auto-migrate error:', err.message);
@@ -98,7 +103,7 @@ async function autoSeed() {
       console.log('No users found — running auto-seed...');
       const passwordHash = await bcrypt.hash('demo123', 10);
       const users = [
-        { email: 'kieran@studiovc.com', name: 'Kieran Corbett', role: 'admin' },
+        { email: 'kcorbett@studio.vc', name: 'Kieran Corbett', role: 'admin' },
         { email: 'analyst@studiovc.com', name: 'Demo Analyst', role: 'analyst' },
       ];
       for (const u of users) {

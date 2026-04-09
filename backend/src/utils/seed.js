@@ -6,7 +6,7 @@ const { v4: uuid } = require('uuid');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const DEMO_USERS = [
-  { email: 'kieran@studiovc.com', name: 'Kieran Corbett', role: 'admin' },
+  { email: 'kcorbett@studio.vc', name: 'Kieran Corbett', role: 'admin' },
   { email: 'analyst@studiovc.com', name: 'Demo Analyst', role: 'analyst' },
 ];
 
