@@ -127,8 +127,8 @@ export default function SubmitDeck() {
                 : `We've received your submission for ${result.company}. While it doesn't match our current focus areas, we'll keep it in our records and may reach out if our thesis evolves.`
               }
             </p>
-            <button className="btn btn-primary" onClick={() => { setResult(null); setForm({ founder_name: '', founder_email: '', founder_phone: '', founder_linkedin: '', company_name: '', one_liner: '', website: '', sector: '', stage: '', arr: '', yoy_growth: '', fundraising_amount: '' }); setDeck(null); removeVideo(); }}>
-              Submit Another
+            <button className="btn btn-secondary" onClick={() => window.history.back()}>
+              Go Back
             </button>
           </div>
         </div>
