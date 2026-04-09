@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../config/db');
+const { notifyDealMemo } = require('./email');
 
 let Anthropic;
 let pdfParse;
@@ -229,6 +230,13 @@ async function analyzeSubmission(submissionId) {
         model: MODEL,
       })]
     );
+
+    // Email deal memo to team if thesis match and recommendation isn't a hard pass
+    if (submission.status === 'matched' && analysis.recommendation !== 'pass') {
+      notifyDealMemo(submission, analysis).catch((e) =>
+        console.error('[deckAnalysis] memo email failed:', e.message)
+      );
+    }
 
     return { ok: true, analysis };
   } catch (err) {
