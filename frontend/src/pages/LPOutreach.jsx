@@ -910,9 +910,9 @@ Kieran`;
                     {/* Navigator search */}
                     <td style={cellStyle(COLS[12])} onClick={e => e.stopPropagation()}>
                       <a
-                        href={`https://www.linkedin.com/sales/search/people?query=(${encodeURIComponent(`spellCorrectionEnabled:true,keywords:${(t.full_name || t.name || t.company).replace(/,/g, '')} ${t.company.replace(/,/g, '')}`).trim()})`}
+                        href={`https://www.linkedin.com/sales/search/people?query=(${encodeURIComponent(`spellCorrectionEnabled:true,keywords:${(t.full_name || t.name) ? (t.full_name || t.name).replace(/,/g, '') : t.company.replace(/,/g, '')}`)})`}
                         target="_blank" rel="noopener noreferrer"
-                        title={`Search for ${t.full_name || t.name || t.company} in Sales Navigator`}
+                        title={`Search for ${(t.full_name || t.name) ? (t.full_name || t.name) + ' at ' + t.company : t.company} in Sales Navigator`}
                         style={{
                           display: 'inline-flex', alignItems: 'center', gap: 4,
                           padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
