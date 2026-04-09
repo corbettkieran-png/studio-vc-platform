@@ -110,9 +110,14 @@ async function notifyStatusChange(submission, oldStatus, newStatus, changedBy) {
 async function notifyDealMemo(submission, analysis) {
   if (!analysis || analysis.recommendation === 'pass') return;
 
-  const { rows: users } = await db.query(
-    `SELECT email, full_name FROM users WHERE is_active = true`
-  );
+  // NOTIFY_EMAIL overrides DB users when domain isn't verified in Resend
+  let users;
+  if (process.env.NOTIFY_EMAIL) {
+    users = [{ email: process.env.NOTIFY_EMAIL, full_name: 'Kieran' }];
+  } else {
+    const { rows } = await db.query(`SELECT email, full_name FROM users WHERE is_active = true`);
+    users = rows;
+  }
   if (!users.length) return;
 
   const rec = analysis.recommendation;
