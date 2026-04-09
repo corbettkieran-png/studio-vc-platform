@@ -140,28 +140,41 @@ async function autoSeed() {
 }
 autoSeed();
 
-// Auto-seed LP targets if table is empty
+// Auto-seed LP targets — inserts any records not already present by company name
 async function autoSeedLPTargets() {
   try {
-    const { rows } = await db.query('SELECT COUNT(*) FROM lp_targets');
-    if (parseInt(rows[0].count) > 0) return;  // already seeded
-
     const lpData = require('./data/lp_seed.json');
-    console.log(`Auto-seeding ${lpData.length} LP targets...`);
-    let inserted = 0;
+    const { rows: countRows } = await db.query('SELECT COUNT(*) FROM lp_targets');
+    if (parseInt(countRows[0].count) >= lpData.length) return; // already fully seeded
+
+    console.log(`LP seed: DB has ${countRows[0].count}/${lpData.length} records, seeding missing...`);
+    let inserted = 0, skipped = 0;
     for (const r of lpData) {
-      const sectors = r.sector_interest && r.sector_interest.length > 0 ? r.sector_interest : null;
-      await db.query(
-        `INSERT INTO lp_targets
-         (id, full_name, email, company, fund_type, sector_interest, geographic_focus, outreach_status, fit_score)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, NULL)
-         ON CONFLICT DO NOTHING`,
-        [r.full_name || null, r.email || null, r.company, r.fund_type || null,
-         sectors, r.geographic_focus || null, r.outreach_status || 'not_started']
-      );
-      inserted++;
+      try {
+        const sectors = r.sector_interest && r.sector_interest.length > 0 ? r.sector_interest : null;
+        const result = await db.query(
+          `INSERT INTO lp_targets
+           (full_name, email, company, fund_type, sector_interest, geographic_focus, outreach_status)
+           SELECT $1, $2, $3, $4, $5, $6, $7
+           WHERE NOT EXISTS (
+             SELECT 1 FROM lp_targets WHERE LOWER(TRIM(company)) = LOWER(TRIM($3))
+           )`,
+          [
+            r.full_name || '',          // full_name NOT NULL — use empty string if missing
+            r.email || null,
+            r.company,
+            r.fund_type || null,
+            sectors,
+            r.geographic_focus || null,
+            r.outreach_status || 'not_started',
+          ]
+        );
+        if (result.rowCount > 0) inserted++; else skipped++;
+      } catch (rowErr) {
+        console.error(`LP seed row error (${r.company}):`, rowErr.message);
+      }
     }
-    console.log(`LP auto-seed complete: ${inserted} records.`);
+    console.log(`LP seed complete: ${inserted} inserted, ${skipped} already existed.`);
   } catch (err) {
     console.error('LP auto-seed error:', err.message);
   }
