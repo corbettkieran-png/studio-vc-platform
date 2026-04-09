@@ -713,36 +713,43 @@ router.get('/targets', authenticate, async (req, res) => {
       limit = 50,
     } = req.query;
 
-    let query = 'SELECT * FROM lp_targets WHERE 1=1';
+    let query = `
+      SELECT t.*,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', mc.id, 'name', mc.name, 'relationship', mc.relationship, 'linkedin_url', mc.linkedin_url) ORDER BY mc.created_at DESC)
+           FROM lp_manual_connections mc WHERE mc.lp_target_id = t.id),
+          '[]'::json
+        ) as manual_connections
+      FROM lp_targets t WHERE 1=1`;
     const params = [];
 
     // Filters
     if (status) {
-      query += ' AND outreach_status = $' + (params.length + 1);
+      query += ' AND t.outreach_status = $' + (params.length + 1);
       params.push(status);
     }
 
     if (min_score) {
-      query += ' AND fit_score >= $' + (params.length + 1);
+      query += ' AND t.fit_score >= $' + (params.length + 1);
       params.push(parseInt(min_score));
     }
 
     if (has_connector === 'true') {
-      query += ' AND best_connector_id IS NOT NULL';
+      query += ' AND t.best_connector_id IS NOT NULL';
     } else if (has_connector === 'false') {
-      query += ' AND best_connector_id IS NULL';
+      query += ' AND t.best_connector_id IS NULL';
     }
 
     if (search) {
       const searchTerm = `%${search}%`;
-      query += ` AND (full_name ILIKE $${params.length + 1} OR company ILIKE $${params.length + 1} OR email ILIKE $${params.length + 1})`;
+      query += ` AND (t.full_name ILIKE $${params.length + 1} OR t.company ILIKE $${params.length + 1} OR t.email ILIKE $${params.length + 1})`;
       params.push(searchTerm);
     }
 
     // Sorting
     const validSortFields = ['fit_score', 'connection_strength', 'last_outreach_at', 'created_at'];
     const sortField = validSortFields.includes(sort_by) ? sort_by : 'fit_score';
-    query += ` ORDER BY ${sortField} DESC`;
+    query += ` ORDER BY t.${sortField} DESC`;
 
     // Pagination
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -876,12 +883,20 @@ router.get('/targets/:id', authenticate, async (req, res) => {
       [id]
     );
 
+    // Get manual connections
+    const { rows: manualConnections } = await db.query(
+      `SELECT id, name, relationship, linkedin_url, added_by, created_at
+       FROM lp_manual_connections WHERE lp_target_id = $1 ORDER BY created_at DESC`,
+      [id]
+    );
+
     res.json({
       lp_target: lp,
       connectors,
       warm_intro_paths: warmIntroPaths,
       linkedin_enrichment: enrichmentRows[0] || null,
       activity_log: activity,
+      manual_connections: manualConnections,
     });
   } catch (err) {
     console.error('Error fetching LP target:', err);
@@ -2657,5 +2672,74 @@ router.get('/clay/webhook-url', authenticate, async (req, res) => {
   });
 });
 
+// ── Manual Connections (Navigator-sourced warm paths) ──
+
+// GET /api/lp/targets/:id/connections — list manual connections for an LP
+router.get('/targets/:id/connections', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query(
+      `SELECT id, name, relationship, linkedin_url, added_by, created_at
+       FROM lp_manual_connections
+       WHERE lp_target_id = $1
+       ORDER BY created_at DESC`,
+      [id]
+    );
+    res.json({ connections: rows });
+  } catch (err) {
+    console.error('Error fetching manual connections:', err);
+    res.status(500).json({ error: 'Failed to fetch connections' });
+  }
+});
+
+// POST /api/lp/targets/:id/connections — add a manual connection
+router.post('/targets/:id/connections', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, relationship, linkedin_url } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    // Verify LP exists
+    const { rows: lpCheck } = await db.query('SELECT id FROM lp_targets WHERE id = $1', [id]);
+    if (!lpCheck.length) return res.status(404).json({ error: 'LP target not found' });
+
+    const { rows } = await db.query(
+      `INSERT INTO lp_manual_connections (lp_target_id, name, relationship, linkedin_url, added_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [id, name.trim(), relationship?.trim() || null, linkedin_url?.trim() || null, req.user.id]
+    );
+
+    // Log activity
+    await db.query(
+      `INSERT INTO lp_activity_log (lp_target_id, user_id, action, details)
+       VALUES ($1, $2, 'manual_connection_added', $3)`,
+      [id, req.user.id, JSON.stringify({ name: name.trim(), relationship: relationship?.trim() })]
+    );
+
+    res.status(201).json({ connection: rows[0] });
+  } catch (err) {
+    console.error('Error adding manual connection:', err);
+    res.status(500).json({ error: 'Failed to add connection' });
+  }
+});
+
+// DELETE /api/lp/targets/:id/connections/:connId — remove a manual connection
+router.delete('/targets/:id/connections/:connId', authenticate, async (req, res) => {
+  try {
+    const { id, connId } = req.params;
+    const { rowCount } = await db.query(
+      'DELETE FROM lp_manual_connections WHERE id = $1 AND lp_target_id = $2',
+      [connId, id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Connection not found' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting manual connection:', err);
+    res.status(500).json({ error: 'Failed to delete connection' });
+  }
+});
+
 module.exports = router;
-// RocketReach GET fix deployed

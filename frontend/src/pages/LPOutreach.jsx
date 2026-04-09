@@ -6,7 +6,8 @@ import {
   getApolloKeyStatus, apolloLiveSearch, apolloBulkEnrich,
   flagKnownContact, unflagKnownContact, enrichLPTarget,
   enrichApolloContact, enrichApolloContactsBatch,
-  getClaySettings, saveClaySettings, exportToClay, importClayCSV, getClayWebhookUrl
+  getClaySettings, saveClaySettings, exportToClay, importClayCSV, getClayWebhookUrl,
+  addManualConnection, deleteManualConnection,
 } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -141,6 +142,15 @@ export default function LPOutreach() {
   const [clayFormApiKey, setClayFormApiKey] = useState('');
   const [clayExporting, setClayExporting] = useState(false);
   const [clayConfigSaved, setClayConfigSaved] = useState(false);
+
+  // Manual connections state
+  const [showAddConnection, setShowAddConnection] = useState(false);
+  const [newConnName, setNewConnName] = useState('');
+  const [newConnRelationship, setNewConnRelationship] = useState('');
+  const [newConnLinkedin, setNewConnLinkedin] = useState('');
+  const [addingConn, setAddingConn] = useState(false);
+  // Inline status edit
+  const [editingStatusId, setEditingStatusId] = useState(null);
 
   // Generate email draft based on LP target data
   const generateEmailDraft = (type = 'cold') => {
@@ -336,7 +346,7 @@ Kieran`;
     const loadDetail = async () => {
       try {
         const data = await getLPTarget(selectedTarget);
-        setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log });
+        setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log, manual_connections: data.manual_connections || [] });
         // Load Apollo contacts for this LP
         setApolloLoading(true);
         try {
@@ -507,174 +517,365 @@ Kieran`;
     );
   };
 
-  // LP LIST TAB
+  // Inline status update handler for the grid
+  const handleInlineStatusChange = async (lpId, newStatus) => {
+    try {
+      await updateLPTarget(lpId, { outreach_status: newStatus });
+      setTargets(prev => prev.map(t => t.id === lpId ? { ...t, outreach_status: newStatus } : t));
+    } catch (err) {
+      alert('Failed to update status');
+    } finally {
+      setEditingStatusId(null);
+    }
+  };
+
+  // LP LIST TAB — Airtable-style grid
   const renderLPList = () => {
-    const filtered = targets.filter(t => {
+    let filtered = targets.filter(t => {
       if (statusFilter === 'all') return true;
       if (statusFilter === 'active') return ['identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions'].includes(t.outreach_status);
-      if (statusFilter === 'connected') return t.connection_strength && t.connection_strength !== 'none';
+      if (statusFilter === 'connected') return (t.connection_strength && t.connection_strength !== 'none') || (t.manual_connections && t.manual_connections.length > 0);
       if (statusFilter === 'has_email') return !!t.email;
       return t.outreach_status === statusFilter;
     });
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(t =>
+        (t.full_name || '').toLowerCase().includes(q) ||
+        (t.company || '').toLowerCase().includes(q) ||
+        (t.email || '').toLowerCase().includes(q)
+      );
+    }
+
+    // Client-side sort
+    filtered = [...filtered].sort((a, b) => {
+      let va, vb;
+      if (sortBy === 'fit_score') { va = a.fit_score || 0; vb = b.fit_score || 0; }
+      else if (sortBy === 'name') { va = (a.full_name || '').toLowerCase(); vb = (b.full_name || '').toLowerCase(); }
+      else if (sortBy === 'outreach_status') { va = a.outreach_status || ''; vb = b.outreach_status || ''; }
+      else { va = a.fit_score || 0; vb = b.fit_score || 0; }
+      if (va < vb) return sortDir === 'desc' ? 1 : -1;
+      if (va > vb) return sortDir === 'desc' ? -1 : 1;
+      return 0;
+    });
+
     const totalPages = Math.ceil(filtered.length / pageSize);
     const paginated = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
+    const COLS = [
+      { key: 'name', label: 'Name / Company', width: 220, sticky: true },
+      { key: 'status', label: 'Status', width: 148 },
+      { key: 'fit_score', label: 'Score', width: 90 },
+      { key: 'fund_type', label: 'Fund Type', width: 130 },
+      { key: 'aum', label: 'AUM', width: 110 },
+      { key: 'geo', label: 'Geography', width: 130 },
+      { key: 'connector', label: 'Connector', width: 140 },
+      { key: 'connections', label: '2nd-Degree Links', width: 220 },
+      { key: 'email', label: 'Email', width: 200 },
+      { key: 'linkedin', label: 'LinkedIn', width: 90 },
+    ];
+
+    const cellStyle = (col, extra = {}) => ({
+      width: col.width,
+      minWidth: col.width,
+      maxWidth: col.width,
+      padding: '0 10px',
+      height: 42,
+      fontSize: 12,
+      borderRight: '1px solid #E5E7EB',
+      borderBottom: '1px solid #E5E7EB',
+      overflow: 'hidden',
+      whiteSpace: 'nowrap',
+      textOverflow: 'ellipsis',
+      verticalAlign: 'middle',
+      display: 'table-cell',
+      position: col.sticky ? 'sticky' : undefined,
+      left: col.sticky ? 0 : undefined,
+      zIndex: col.sticky ? 2 : undefined,
+      background: col.sticky ? '#fff' : undefined,
+      ...extra,
+    });
+
+    const headerCellStyle = (col) => ({
+      ...cellStyle(col),
+      background: '#F9FAFB',
+      fontWeight: 600,
+      fontSize: 11,
+      color: '#6B7280',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      height: 36,
+      userSelect: 'none',
+      cursor: 'pointer',
+      zIndex: col.sticky ? 3 : 1,
+    });
+
     return (
       <>
-        {/* Status filter bar */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
-          {[
-            { key: 'all', label: 'All', color: '#374151' },
-            { key: 'active', label: 'Active Pipeline', color: '#003B76' },
-            { key: 'not_started', label: 'Not Started', color: '#9CA3AF' },
-            { key: 'connected', label: 'Has Connection', color: '#10B981' },
-            { key: 'has_email', label: 'Has Email', color: '#059669' },
-            { key: 'meeting_scheduled', label: 'Meetings', color: '#003B76' },
-            { key: 'committed', label: 'Committed', color: '#059669' },
-            { key: 'passed', label: 'Passed', color: '#D1D5DB' },
-          ].map(f => {
-            const isActive = statusFilter === f.key;
-            const count = f.key === 'all' ? targets.length
-              : f.key === 'active' ? targets.filter(t => ['identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions'].includes(t.outreach_status)).length
-              : f.key === 'connected' ? targets.filter(t => t.connection_strength && t.connection_strength !== 'none').length
-              : f.key === 'has_email' ? targets.filter(t => !!t.email).length
-              : targets.filter(t => t.outreach_status === f.key).length;
-            return (
-              <button key={f.key} onClick={() => { setStatusFilter(f.key); setPage(0); }} style={{
-                padding: '5px 12px', borderRadius: 16, fontSize: 11, cursor: 'pointer', fontWeight: 600,
-                border: isActive ? 'none' : '1px solid var(--border-light)',
-                background: isActive ? f.color : 'transparent',
-                color: isActive ? (f.color === '#D1D5DB' ? '#374151' : 'white') : 'var(--muted)',
-                transition: 'all 0.15s',
-              }}>
-                {f.label} <span style={{ opacity: 0.7, fontWeight: 400 }}>{count}</span>
-              </button>
-            );
-          })}
+        {/* Filter + toolbar row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+            {[
+              { key: 'all', label: 'All', color: '#374151' },
+              { key: 'active', label: 'Pipeline', color: '#003B76' },
+              { key: 'not_started', label: 'Not Started', color: '#9CA3AF' },
+              { key: 'connected', label: 'Has Connection', color: '#10B981' },
+              { key: 'has_email', label: 'Has Email', color: '#059669' },
+              { key: 'meeting_scheduled', label: 'Meetings', color: '#003B76' },
+              { key: 'committed', label: 'Committed', color: '#059669' },
+              { key: 'passed', label: 'Passed', color: '#6B7280' },
+            ].map(f => {
+              const isActive = statusFilter === f.key;
+              const count = f.key === 'all' ? targets.length
+                : f.key === 'active' ? targets.filter(t => ['identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions'].includes(t.outreach_status)).length
+                : f.key === 'connected' ? targets.filter(t => (t.connection_strength && t.connection_strength !== 'none') || (t.manual_connections && t.manual_connections.length > 0)).length
+                : f.key === 'has_email' ? targets.filter(t => !!t.email).length
+                : targets.filter(t => t.outreach_status === f.key).length;
+              return (
+                <button key={f.key} onClick={() => { setStatusFilter(f.key); setPage(0); }} style={{
+                  padding: '4px 11px', borderRadius: 14, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                  border: isActive ? 'none' : '1px solid var(--border-light)',
+                  background: isActive ? f.color : 'transparent',
+                  color: isActive ? '#fff' : 'var(--muted)',
+                  transition: 'all 0.15s',
+                }}>
+                  {f.label} <span style={{ opacity: 0.7, fontWeight: 400 }}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="search-input" style={{ minWidth: 200 }}>
+              <span>🔍</span>
+              <input placeholder="Search name, company..." value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
+            </div>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+              style={{ padding: '5px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 11 }}>
+              <option value="fit_score">Score ↕</option>
+              <option value="name">Name ↕</option>
+              <option value="outreach_status">Status ↕</option>
+            </select>
+            <button onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+              style={{ padding: '5px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 11, background: '#fff', cursor: 'pointer' }}>
+              {sortDir === 'desc' ? '↓' : '↑'}
+            </button>
+            <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+              {filtered.length} LP{filtered.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
 
-        <div className="table-box">
-          <div className="table-toolbar">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div className="search-input">
-                <span>🔍</span>
-                <input placeholder="Search LP name, company..." value={search}
-                  onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                {filtered.length} result{filtered.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                style={{ padding: '6px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 12 }}>
-                <option value="fit_score">Sort: Fit Score</option>
-                <option value="connection_strength">Sort: Strength</option>
-                <option value="name">Sort: Name</option>
-                <option value="outreach_status">Sort: Status</option>
-              </select>
-              <select value={sortDir} onChange={(e) => setSortDir(e.target.value)}
-                style={{ padding: '6px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 12 }}>
-                <option value="desc">↓ Descending</option>
-                <option value="asc">↑ Ascending</option>
-              </select>
-            </div>
-          </div>
-
-          <table>
+        {/* Airtable-style grid */}
+        <div style={{
+          border: '1px solid #E5E7EB',
+          borderRadius: 8,
+          overflow: 'auto',
+          background: '#fff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          maxHeight: 'calc(100vh - 260px)',
+          position: 'relative',
+        }}>
+          <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
             <thead>
               <tr>
-                <th>Name / Company</th>
-                <th>Fit Score</th>
-                <th>Connector / Apollo</th>
-                <th>Strength</th>
-                <th>Status</th>
-                <th>Actions</th>
+                {COLS.map(col => (
+                  <th key={col.key} style={headerCellStyle(col)}
+                    onClick={() => {
+                      if (col.key === 'fit_score') { setSortBy('fit_score'); setSortDir(d => d === 'desc' ? 'asc' : 'desc'); }
+                      if (col.key === 'name') { setSortBy('name'); setSortDir(d => d === 'desc' ? 'asc' : 'desc'); }
+                      if (col.key === 'status') { setSortBy('outreach_status'); setSortDir(d => d === 'desc' ? 'asc' : 'desc'); }
+                    }}>
+                    {col.label}
+                    {(col.key === 'fit_score' && sortBy === 'fit_score') || (col.key === 'name' && sortBy === 'name') || (col.key === 'status' && sortBy === 'outreach_status')
+                      ? <span style={{ marginLeft: 4 }}>{sortDir === 'desc' ? '↓' : '↑'}</span> : null}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {paginated.map((t) => (
-                <tr key={t.id} onClick={() => setSelectedTarget(t.id)} style={{ cursor: 'pointer' }}>
-                  <td>
-                    <div style={{ fontWeight: 500 }}>{t.full_name || t.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                      {t.company}
-                      {t.email && <span style={{ marginLeft: 8, fontSize: 10, color: '#059669' }}>✉</span>}
-                    </div>
-                  </td>
-                  <td>
-                    <FitScoreBar score={t.fit_score || 0} />
-                  </td>
-                  <td style={{ fontSize: 12 }}>
-                    {t.best_connector_name || '—'}
-                    {t.total_connectors > 0 && (
-                      <div style={{ fontSize: 10, color: '#6366F1', marginTop: 2 }}>
-                        {t.total_connectors} contact{t.total_connectors !== 1 ? 's' : ''}
+              {paginated.map((t, rowIdx) => {
+                const manualConns = t.manual_connections || [];
+                const rowBg = rowIdx % 2 === 0 ? '#fff' : '#FAFAFA';
+                return (
+                  <tr key={t.id} style={{ cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#EFF6FF'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}>
+
+                    {/* Name / Company — sticky */}
+                    <td style={{ ...cellStyle(COLS[0]), background: rowBg, fontWeight: 500 }}
+                      onClick={() => setSelectedTarget(t.id)}>
+                      <div style={{ fontWeight: 600, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t.full_name || t.name}
                       </div>
-                    )}
-                  </td>
-                  <td>
-                    <StatusBadge
-                      status={CONNECTION_STRENGTH_LABELS[t.connection_strength] || t.connection_strength || 'No Connection'}
-                      color={CONNECTION_STRENGTH_COLORS[t.connection_strength] || '#9CA3AF'}
-                    />
-                  </td>
-                  <td>
-                    <StatusBadge
-                      status={OUTREACH_STATUS_LABELS[t.outreach_status] || t.outreach_status}
-                      color={OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF'}
-                    />
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <button className="btn btn-sm btn-secondary" onClick={() => setSelectedTarget(t.id)}>
-                      View
-                    </button>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t.company}
+                      </div>
+                    </td>
+
+                    {/* Status — inline editable */}
+                    <td style={cellStyle(COLS[1])} onClick={(e) => { e.stopPropagation(); setEditingStatusId(t.id); }}>
+                      {editingStatusId === t.id ? (
+                        <select autoFocus
+                          defaultValue={t.outreach_status}
+                          onChange={(e) => handleInlineStatusChange(t.id, e.target.value)}
+                          onBlur={() => setEditingStatusId(null)}
+                          style={{ fontSize: 11, border: '1px solid var(--navy)', borderRadius: 3, padding: '2px 4px', width: '100%', outline: 'none' }}>
+                          {Object.entries(OUTREACH_STATUS_LABELS).map(([v, l]) => (
+                            <option key={v} value={v}>{l}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span style={{
+                          display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
+                          background: (OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF') + '22',
+                          color: OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF',
+                          cursor: 'pointer', border: `1px solid ${(OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF')}44`,
+                        }}>
+                          {OUTREACH_STATUS_LABELS[t.outreach_status] || t.outreach_status || 'Not Started'}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Fit Score */}
+                    <td style={cellStyle(COLS[2])} onClick={() => setSelectedTarget(t.id)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <div style={{
+                          width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', fontSize: 10, fontWeight: 700,
+                          background: getFitScoreColor(t.fit_score || 0) + '18',
+                          color: getFitScoreColor(t.fit_score || 0),
+                        }}>
+                          {t.fit_score || 0}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Fund Type */}
+                    <td style={cellStyle(COLS[3])} onClick={() => setSelectedTarget(t.id)}>
+                      <span style={{ fontSize: 11, color: '#374151' }}>
+                        {t.fund_type ? t.fund_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : <span style={{ color: '#D1D5DB' }}>—</span>}
+                      </span>
+                    </td>
+
+                    {/* AUM */}
+                    <td style={cellStyle(COLS[4])} onClick={() => setSelectedTarget(t.id)}>
+                      <span style={{ fontSize: 11, color: '#374151' }}>
+                        {t.estimated_aum || <span style={{ color: '#D1D5DB' }}>—</span>}
+                      </span>
+                    </td>
+
+                    {/* Geography */}
+                    <td style={cellStyle(COLS[5])} onClick={() => setSelectedTarget(t.id)}>
+                      <span style={{ fontSize: 11, color: '#374151' }}>
+                        {t.geographic_focus || <span style={{ color: '#D1D5DB' }}>—</span>}
+                      </span>
+                    </td>
+
+                    {/* Connector (LinkedIn CSV) */}
+                    <td style={cellStyle(COLS[6])} onClick={() => setSelectedTarget(t.id)}>
+                      {t.best_connector_name ? (
+                        <span style={{ fontSize: 11 }}>
+                          <span style={{ color: '#10B981', marginRight: 3 }}>●</span>
+                          {t.best_connector_name}
+                        </span>
+                      ) : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
+                    </td>
+
+                    {/* 2nd-Degree Connections (manual / Navigator) */}
+                    <td style={cellStyle(COLS[7], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
+                      onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', minHeight: 28 }}>
+                        {manualConns.slice(0, 3).map(conn => (
+                          <a key={conn.id}
+                            href={conn.linkedin_url || undefined}
+                            target="_blank" rel="noopener noreferrer"
+                            onClick={e => { if (!conn.linkedin_url) e.preventDefault(); }}
+                            title={conn.relationship ? `${conn.name} — ${conn.relationship}` : conn.name}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 500,
+                              background: conn.linkedin_url ? '#EFF6FF' : '#F3F4F6',
+                              color: conn.linkedin_url ? '#1D4ED8' : '#6B7280',
+                              textDecoration: 'none', border: '1px solid ' + (conn.linkedin_url ? '#BFDBFE' : '#E5E7EB'),
+                              maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}>
+                            {conn.linkedin_url && <span style={{ fontSize: 9 }}>in</span>}
+                            {conn.name.split(' ')[0]}
+                          </a>
+                        ))}
+                        {manualConns.length > 3 && (
+                          <span style={{ fontSize: 10, color: '#6B7280', cursor: 'pointer' }}
+                            onClick={() => setSelectedTarget(t.id)}>
+                            +{manualConns.length - 3} more
+                          </span>
+                        )}
+                        <button
+                          title="Add 2nd-degree connection"
+                          onClick={() => { setSelectedTarget(t.id); }}
+                          style={{
+                            width: 18, height: 18, borderRadius: '50%', border: '1px dashed #CBD5E1',
+                            background: 'transparent', cursor: 'pointer', fontSize: 10, color: '#94A3B8',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0,
+                            flexShrink: 0,
+                          }}>+</button>
+                      </div>
+                    </td>
+
+                    {/* Email */}
+                    <td style={cellStyle(COLS[8])} onClick={() => setSelectedTarget(t.id)}>
+                      {t.email
+                        ? <span style={{ fontSize: 11, color: '#059669' }}>{t.email}</span>
+                        : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
+                    </td>
+
+                    {/* LinkedIn */}
+                    <td style={cellStyle(COLS[9])} onClick={e => e.stopPropagation()}>
+                      {t.linkedin_url
+                        ? <a href={t.linkedin_url} target="_blank" rel="noopener noreferrer"
+                            style={{ fontSize: 11, color: '#0077B5', textDecoration: 'none' }}>↗ View</a>
+                        : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!paginated.length && (
+                <tr>
+                  <td colSpan={COLS.length} style={{ textAlign: 'center', padding: 48, color: 'var(--muted)', fontSize: 13 }}>
+                    {loading ? 'Loading...' : search ? 'No results for that search' : statusFilter !== 'all' ? 'No LPs match this filter' : 'No LP targets found — import a CSV to get started'}
                   </td>
                 </tr>
-              ))}
-              {!paginated.length && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
-                  {loading ? 'Loading...' : statusFilter !== 'all' ? 'No LPs match this filter' : 'No LP targets found'}
-                </td></tr>
               )}
             </tbody>
           </table>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '10px 18px', borderTop: '1px solid var(--border-light)', fontSize: 12
-            }}>
-              <span style={{ color: 'var(--muted)' }}>
-                Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, filtered.length)} of {filtered.length}
-              </span>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                  style={{
-                    padding: '4px 10px', borderRadius: 4, fontSize: 11, border: '1px solid var(--border-light)',
-                    background: page === 0 ? 'var(--card-bg)' : '#fff', cursor: page === 0 ? 'default' : 'pointer',
-                    color: page === 0 ? 'var(--border-light)' : 'var(--dark)'
-                  }}>← Prev</button>
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <button key={i} onClick={() => setPage(i)} style={{
-                    padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: page === i ? 700 : 400,
-                    border: page === i ? '1px solid var(--navy)' : '1px solid var(--border-light)',
-                    background: page === i ? 'var(--navy)' : '#fff',
-                    color: page === i ? '#fff' : 'var(--dark)', cursor: 'pointer', minWidth: 28
-                  }}>{i + 1}</button>
-                ))}
-                <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-                  style={{
-                    padding: '4px 10px', borderRadius: 4, fontSize: 11, border: '1px solid var(--border-light)',
-                    background: page >= totalPages - 1 ? 'var(--card-bg)' : '#fff',
-                    cursor: page >= totalPages - 1 ? 'default' : 'pointer',
-                    color: page >= totalPages - 1 ? 'var(--border-light)' : 'var(--dark)'
-                  }}>Next →</button>
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '10px 4px', fontSize: 12, marginTop: 8,
+          }}>
+            <span style={{ color: 'var(--muted)' }}>
+              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, filtered.length)} of {filtered.length}
+            </span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+                style={{ padding: '4px 10px', borderRadius: 4, fontSize: 11, border: '1px solid var(--border-light)', background: page === 0 ? '#F9FAFB' : '#fff', cursor: page === 0 ? 'default' : 'pointer', color: page === 0 ? '#D1D5DB' : 'var(--dark)' }}>← Prev</button>
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => (
+                <button key={i} onClick={() => setPage(i)} style={{
+                  padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: page === i ? 700 : 400,
+                  border: page === i ? '1px solid var(--navy)' : '1px solid var(--border-light)',
+                  background: page === i ? 'var(--navy)' : '#fff',
+                  color: page === i ? '#fff' : 'var(--dark)', cursor: 'pointer', minWidth: 28,
+                }}>{i + 1}</button>
+              ))}
+              <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
+                style={{ padding: '4px 10px', borderRadius: 4, fontSize: 11, border: '1px solid var(--border-light)', background: page >= totalPages - 1 ? '#F9FAFB' : '#fff', cursor: page >= totalPages - 1 ? 'default' : 'pointer', color: page >= totalPages - 1 ? '#D1D5DB' : 'var(--dark)' }}>Next →</button>
+            </div>
+          </div>
+        )}
       </>
     );
   };
@@ -1287,7 +1488,7 @@ Kieran`;
                           try {
                             const res = await enrichLPTarget(detail.id);
                             const updated = await getLPTarget(detail.id);
-                            setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log });
+                            setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log, manual_connections: updated.manual_connections || [] });
                           } catch (err) {
                             alert('Enrichment failed: ' + err.message);
                           }
@@ -1317,7 +1518,7 @@ Kieran`;
                       try {
                         await updateLPTarget(detail.id, { outreach_status: key });
                         const updated = await getLPTarget(detail.id);
-                        setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log });
+                        setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log, manual_connections: updated.manual_connections || [] });
                         loadTargets();
                       } catch (err) {
                         alert(err.message);
@@ -1525,6 +1726,133 @@ Kieran`;
               </div>
             )}
 
+            {/* Manual Connections (Navigator / 2nd-degree) */}
+            <div className="detail-section">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{ color: '#0077B5' }}>in</span> 2nd-Degree Connections
+                {(detail.manual_connections || []).length > 0 && (
+                  <span style={{ fontSize: 11, background: '#0077B5', color: 'white', padding: '2px 8px', borderRadius: 10 }}>
+                    {(detail.manual_connections || []).length}
+                  </span>
+                )}
+                <button
+                  onClick={() => setShowAddConnection(v => !v)}
+                  style={{
+                    marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                    border: '1px solid #0077B5', background: showAddConnection ? '#0077B5' : 'transparent',
+                    color: showAddConnection ? '#fff' : '#0077B5', cursor: 'pointer',
+                  }}>
+                  {showAddConnection ? '✕ Cancel' : '+ Add'}
+                </button>
+              </h3>
+
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                People you found via LinkedIn Navigator who can connect you to <strong>{detail.company || detail.full_name}</strong>.
+              </div>
+
+              {/* Add connection form */}
+              {showAddConnection && (
+                <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#0369A1', display: 'block', marginBottom: 4 }}>Name *</label>
+                      <input value={newConnName} onChange={e => setNewConnName(e.target.value)}
+                        placeholder="John Smith"
+                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #BAE6FD', borderRadius: 4, fontSize: 12, boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#0369A1', display: 'block', marginBottom: 4 }}>Relationship</label>
+                      <input value={newConnRelationship} onChange={e => setNewConnRelationship(e.target.value)}
+                        placeholder="e.g. Co-investor at Acme"
+                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #BAE6FD', borderRadius: 4, fontSize: 12, boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#0369A1', display: 'block', marginBottom: 4 }}>LinkedIn URL</label>
+                    <input value={newConnLinkedin} onChange={e => setNewConnLinkedin(e.target.value)}
+                      placeholder="https://linkedin.com/in/..."
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid #BAE6FD', borderRadius: 4, fontSize: 12, boxSizing: 'border-box' }} />
+                  </div>
+                  <button
+                    disabled={addingConn || !newConnName.trim()}
+                    onClick={async () => {
+                      setAddingConn(true);
+                      try {
+                        await addManualConnection(detail.id, {
+                          name: newConnName.trim(),
+                          relationship: newConnRelationship.trim() || undefined,
+                          linkedin_url: newConnLinkedin.trim() || undefined,
+                        });
+                        setNewConnName(''); setNewConnRelationship(''); setNewConnLinkedin('');
+                        setShowAddConnection(false);
+                        const updated = await getLPTarget(detail.id);
+                        setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log, manual_connections: updated.manual_connections || [] });
+                        loadTargets();
+                      } catch (err) {
+                        alert(err.message);
+                      } finally {
+                        setAddingConn(false);
+                      }
+                    }}
+                    style={{
+                      padding: '7px 16px', background: '#0077B5', color: '#fff', border: 'none',
+                      borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: addingConn || !newConnName.trim() ? 'not-allowed' : 'pointer',
+                      opacity: addingConn || !newConnName.trim() ? 0.6 : 1,
+                    }}>
+                    {addingConn ? 'Adding...' : 'Save Connection'}
+                  </button>
+                </div>
+              )}
+
+              {/* Connection list */}
+              {(detail.manual_connections || []).length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {(detail.manual_connections || []).map(conn => (
+                    <div key={conn.id} style={{
+                      display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                      padding: '8px 12px', background: '#F0F9FF', borderRadius: 6,
+                      border: '1px solid #BAE6FD', fontSize: 12,
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 600, color: '#1E40AF' }}>{conn.name}</span>
+                          {conn.linkedin_url && (
+                            <a href={conn.linkedin_url} target="_blank" rel="noopener noreferrer"
+                              style={{ fontSize: 10, color: '#0077B5', textDecoration: 'none', background: '#DBEAFE', padding: '1px 5px', borderRadius: 3 }}>
+                              LinkedIn ↗
+                            </a>
+                          )}
+                        </div>
+                        {conn.relationship && (
+                          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, fontStyle: 'italic' }}>{conn.relationship}</div>
+                        )}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Remove ${conn.name}?`)) return;
+                          try {
+                            await deleteManualConnection(detail.id, conn.id);
+                            const updated = await getLPTarget(detail.id);
+                            setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log, manual_connections: updated.manual_connections || [] });
+                            loadTargets();
+                          } catch (err) {
+                            alert(err.message);
+                          }
+                        }}
+                        style={{
+                          padding: '2px 7px', borderRadius: 4, fontSize: 10, border: '1px solid #FCA5A5',
+                          background: 'transparent', color: '#DC2626', cursor: 'pointer', marginLeft: 8, flexShrink: 0,
+                        }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', padding: '16px 0' }}>
+                  No connections added yet. Use LinkedIn Navigator to find warm paths, then add them above.
+                </div>
+              )}
+            </div>
+
             {/* Apollo Contacts */}
             <div className="detail-section">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1700,7 +2028,7 @@ Kieran`;
                               setApolloContacts(apolloData.contacts || []);
                               // Reload detail for warm intro paths
                               const data = await getLPTarget(selectedTarget);
-                              setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log });
+                              setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log, manual_connections: data.manual_connections || [] });
                             } catch (err) { console.error('Flag error:', err); }
                           }}
                           style={{
@@ -1777,7 +2105,7 @@ Kieran`;
                     setActivityAction('email_sent');
                     setActivityDetails('');
                     const updated = await getLPTarget(detail.id);
-                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log });
+                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log, manual_connections: updated.manual_connections || [] });
                   } catch (err) {
                     alert(err.message);
                   }
@@ -1807,7 +2135,7 @@ Kieran`;
                     await updateLPTarget(detail.id, { notes: (detail.notes || '') + '\n' + noteText });
                     setNoteText('');
                     const updated = await getLPTarget(detail.id);
-                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log });
+                    setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log, manual_connections: updated.manual_connections || [] });
                   } catch (err) {
                     alert(err.message);
                   }

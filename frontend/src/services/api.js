@@ -169,3 +169,10 @@ export const exportToClay = (data = {}) =>
 export const importClayCSV = (formData) =>
   request('/lp/clay/import-csv', { method: 'POST', body: formData });
 export const getClayWebhookUrl = () => request('/lp/clay/webhook-url');
+
+// Manual Connections (Navigator-sourced warm paths)
+export const getManualConnections = (lpId) => request(`/lp/targets/${lpId}/connections`);
+export const addManualConnection = (lpId, data) =>
+  request(`/lp/targets/${lpId}/connections`, { method: 'POST', body: JSON.stringify(data) });
+export const deleteManualConnection = (lpId, connId) =>
+  request(`/lp/targets/${lpId}/connections/${connId}`, { method: 'DELETE' });

@@ -182,6 +182,18 @@ CREATE TABLE IF NOT EXISTS linkedin_enrichments (
   UNIQUE(linkedin_url)
 );
 
+-- Manual connections: Navigator-sourced warm paths stored per LP
+CREATE TABLE IF NOT EXISTS lp_manual_connections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lp_target_id UUID NOT NULL REFERENCES lp_targets(id) ON DELETE CASCADE,
+  name VARCHAR(500) NOT NULL,
+  relationship VARCHAR(500),       -- e.g. "Co-investor in Seed round", "Met at SaaStr"
+  linkedin_url TEXT,
+  added_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_lp_manual_conn_target ON lp_manual_connections(lp_target_id);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_linkedin_enrichments_lp ON linkedin_enrichments(lp_target_id);
 CREATE INDEX IF NOT EXISTS idx_linkedin_enrichments_apollo ON linkedin_enrichments(apollo_contact_id);

@@ -83,6 +83,20 @@ async function autoMigrate() {
       CREATE INDEX IF NOT EXISTS idx_submissions_intro_source
         ON submissions (intro_source_contact_id);
     `);
+    // Manual connections table (Navigator-sourced warm paths)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS lp_manual_connections (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        lp_target_id UUID NOT NULL REFERENCES lp_targets(id) ON DELETE CASCADE,
+        name VARCHAR(500) NOT NULL,
+        relationship VARCHAR(500),
+        linkedin_url TEXT,
+        added_by UUID REFERENCES users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_lp_manual_conn_target ON lp_manual_connections(lp_target_id);
+    `);
+
     // One-time: update admin email from old seed value to correct address
     await db.query(`
       UPDATE users SET email = 'kcorbett@studio.vc'
