@@ -910,7 +910,7 @@ Kieran`;
                     {/* Navigator search */}
                     <td style={cellStyle(COLS[12])} onClick={e => e.stopPropagation()}>
                       <a
-                        href={`https://www.linkedin.com/sales/search/people?query=${encodeURIComponent(`(keywords:${t.company})`)}`}
+                        href={`https://www.linkedin.com/sales/search/people?query=(${encodeURIComponent(`spellCorrectionEnabled:true,keywords:${t.company.replace(/,/g, '')}`)})`}
                         target="_blank" rel="noopener noreferrer"
                         title={`Search for people at ${t.company} in Sales Navigator`}
                         style={{
