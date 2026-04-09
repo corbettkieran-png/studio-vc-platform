@@ -27,7 +27,13 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-brand">Studio VC</div>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <img
+            src="/assets/logo.svg"
+            alt="Studio VC"
+            style={{ width: 160, filter: 'invert(1) brightness(0) saturate(0) invert(0.2) sepia(0.5) hue-rotate(180deg) brightness(0.3)' }}
+          />
+        </div>
         <p className="subtitle">Invest. Collaborate. Build.</p>
         <form onSubmit={handleSubmit}>
           <div className="form-group">

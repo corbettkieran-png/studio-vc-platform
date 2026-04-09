@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 242 51" width="242" height="51" role="img" aria-label="Studio VC">
+  <text
+    x="0" y="37"
+    font-family="Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    font-weight="300"
+    font-size="26"
+    fill="#FFFFFF"
+    letter-spacing="7"
+  >STUDIO</text>
+  <line x1="133" y1="8" x2="133" y2="44" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>
+  <text
+    x="143" y="37"
+    font-family="Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    font-weight="300"
+    font-size="26"
+    fill="#FFFFFF"
+    letter-spacing="5"
+  >VC</text>
+</svg>

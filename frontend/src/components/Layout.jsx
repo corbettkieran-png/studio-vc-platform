@@ -13,9 +13,13 @@ export default function Layout({ children }) {
   return (
     <div className="app-layout">
       <aside className="app-sidebar">
-        {/* Brand mark — mirrors studio.vc logo treatment */}
+        {/* Studio VC wordmark — matches studio.vc logo exactly */}
         <div className="sidebar-logo">
-          <span>Studio VC</span>
+          <img
+            src="/assets/logo.svg"
+            alt="Studio VC"
+            style={{ width: 140, display: 'block', marginBottom: 8 }}
+          />
           <div className="tagline">Deal Flow Platform</div>
         </div>
 
