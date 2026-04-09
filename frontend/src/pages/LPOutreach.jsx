@@ -9,6 +9,14 @@ import {
   getClaySettings, saveClaySettings, exportToClay, importClayCSV, getClayWebhookUrl,
   addManualConnection, deleteManualConnection,
 } from '../services/api';
+
+const request = (path, opts = {}) => {
+  const token = localStorage.getItem('token');
+  return fetch(`/api${path}`, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(opts.headers || {}) },
+  }).then(r => r.json());
+};
 import { useAuth } from '../hooks/useAuth';
 
 function timeAgo(dateStr) {
@@ -151,6 +159,11 @@ export default function LPOutreach() {
   const [addingConn, setAddingConn] = useState(false);
   // Inline status edit
   const [editingStatusId, setEditingStatusId] = useState(null);
+  // Intro email modal
+  const [introEmail, setIntroEmail] = useState(null);
+  const [generatingIntro, setGeneratingIntro] = useState(false);
+  // Inline editable fields
+  const [editingFollowup, setEditingFollowup] = useState(null); // lpId being edited
 
   // Generate email draft based on LP target data
   const generateEmailDraft = (type = 'cold') => {
@@ -566,13 +579,15 @@ Kieran`;
     const COLS = [
       { key: 'name', label: 'Name / Company', width: 220, sticky: true },
       { key: 'status', label: 'Status', width: 148 },
-      { key: 'fit_score', label: 'Score', width: 90 },
+      { key: 'priority', label: 'Priority', width: 90 },
+      { key: 'last_contacted', label: 'Last Contact', width: 120 },
+      { key: 'next_followup', label: 'Follow-up', width: 110 },
+      { key: 'fit_score', label: 'Score', width: 80 },
       { key: 'fund_type', label: 'Fund Type', width: 130 },
       { key: 'aum', label: 'AUM', width: 110 },
       { key: 'geo', label: 'Geography', width: 130 },
-      { key: 'connector', label: 'Connector', width: 140 },
       { key: 'connections', label: '2nd-Degree Links', width: 220 },
-      { key: 'email', label: 'Email', width: 200 },
+      { key: 'email', label: 'Email', width: 190 },
       { key: 'linkedin', label: 'LinkedIn', width: 90 },
     ];
 
@@ -739,8 +754,52 @@ Kieran`;
                       )}
                     </td>
 
+                    {/* Priority */}
+                    <td style={cellStyle(COLS[2])} onClick={(e) => { e.stopPropagation(); }}>
+                      <select value={t.priority || 'medium'}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          await updateLPTarget(t.id, { priority: val });
+                          setTargets(prev => prev.map(x => x.id === t.id ? { ...x, priority: val } : x));
+                        }}
+                        style={{ fontSize: 10, fontWeight: 700, border: 'none', background: 'transparent', cursor: 'pointer',
+                          color: t.priority === 'high' ? '#DC2626' : t.priority === 'low' ? '#9CA3AF' : '#D97706' }}>
+                        <option value="high">● High</option>
+                        <option value="medium">● Med</option>
+                        <option value="low">● Low</option>
+                      </select>
+                    </td>
+
+                    {/* Last Contact */}
+                    <td style={cellStyle(COLS[3])} onClick={() => setSelectedTarget(t.id)}>
+                      <span style={{ fontSize: 11, color: t.last_contacted_at ? '#374151' : '#D1D5DB' }}>
+                        {t.last_contacted_at ? new Date(t.last_contacted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+                      </span>
+                    </td>
+
+                    {/* Follow-up date — inline editable */}
+                    <td style={cellStyle(COLS[4])} onClick={(e) => { e.stopPropagation(); setEditingFollowup(t.id); }}>
+                      {editingFollowup === t.id ? (
+                        <input type="date" autoFocus
+                          defaultValue={t.next_followup_at ? t.next_followup_at.split('T')[0] : ''}
+                          onBlur={async (e) => {
+                            const val = e.target.value;
+                            setEditingFollowup(null);
+                            if (val !== (t.next_followup_at || '').split('T')[0]) {
+                              await updateLPTarget(t.id, { next_followup_at: val || null });
+                              setTargets(prev => prev.map(x => x.id === t.id ? { ...x, next_followup_at: val } : x));
+                            }
+                          }}
+                          style={{ fontSize: 10, width: '100%', border: '1px solid var(--navy)', borderRadius: 3, padding: '2px 4px', outline: 'none' }} />
+                      ) : (
+                        <span style={{ fontSize: 11, color: t.next_followup_at ? (new Date(t.next_followup_at) < new Date() ? '#DC2626' : '#059669') : '#D1D5DB', cursor: 'pointer' }}>
+                          {t.next_followup_at ? new Date(t.next_followup_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+                        </span>
+                      )}
+                    </td>
+
                     {/* Fit Score */}
-                    <td style={cellStyle(COLS[2])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[5])} onClick={() => setSelectedTarget(t.id)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <div style={{
                           width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center',
@@ -754,14 +813,14 @@ Kieran`;
                     </td>
 
                     {/* Fund Type */}
-                    <td style={cellStyle(COLS[3])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[6])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: '#374151' }}>
                         {t.fund_type ? t.fund_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : <span style={{ color: '#D1D5DB' }}>—</span>}
                       </span>
                     </td>
 
                     {/* AUM */}
-                    <td style={cellStyle(COLS[4])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[7])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: '#374151' }}>
                         {t.estimated_aum || <span style={{ color: '#D1D5DB' }}>—</span>}
                       </span>
@@ -774,18 +833,8 @@ Kieran`;
                       </span>
                     </td>
 
-                    {/* Connector (LinkedIn CSV) */}
-                    <td style={cellStyle(COLS[6])} onClick={() => setSelectedTarget(t.id)}>
-                      {t.best_connector_name ? (
-                        <span style={{ fontSize: 11 }}>
-                          <span style={{ color: '#10B981', marginRight: 3 }}>●</span>
-                          {t.best_connector_name}
-                        </span>
-                      ) : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
-                    </td>
-
                     {/* 2nd-Degree Connections (manual / Navigator) */}
-                    <td style={cellStyle(COLS[7], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
+                    <td style={cellStyle(COLS[8], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
                       onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', minHeight: 28 }}>
                         {manualConns.slice(0, 3).map(conn => (
@@ -825,14 +874,14 @@ Kieran`;
                     </td>
 
                     {/* Email */}
-                    <td style={cellStyle(COLS[8])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[9])} onClick={() => setSelectedTarget(t.id)}>
                       {t.email
                         ? <span style={{ fontSize: 11, color: '#059669' }}>{t.email}</span>
                         : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
                     </td>
 
                     {/* LinkedIn */}
-                    <td style={cellStyle(COLS[9])} onClick={e => e.stopPropagation()}>
+                    <td style={cellStyle(COLS[10])} onClick={e => e.stopPropagation()}>
                       {t.linkedin_url
                         ? <a href={t.linkedin_url} target="_blank" rel="noopener noreferrer"
                             style={{ fontSize: 11, color: '#0077B5', textDecoration: 'none' }}>↗ View</a>
@@ -1508,6 +1557,49 @@ Kieran`;
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Intro Email Generator */}
+            <div className="detail-section">
+              <h3>Generate Intro Email</h3>
+              <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                Drafts a personalised intro from <strong>{user?.full_name || user?.name || 'you'}</strong> to {detail?.company}.
+              </p>
+              <button
+                disabled={generatingIntro}
+                onClick={async () => {
+                  setGeneratingIntro(true);
+                  try {
+                    const data = await request(`/lp/targets/${detail.id}/draft-intro`, { method: 'POST', body: JSON.stringify({}) });
+                    setIntroEmail(data);
+                  } finally {
+                    setGeneratingIntro(false);
+                  }
+                }}
+                style={{ padding: '6px 14px', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: generatingIntro ? 'default' : 'pointer',
+                  background: '#003B76', color: '#fff', border: 'none', opacity: generatingIntro ? 0.6 : 1 }}>
+                {generatingIntro ? 'Generating…' : '✉ Draft Intro Email'}
+              </button>
+
+              {introEmail && introEmail.lp_company === detail?.company && (
+                <div style={{ marginTop: 14, border: '1px solid var(--border-light)', borderRadius: 6, overflow: 'hidden' }}>
+                  <div style={{ background: '#F8FAFC', padding: '10px 14px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>Subject</div>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>{introEmail.subject}</div>
+                    </div>
+                    <button onClick={() => { navigator.clipboard.writeText(`Subject: ${introEmail.subject}\n\n${introEmail.body}`); }}
+                      style={{ fontSize: 11, padding: '4px 10px', border: '1px solid var(--border-light)', borderRadius: 4, background: '#fff', cursor: 'pointer' }}>
+                      Copy
+                    </button>
+                  </div>
+                  <textarea
+                    value={introEmail.body}
+                    onChange={e => setIntroEmail(prev => ({ ...prev, body: e.target.value }))}
+                    style={{ width: '100%', minHeight: 280, padding: '12px 14px', fontSize: 12, lineHeight: 1.6, border: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Email Draft */}

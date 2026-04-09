@@ -97,6 +97,15 @@ async function autoMigrate() {
       CREATE INDEX IF NOT EXISTS idx_lp_manual_conn_target ON lp_manual_connections(lp_target_id);
     `);
 
+    // LP CRM enhancement columns
+    await db.query(`
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS last_contacted_at TIMESTAMPTZ;
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS next_followup_at DATE;
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS priority VARCHAR(10) DEFAULT 'medium'
+        CHECK (priority IN ('high', 'medium', 'low'));
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS estimated_aum TEXT;
+    `);
+
     // Deduplicate lp_targets: keep the oldest row per company name, delete the rest
     await db.query(`
       DELETE FROM lp_targets

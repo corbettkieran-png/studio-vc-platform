@@ -747,9 +747,10 @@ router.get('/targets', authenticate, async (req, res) => {
     }
 
     // Sorting
-    const validSortFields = ['fit_score', 'connection_strength', 'last_outreach_at', 'created_at'];
-    const sortField = validSortFields.includes(sort_by) ? sort_by : 'fit_score';
-    query += ` ORDER BY t.${sortField} DESC`;
+    const validSortFields = ['fit_score', 'connection_strength', 'last_outreach_at', 'created_at', 'company', 'last_contacted_at', 'next_followup_at', 'priority'];
+    const sortField = validSortFields.includes(sort_by) ? sort_by : 'company';
+    const sortDir = (req.query.sort_dir || 'asc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+    query += ` ORDER BY t.${sortField} ${sortDir} NULLS LAST`;
 
     // Pagination
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -978,6 +979,24 @@ router.patch('/targets/:id', authenticate, async (req, res) => {
       needsRescore = true;
     }
 
+    if (req.body.last_contacted_at !== undefined) {
+      updates.push('last_contacted_at = $' + (params.length + 1));
+      params.push(req.body.last_contacted_at || null);
+    }
+
+    if (req.body.next_followup_at !== undefined) {
+      updates.push('next_followup_at = $' + (params.length + 1));
+      params.push(req.body.next_followup_at || null);
+    }
+
+    if (req.body.priority !== undefined) {
+      const p = req.body.priority;
+      if (['high', 'medium', 'low'].includes(p)) {
+        updates.push('priority = $' + (params.length + 1));
+        params.push(p);
+      }
+    }
+
     // Recompute fit score if needed
     if (needsRescore) {
       const updatedLp = {
@@ -1011,6 +1030,67 @@ router.patch('/targets/:id', authenticate, async (req, res) => {
 });
 
 // ============================================================
+// INTRO EMAIL GENERATION
+// ============================================================
+
+// POST /api/lp/targets/:id/draft-intro  — generate personalised intro email
+router.post('/targets/:id/draft-intro', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Load LP details
+    const { rows: lpRows } = await db.query('SELECT * FROM lp_targets WHERE id = $1', [id]);
+    if (!lpRows.length) return res.status(404).json({ error: 'LP not found' });
+    const lp = lpRows[0];
+
+    // Load the logged-in user's full profile
+    const { rows: userRows } = await db.query(
+      'SELECT full_name, email, role FROM users WHERE id = $1', [req.user.id]
+    );
+    const sender = userRows[0] || { full_name: 'The Studio VC Team', email: '' };
+
+    // Build a personalised email using what we know
+    const fundType = lp.fund_type || 'investment firm';
+    const geo = lp.geographic_focus ? ` based in ${lp.geographic_focus}` : '';
+    const sectors = Array.isArray(lp.sector_interest) && lp.sector_interest.length
+      ? lp.sector_interest.slice(0, 3).join(', ')
+      : null;
+    const sectorLine = sectors ? ` with a focus on ${sectors}` : '';
+    const contactName = lp.full_name ? lp.full_name.split(' ')[0] : null;
+    const salutation = contactName ? `Hi ${contactName},` : 'Hi,';
+    const connectors = req.body.connector_name
+      ? `I was introduced to you by ${req.body.connector_name}.`
+      : '';
+
+    const subject = `Introduction — CQ Fund III | Studio VC`;
+
+    const body = `${salutation}
+
+${connectors ? connectors + '\n\n' : ''}I'm ${sender.full_name} from Studio VC. I wanted to reach out as we're currently raising CQ Fund III, our early-stage seed fund focused on B2B software, fintech, and deep tech companies across the US and Europe.
+
+Given ${lp.company}'s profile as a ${fundType}${geo}${sectorLine}, I think there could be a strong fit — many of our LPs share a similar thesis and have found our deal flow and co-investment opportunities compelling.
+
+CQ Fund III highlights:
+• Target: $50M fund
+• Stage: Pre-seed and seed (initial cheques of $250K–$1M)
+• Focus: B2B SaaS, fintech infrastructure, and AI-native applications
+• Portfolio: 12 current investments across the US and Europe
+
+I'd love to share our deck and have a brief 20-minute intro call at your convenience.
+
+Best,
+${sender.full_name}
+Studio VC
+${sender.email}`;
+
+    res.json({ subject, body, lp_name: lp.full_name, lp_company: lp.company, sender: sender.full_name });
+  } catch (err) {
+    console.error('Draft intro error:', err);
+    res.status(500).json({ error: 'Failed to generate intro email' });
+  }
+});
+
+// ============================================================
 // ACTIVITY LOGGING
 // ============================================================
 
@@ -1035,6 +1115,15 @@ router.post('/targets/:id/activity', authenticate, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5)`,
       [activityId, id, req.user.id, action, JSON.stringify(details || {})]
     );
+
+    // Auto-update last_contacted_at for contact-type activities
+    const contactActions = ['email_sent', 'meeting', 'call', 'intro_sent', 'follow_up', 'email'];
+    if (contactActions.some(a => action.toLowerCase().includes(a))) {
+      await db.query(
+        `UPDATE lp_targets SET last_contacted_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [id]
+      );
+    }
 
     const { rows: activity } = await db.query('SELECT * FROM lp_activity_log WHERE id = $1', [
       activityId,
