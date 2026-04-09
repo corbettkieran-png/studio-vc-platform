@@ -111,8 +111,8 @@ export default function LPOutreach() {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState('fit_score');
-  const [sortDir, setSortDir] = useState('desc');
+  const [sortBy, setSortBy] = useState('company');
+  const [sortDir, setSortDir] = useState('asc');
   const [teamMembers, setTeamMembers] = useState([]);
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -553,15 +553,15 @@ Kieran`;
       let va, vb;
       if (sortBy === 'fit_score') { va = a.fit_score || 0; vb = b.fit_score || 0; }
       else if (sortBy === 'name') { va = (a.full_name || '').toLowerCase(); vb = (b.full_name || '').toLowerCase(); }
+      else if (sortBy === 'company') { va = (a.company || '').toLowerCase(); vb = (b.company || '').toLowerCase(); }
       else if (sortBy === 'outreach_status') { va = a.outreach_status || ''; vb = b.outreach_status || ''; }
-      else { va = a.fit_score || 0; vb = b.fit_score || 0; }
+      else { va = (a.company || '').toLowerCase(); vb = (b.company || '').toLowerCase(); }
       if (va < vb) return sortDir === 'desc' ? 1 : -1;
       if (va > vb) return sortDir === 'desc' ? -1 : 1;
       return 0;
     });
 
-    const totalPages = Math.ceil(filtered.length / pageSize);
-    const paginated = filtered.slice(page * pageSize, (page + 1) * pageSize);
+    const paginated = filtered; // show all — no pagination
 
     const COLS = [
       { key: 'name', label: 'Name / Company', width: 220, sticky: true },
@@ -653,9 +653,10 @@ Kieran`;
             </div>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
               style={{ padding: '5px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 11 }}>
-              <option value="fit_score">Score ↕</option>
-              <option value="name">Name ↕</option>
-              <option value="outreach_status">Status ↕</option>
+              <option value="company">Company A→Z</option>
+              <option value="fit_score">Score</option>
+              <option value="name">Contact Name</option>
+              <option value="outreach_status">Status</option>
             </select>
             <button onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
               style={{ padding: '5px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 11, background: '#fff', cursor: 'pointer' }}>
@@ -851,31 +852,10 @@ Kieran`;
           </table>
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '10px 4px', fontSize: 12, marginTop: 8,
-          }}>
-            <span style={{ color: 'var(--muted)' }}>
-              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, filtered.length)} of {filtered.length}
-            </span>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                style={{ padding: '4px 10px', borderRadius: 4, fontSize: 11, border: '1px solid var(--border-light)', background: page === 0 ? '#F9FAFB' : '#fff', cursor: page === 0 ? 'default' : 'pointer', color: page === 0 ? '#D1D5DB' : 'var(--dark)' }}>← Prev</button>
-              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => (
-                <button key={i} onClick={() => setPage(i)} style={{
-                  padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: page === i ? 700 : 400,
-                  border: page === i ? '1px solid var(--navy)' : '1px solid var(--border-light)',
-                  background: page === i ? 'var(--navy)' : '#fff',
-                  color: page === i ? '#fff' : 'var(--dark)', cursor: 'pointer', minWidth: 28,
-                }}>{i + 1}</button>
-              ))}
-              <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-                style={{ padding: '4px 10px', borderRadius: 4, fontSize: 11, border: '1px solid var(--border-light)', background: page >= totalPages - 1 ? '#F9FAFB' : '#fff', cursor: page >= totalPages - 1 ? 'default' : 'pointer', color: page >= totalPages - 1 ? '#D1D5DB' : 'var(--dark)' }}>Next →</button>
-            </div>
-          </div>
-        )}
+        {/* Row count */}
+        <div style={{ padding: '8px 4px', fontSize: 11, color: 'var(--muted)' }}>
+          {filtered.length} LP{filtered.length !== 1 ? 's' : ''}
+        </div>
       </>
     );
   };

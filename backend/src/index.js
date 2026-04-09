@@ -97,6 +97,22 @@ async function autoMigrate() {
       CREATE INDEX IF NOT EXISTS idx_lp_manual_conn_target ON lp_manual_connections(lp_target_id);
     `);
 
+    // Deduplicate lp_targets: keep the oldest row per company name, delete the rest
+    await db.query(`
+      DELETE FROM lp_targets
+      WHERE id IN (
+        SELECT id FROM (
+          SELECT id,
+            ROW_NUMBER() OVER (
+              PARTITION BY LOWER(TRIM(company))
+              ORDER BY imported_at ASC NULLS LAST, id ASC
+            ) AS rn
+          FROM lp_targets
+        ) ranked
+        WHERE rn > 1
+      )
+    `);
+
     // One-time: update admin email from old seed value to correct address
     await db.query(`
       UPDATE users SET email = 'kcorbett@studio.vc'
