@@ -242,7 +242,7 @@ Kieran`;
       const params = {
         sort_by: sortBy,
         sort_dir: sortDir,
-        limit: 100,
+        limit: 2000,
       };
       if (search.trim()) params.search = search.trim();
       const data = await getLPTargets(params);

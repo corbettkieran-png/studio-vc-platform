@@ -710,7 +710,7 @@ router.get('/targets', authenticate, async (req, res) => {
       search,
       sort_by = 'fit_score',
       page = 1,
-      limit = 50,
+      limit = 2000,
     } = req.query;
 
     let query = `
