@@ -88,6 +88,11 @@ async function autoMigrate() {
       UPDATE users SET email = 'kcorbett@studio.vc'
       WHERE email = 'kieran@studiovc.com'
     `);
+    // Reset failed/stuck emails so they're retried after SMTP → Resend API switch
+    await db.query(`
+      UPDATE email_queue SET status = 'pending', attempts = 0
+      WHERE status IN ('failed', 'pending') AND attempts > 0
+    `);
     console.log('Auto-migrate: contacts schema applied.');
   } catch (err) {
     console.error('Auto-migrate error:', err.message);
