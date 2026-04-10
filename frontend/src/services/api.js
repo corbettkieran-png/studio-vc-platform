@@ -97,6 +97,11 @@ export const getActivity = (params = {}) => {
   return request(`/activity?${qs}`);
 };
 
+// LP Outreach — current user's own connections
+export const getMyTeamMember = () => request('/lp/me/team-member');
+export const uploadMyLinkedInCSV = (formData) =>
+  request('/lp/me/connections/upload', { method: 'POST', body: formData });
+
 // LP Outreach
 export const getLPTeam = () => request('/lp/team');
 export const addLPTeamMember = (data) =>
