@@ -20,6 +20,13 @@ export function AuthProvider({ children }) {
     } else {
       setLoading(false);
     }
+
+    // Google OAuth sets token in localStorage then fires this event
+    const handleGoogleLogin = (e) => {
+      if (e.detail?.user) setUser(e.detail.user);
+    };
+    window.addEventListener('svc:login', handleGoogleLogin);
+    return () => window.removeEventListener('svc:login', handleGoogleLogin);
   }, []);
 
   const login = async (email, password) => {

@@ -122,6 +122,13 @@ async function autoMigrate() {
       )
     `);
 
+    // Google OAuth: add google_id column and make password_hash nullable
+    await db.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;
+      ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
+    `);
+
     // One-time: update admin email from old seed value to correct address
     await db.query(`
       UPDATE users SET email = 'kcorbett@studio.vc'

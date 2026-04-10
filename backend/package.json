@@ -23,6 +23,7 @@
     "pdf-parse": "^1.1.1",
     "peopledatalabs": "^14.1.1",
     "pg": "^8.12.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "google-auth-library": "^9.14.2"
   }
 }

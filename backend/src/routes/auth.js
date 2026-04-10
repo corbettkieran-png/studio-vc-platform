@@ -1,10 +1,12 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 const db = require('../config/db');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -41,6 +43,92 @@ router.post('/login', async (req, res) => {
     });
   } catch (err) {
     console.error('Login error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/auth/google — verify Google ID token and return a Studio VC JWT
+router.post('/google', async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ error: 'Google credential required' });
+    }
+
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      return res.status(501).json({ error: 'Google auth not configured on this server' });
+    }
+
+    // Verify the ID token issued by Google
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      return res.status(401).json({ error: 'Invalid Google credential' });
+    }
+
+    const { email, name, sub: googleId } = payload;
+    if (!email) {
+      return res.status(400).json({ error: 'No email returned from Google' });
+    }
+
+    // Optional domain restriction — e.g. ALLOWED_GOOGLE_DOMAINS=studio.vc,studiovc.com
+    const allowedDomains = process.env.ALLOWED_GOOGLE_DOMAINS;
+    if (allowedDomains) {
+      const domain = email.split('@')[1];
+      const allowed = allowedDomains.split(',').map(d => d.trim().toLowerCase());
+      if (!allowed.includes(domain.toLowerCase())) {
+        return res.status(403).json({
+          error: `Access restricted to: ${allowedDomains}. Contact your admin.`,
+        });
+      }
+    }
+
+    // Find existing user by google_id or email
+    const { rows } = await db.query(
+      `SELECT id, email, full_name, role, is_active, google_id
+       FROM users WHERE google_id = $1 OR email = $2
+       LIMIT 1`,
+      [googleId, email.toLowerCase()]
+    );
+
+    let user;
+    if (rows.length > 0) {
+      user = rows[0];
+      if (!user.is_active) {
+        return res.status(403).json({ error: 'Account disabled. Contact your admin.' });
+      }
+      // Link google_id if this user signed up with a password before
+      if (!user.google_id) {
+        await db.query('UPDATE users SET google_id = $1, updated_at = NOW() WHERE id = $2', [googleId, user.id]);
+      }
+    } else {
+      // First-time Google sign-in — create the user as analyst
+      const { rows: created } = await db.query(
+        `INSERT INTO users (email, full_name, google_id, role)
+         VALUES ($1, $2, $3, 'analyst')
+         RETURNING id, email, full_name, role`,
+        [email.toLowerCase(), name, googleId]
+      );
+      user = created[0];
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, name: user.full_name, role: user.role },
+    });
+  } catch (err) {
+    console.error('Google auth error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

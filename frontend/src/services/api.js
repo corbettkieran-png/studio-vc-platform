@@ -37,6 +37,9 @@ async function request(path, options = {}) {
 export const login = (email, password) =>
   request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
 
+export const loginWithGoogle = (credential) =>
+  request('/auth/google', { method: 'POST', body: JSON.stringify({ credential }) });
+
 export const getMe = () => request('/auth/me');
 
 export const createUser = (data) =>
