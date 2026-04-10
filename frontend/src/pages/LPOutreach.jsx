@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
+  getMyTeamMember, uploadMyLinkedInCSV,
   getLPTeam, addLPTeamMember, removeLPTeamMember, uploadLinkedInCSV,
   importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
   runLPMatching, getLPStats, getApolloStatus, getApolloContacts,
@@ -121,6 +122,8 @@ export default function LPOutreach() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('company');
   const [sortDir, setSortDir] = useState('asc');
+  const [myTeamMember, setMyTeamMember] = useState(null);
+  const [myConnectionsUploading, setMyConnectionsUploading] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -185,7 +188,7 @@ export default function LPOutreach() {
 
     if (type === 'warm_intro' && connectors.length > 0) {
       const connector = connectors[0];
-      subject = `Introduction via ${connector.name} — Studio VC`;
+      subject = `Introduction via ${connector.name} â Studio VC`;
       body = `Hi ${firstName},
 
 ${connector.name} suggested I reach out. I'm a partner at Studio VC, an early-stage seed fund focused on ${sectorText}.
@@ -198,7 +201,7 @@ Best,
 Kieran`;
     } else if (type === 'warm_intro_path' && warmPaths.length > 0) {
       const path = warmPaths[0];
-      subject = `${path.contact_name} at ${company} — Studio VC Introduction`;
+      subject = `${path.contact_name} at ${company} â Studio VC Introduction`;
       body = `Hi ${firstName},
 
 I understand we share a mutual connection in ${path.contact_name}${path.contact_title ? ` (${path.contact_title})` : ''} at ${company}. I'm a partner at Studio VC, where we invest at the seed stage in ${sectorText}.
@@ -210,7 +213,7 @@ I'd welcome the chance to share our pipeline and thesis. Would a brief call work
 Best,
 Kieran`;
     } else if (type === 'follow_up') {
-      subject = `Following up — Studio VC`;
+      subject = `Following up â Studio VC`;
       body = `Hi ${firstName},
 
 I wanted to follow up on my earlier note. We've been making strong progress at Studio VC and have several active deals in ${sectorText} that I think would be of interest to ${company}.
@@ -221,7 +224,7 @@ Best,
 Kieran`;
     } else {
       // Cold outreach
-      subject = `Studio VC — Seed-Stage Investment Opportunity`;
+      subject = `Studio VC â Seed-Stage Investment Opportunity`;
       body = `Hi ${firstName},
 
 I'm Kieran, a partner at Studio VC. We're a seed-stage venture fund investing in ${sectorText}.
@@ -266,6 +269,16 @@ Kieran`;
       setLoading(false);
     }
   }, [search, sortBy, sortDir]);
+
+  // Load current user's own team_member record (auto-created on first call)
+  const loadMyTeamMember = useCallback(async () => {
+    try {
+      const data = await getMyTeamMember();
+      setMyTeamMember(data.team_member || null);
+    } catch (err) {
+      console.error('Load my team member error:', err);
+    }
+  }, []);
 
   // Load team members
   const loadTeamMembers = useCallback(async () => {
@@ -319,16 +332,17 @@ Kieran`;
   // Initial loads
   useEffect(() => {
     loadStats();
+    loadMyTeamMember();
     loadTeamMembers();
     loadApolloStats();
     loadApolloKey();
     loadClaySettings();
-  }, [loadStats, loadTeamMembers, loadApolloStats, loadApolloKey, loadClaySettings]);
+  }, [loadStats, loadMyTeamMember, loadTeamMembers, loadApolloStats, loadApolloKey, loadClaySettings]);
 
   const runApolloBulkEnrich = async () => {
     if (apolloBulkRunning) return;
     if (!apolloKeyStatus?.has_key) {
-      alert('Apollo API key not configured on the backend. Add APOLLO_API_KEY in Railway → Variables and redeploy.');
+      alert('Apollo API key not configured on the backend. Add APOLLO_API_KEY in Railway â Variables and redeploy.');
       return;
     }
     if (!confirm('Run Apollo live search for all LP targets without contacts? This calls the Apollo API and may take a few minutes.')) return;
@@ -388,7 +402,7 @@ Kieran`;
             borderRadius: 10, padding: '14px 20px', marginBottom: 20,
             display: 'flex', alignItems: 'center', gap: 12
           }}>
-            <span style={{ fontSize: 20 }}>🔗</span>
+            <span style={{ fontSize: 20 }}>ð</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 13, color: '#1E40AF', marginBottom: 2 }}>
                 LinkedIn Connection Export Pending
@@ -483,7 +497,7 @@ Kieran`;
             <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
               {apolloStats.companies_searched > 0
                 ? `${Math.round((apolloStats.companies_searched / apolloStats.total_companies) * 100)}% of LP companies enriched via Apollo`
-                : 'Apollo enrichment in progress — senior contacts are being mapped to your LP targets'}
+                : 'Apollo enrichment in progress â senior contacts are being mapped to your LP targets'}
             </div>
             <div style={{
               marginTop: 12, padding: 10, borderRadius: 6,
@@ -493,15 +507,15 @@ Kieran`;
             }}>
               <span>
                 {apolloKeyStatus?.has_key
-                  ? '✓ Apollo API key detected — live enrichment is enabled.'
-                  : '⚠ APOLLO_API_KEY not set on the backend. Live enrichment is disabled. Add it in Railway → Variables.'}
+                  ? 'â Apollo API key detected â live enrichment is enabled.'
+                  : 'â  APOLLO_API_KEY not set on the backend. Live enrichment is disabled. Add it in Railway â Variables.'}
               </span>
               <button
                 className="btn btn-primary btn-sm"
                 disabled={!apolloKeyStatus?.has_key || apolloBulkRunning}
                 onClick={runApolloBulkEnrich}
               >
-                {apolloBulkRunning ? 'Enriching…' : 'Run Live Apollo Enrich (missing only)'}
+                {apolloBulkRunning ? 'Enrichingâ¦' : 'Run Live Apollo Enrich (missing only)'}
               </button>
             </div>
           </div>
@@ -542,7 +556,7 @@ Kieran`;
     }
   };
 
-  // LP LIST TAB — Airtable-style grid
+  // LP LIST TAB â Airtable-style grid
   const renderLPList = () => {
     let filtered = targets.filter(t => {
       if (statusFilter === 'all') return true;
@@ -574,7 +588,7 @@ Kieran`;
       return 0;
     });
 
-    const paginated = filtered; // show all — no pagination
+    const paginated = filtered; // show all â no pagination
 
     const COLS = [
       { key: 'name', label: 'Name / Company', width: 220, sticky: true },
@@ -663,20 +677,20 @@ Kieran`;
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div className="search-input" style={{ minWidth: 200 }}>
-              <span>🔍</span>
+              <span>ð</span>
               <input placeholder="Search name, company..." value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
             </div>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
               style={{ padding: '5px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 11 }}>
-              <option value="company">Company A→Z</option>
+              <option value="company">Company AâZ</option>
               <option value="fit_score">Score</option>
               <option value="name">Contact Name</option>
               <option value="outreach_status">Status</option>
             </select>
             <button onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
               style={{ padding: '5px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 11, background: '#fff', cursor: 'pointer' }}>
-              {sortDir === 'desc' ? '↓' : '↑'}
+              {sortDir === 'desc' ? 'â' : 'â'}
             </button>
             <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
               {filtered.length} LP{filtered.length !== 1 ? 's' : ''}
@@ -706,7 +720,7 @@ Kieran`;
                     }}>
                     {col.label}
                     {(col.key === 'fit_score' && sortBy === 'fit_score') || (col.key === 'name' && sortBy === 'name') || (col.key === 'status' && sortBy === 'outreach_status')
-                      ? <span style={{ marginLeft: 4 }}>{sortDir === 'desc' ? '↓' : '↑'}</span> : null}
+                      ? <span style={{ marginLeft: 4 }}>{sortDir === 'desc' ? 'â' : 'â'}</span> : null}
                   </th>
                 ))}
               </tr>
@@ -720,7 +734,7 @@ Kieran`;
                     onMouseEnter={e => e.currentTarget.style.background = '#EFF6FF'}
                     onMouseLeave={e => e.currentTarget.style.background = ''}>
 
-                    {/* Name / Company — sticky */}
+                    {/* Name / Company â sticky */}
                     <td style={{ ...cellStyle(COLS[0]), background: rowBg, fontWeight: 500 }}
                       onClick={() => setSelectedTarget(t.id)}>
                       <div style={{ fontWeight: 600, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -731,7 +745,7 @@ Kieran`;
                       </div>
                     </td>
 
-                    {/* Status — inline editable */}
+                    {/* Status â inline editable */}
                     <td style={cellStyle(COLS[1])} onClick={(e) => { e.stopPropagation(); setEditingStatusId(t.id); }}>
                       {editingStatusId === t.id ? (
                         <select autoFocus
@@ -765,20 +779,20 @@ Kieran`;
                         }}
                         style={{ fontSize: 10, fontWeight: 700, border: 'none', background: 'transparent', cursor: 'pointer',
                           color: t.priority === 'high' ? '#DC2626' : t.priority === 'low' ? '#9CA3AF' : '#D97706' }}>
-                        <option value="high">● High</option>
-                        <option value="medium">● Med</option>
-                        <option value="low">● Low</option>
+                        <option value="high">â High</option>
+                        <option value="medium">â Med</option>
+                        <option value="low">â Low</option>
                       </select>
                     </td>
 
                     {/* Last Contact */}
                     <td style={cellStyle(COLS[3])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: t.last_contacted_at ? '#374151' : '#D1D5DB' }}>
-                        {t.last_contacted_at ? new Date(t.last_contacted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+                        {t.last_contacted_at ? new Date(t.last_contacted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'â'}
                       </span>
                     </td>
 
-                    {/* Follow-up date — inline editable */}
+                    {/* Follow-up date â inline editable */}
                     <td style={cellStyle(COLS[4])} onClick={(e) => { e.stopPropagation(); setEditingFollowup(t.id); }}>
                       {editingFollowup === t.id ? (
                         <input type="date" autoFocus
@@ -794,7 +808,7 @@ Kieran`;
                           style={{ fontSize: 10, width: '100%', border: '1px solid var(--navy)', borderRadius: 3, padding: '2px 4px', outline: 'none' }} />
                       ) : (
                         <span style={{ fontSize: 11, color: t.next_followup_at ? (new Date(t.next_followup_at) < new Date() ? '#DC2626' : '#059669') : '#D1D5DB', cursor: 'pointer' }}>
-                          {t.next_followup_at ? new Date(t.next_followup_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+                          {t.next_followup_at ? new Date(t.next_followup_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'â'}
                         </span>
                       )}
                     </td>
@@ -816,34 +830,34 @@ Kieran`;
                     {/* Fund Type */}
                     <td style={cellStyle(COLS[6])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: '#374151' }}>
-                        {t.fund_type ? t.fund_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : <span style={{ color: '#D1D5DB' }}>—</span>}
+                        {t.fund_type ? t.fund_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : <span style={{ color: '#D1D5DB' }}>â</span>}
                       </span>
                     </td>
 
                     {/* AUM */}
                     <td style={cellStyle(COLS[7])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: '#374151' }}>
-                        {t.estimated_aum || <span style={{ color: '#D1D5DB' }}>—</span>}
+                        {t.estimated_aum || <span style={{ color: '#D1D5DB' }}>â</span>}
                       </span>
                     </td>
 
                     {/* Geography */}
                     <td style={cellStyle(COLS[8])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: '#374151' }}>
-                        {t.geographic_focus || <span style={{ color: '#D1D5DB' }}>—</span>}
+                        {t.geographic_focus || <span style={{ color: '#D1D5DB' }}>â</span>}
                       </span>
                     </td>
 
-                    {/* Your Connections — from uploaded LinkedIn CSV */}
+                    {/* Your Connections â from uploaded LinkedIn CSV */}
                     <td style={cellStyle(COLS[9], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
                       onClick={() => setSelectedTarget(t.id)}>
                       {(() => {
                         const matches = t.linkedin_matches || [];
-                        if (!matches.length) return <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>;
+                        if (!matches.length) return <span style={{ color: '#D1D5DB', fontSize: 11 }}>â</span>;
                         return (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                             {matches.slice(0, 3).map((m, i) => (
-                              <span key={i} title={`${m.connection_name}${m.connection_position ? ` — ${m.connection_position}` : ''}\nvia ${m.team_member_name}`}
+                              <span key={i} title={`${m.connection_name}${m.connection_position ? ` â ${m.connection_position}` : ''}\nvia ${m.team_member_name}`}
                                 style={{
                                   display: 'inline-block', padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 500,
                                   background: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0',
@@ -869,7 +883,7 @@ Kieran`;
                             href={conn.linkedin_url || undefined}
                             target="_blank" rel="noopener noreferrer"
                             onClick={e => { if (!conn.linkedin_url) e.preventDefault(); }}
-                            title={conn.relationship ? `${conn.name} — ${conn.relationship}` : conn.name}
+                            title={conn.relationship ? `${conn.name} â ${conn.relationship}` : conn.name}
                             style={{
                               display: 'inline-flex', alignItems: 'center', gap: 3,
                               padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 500,
@@ -904,7 +918,7 @@ Kieran`;
                     <td style={cellStyle(COLS[11])} onClick={() => setSelectedTarget(t.id)}>
                       {t.email
                         ? <span style={{ fontSize: 11, color: '#059669' }}>{t.email}</span>
-                        : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
+                        : <span style={{ color: '#D1D5DB', fontSize: 11 }}>â</span>}
                     </td>
 
                     {/* Navigator search */}
@@ -928,7 +942,7 @@ Kieran`;
               {!paginated.length && (
                 <tr>
                   <td colSpan={COLS.length} style={{ textAlign: 'center', padding: 48, color: 'var(--muted)', fontSize: 13 }}>
-                    {loading ? 'Loading...' : search ? 'No results for that search' : statusFilter !== 'all' ? 'No LPs match this filter' : 'No LP targets found — import a CSV to get started'}
+                    {loading ? 'Loading...' : search ? 'No results for that search' : statusFilter !== 'all' ? 'No LPs match this filter' : 'No LP targets found â import a CSV to get started'}
                   </td>
                 </tr>
               )}
@@ -948,6 +962,66 @@ Kieran`;
   const renderUploadSetup = () => {
     return (
       <>
+      {/* MY LINKEDIN CONNECTIONS â per-user, shown prominently at top */}
+      <div style={{ marginBottom: 28 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>My LinkedIn Connections</h3>
+        <div className="card">
+          <div className="card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4 }}>
+                {user?.full_name || user?.email}
+              </div>
+              {myTeamMember ? (
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  {myTeamMember.connections_count
+                    ? `${myTeamMember.connections_count.toLocaleString()} connections uploaded`
+                    : 'No connections uploaded yet'}
+                  {myTeamMember.last_upload_at && (
+                    <span style={{ marginLeft: 8, color: '#9CA3AF' }}>
+                      Â· Last updated {new Date(myTeamMember.last_upload_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>Loadingâ¦</div>
+              )}
+              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>
+                Export your connections from LinkedIn: <strong>Settings &amp; Privacy â Data privacy â Get a copy of your data â Connections</strong>
+              </div>
+            </div>
+            <label style={{ cursor: 'pointer', flexShrink: 0 }}>
+              <input
+                type="file"
+                accept=".csv"
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setMyConnectionsUploading(true);
+                  try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    const result = await uploadMyLinkedInCSV(formData);
+                    alert(`â ${result.count} connections imported successfully`);
+                    await loadMyTeamMember();
+                    loadStats();
+                    loadTargets();
+                  } catch (err) {
+                    alert(err.message || 'Upload failed');
+                  } finally {
+                    setMyConnectionsUploading(false);
+                    e.target.value = '';
+                  }
+                }}
+              />
+              <span className="btn btn-primary" style={{ pointerEvents: myConnectionsUploading ? 'none' : 'auto', opacity: myConnectionsUploading ? 0.6 : 1 }}>
+                {myConnectionsUploading ? 'Uploadingâ¦' : 'Upload My Connections CSV'}
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
         {/* Team Management */}
         <div>
@@ -1054,7 +1128,7 @@ Kieran`;
           <div className="card">
             <div className="card-body">
               <div className="upload-area" style={{ textAlign: 'center', padding: 32, border: '2px dashed var(--border-light)', borderRadius: 8 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>ð</div>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>Upload LP List CSV</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
                   Columns: name, company, email, title, fund_type, estimated_aum, typical_check_size, sector_interest, geographic_focus
@@ -1119,14 +1193,14 @@ Kieran`;
                 <input type="text" placeholder="https://app.clay.com/api/v1/webhooks/..." value={clayFormUrl}
                   onChange={(e) => setClayFormUrl(e.target.value)}
                   style={{ padding: 8, border: '1px solid var(--border-light)', borderRadius: 4, width: '100%', fontSize: 12 }} />
-                <span className="hint">Found in your Clay table → Sources → Webhook</span>
+                <span className="hint">Found in your Clay table â Sources â Webhook</span>
               </div>
               <div className="form-group">
                 <label>Webhook Secret (optional)</label>
                 <input type="password" placeholder="Secret for verifying incoming Clay callbacks" value={clayFormSecret}
                   onChange={(e) => setClayFormSecret(e.target.value)}
                   style={{ padding: 8, border: '1px solid var(--border-light)', borderRadius: 4, width: '100%', fontSize: 12 }} />
-                <span className="hint">Protects the callback endpoint — add this as a header in Clay's HTTP action</span>
+                <span className="hint">Protects the callback endpoint â add this as a header in Clay's HTTP action</span>
               </div>
               <div className="form-group">
                 <label>Clay API Key (optional)</label>
@@ -1148,7 +1222,7 @@ Kieran`;
                   loadClaySettings();
                 } catch (err) { alert(err.message); }
               }}>
-                {clayConfigSaved ? '✓ Saved' : 'Save Settings'}
+                {clayConfigSaved ? 'â Saved' : 'Save Settings'}
               </button>
 
               {/* Callback URL */}
@@ -1221,11 +1295,11 @@ Kieran`;
                   </button>
                 </div>
                 {!clayFormUrl && (
-                  <div style={{ fontSize: 11, color: '#D97706', marginTop: 8 }}>Configure Clay webhook URL first →</div>
+                  <div style={{ fontSize: 11, color: '#D97706', marginTop: 8 }}>Configure Clay webhook URL first â</div>
                 )}
                 {claySettings?.last_export_at && (
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-                    Last export: {timeAgo(claySettings.last_export_at)} · {claySettings.export_count} total records exported
+                    Last export: {timeAgo(claySettings.last_export_at)} Â· {claySettings.export_count} total records exported
                   </div>
                 )}
               </div>
@@ -1259,7 +1333,7 @@ Kieran`;
                 </div>
                 {claySettings?.last_import_at && (
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-                    Last import: {timeAgo(claySettings.last_import_at)} · {claySettings.import_count} total records imported
+                    Last import: {timeAgo(claySettings.last_import_at)} Â· {claySettings.import_count} total records imported
                   </div>
                 )}
               </div>
@@ -1293,7 +1367,7 @@ Kieran`;
                             background: log.direction === 'export' ? '#EDE9FE' : '#ECFDF5',
                             color: log.direction === 'export' ? '#6366F1' : '#059669'
                           }}>
-                            {log.direction === 'export' ? '→ Export' : '← Import'}
+                            {log.direction === 'export' ? 'â Export' : 'â Import'}
                           </span>
                         </td>
                         <td style={{ fontSize: 13, fontWeight: 600 }}>{log.records_count}</td>
@@ -1306,10 +1380,30 @@ Kieran`;
                             {log.status}
                           </span>
                         </td>
+                        <td style={{ fontSize: 11, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {details.error || details.message || (details.updated != null ? `${details.updated} updated, ${details.skipped} skipped` : '')}
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--muted)' }}>{timeAgo(log.created_at)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+      </>
+    );
+  };
+        }}>
+                            {log.status}
+                          </span>
+                        </td>
                         <td style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {details.source === 'csv_upload' ? 'CSV upload' :
                            details.filter ? `Filter: ${details.filter}` :
-                           details.total_received ? `Received: ${details.total_received}` : '—'}
+                           details.total_received ? `Received: ${details.total_received}` : 'â'}
                         </td>
                         <td style={{ fontSize: 11, color: 'var(--muted)' }}>{timeAgo(log.created_at)}</td>
                       </tr>
@@ -1338,13 +1432,13 @@ Kieran`;
               <div>
                 <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 2 }}>{detail.full_name || detail.name}</h2>
                 <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 0 }}>
-                  {detail.title ? `${detail.title} · ` : ''}{detail.company}
+                  {detail.title ? `${detail.title} Â· ` : ''}{detail.company}
                 </p>
               </div>
               <button onClick={() => setSelectedTarget(null)} style={{
                 background: 'none', border: 'none', fontSize: 20, cursor: 'pointer',
                 color: 'var(--muted)'
-              }}>✕</button>
+              }}>â</button>
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
               <StatusBadge
@@ -1373,7 +1467,7 @@ Kieran`;
                   fontSize: 11, color: '#0077B5', textDecoration: 'none',
                   background: '#EFF6FF', padding: '4px 8px', borderRadius: 4
                 }}>
-                  LinkedIn →
+                  LinkedIn â
                 </a>
               )}
             </div>
@@ -1402,8 +1496,8 @@ Kieran`;
             <div className="detail-section">
               <h3>Contact Info</h3>
               <div style={{ fontSize: 13, lineHeight: 2 }}>
-                <div><strong>Title:</strong> {detail.title || '—'}</div>
-                <div><strong>Email:</strong> {detail.email || '—'}</div>
+                <div><strong>Title:</strong> {detail.title || 'â'}</div>
+                <div><strong>Email:</strong> {detail.email || 'â'}</div>
               </div>
             </div>
 
@@ -1413,19 +1507,19 @@ Kieran`;
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
                 <div style={{ padding: 10, background: 'var(--card-bg)', borderRadius: 6 }}>
                   <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>FUND TYPE</div>
-                  <div style={{ fontWeight: 500 }}>{detail.fund_type || '—'}</div>
+                  <div style={{ fontWeight: 500 }}>{detail.fund_type || 'â'}</div>
                 </div>
                 <div style={{ padding: 10, background: 'var(--card-bg)', borderRadius: 6 }}>
                   <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>EST. AUM</div>
-                  <div style={{ fontWeight: 500 }}>{detail.estimated_aum || '—'}</div>
+                  <div style={{ fontWeight: 500 }}>{detail.estimated_aum || 'â'}</div>
                 </div>
                 <div style={{ padding: 10, background: 'var(--card-bg)', borderRadius: 6 }}>
                   <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>CHECK SIZE</div>
-                  <div style={{ fontWeight: 500 }}>{detail.typical_check_size || '—'}</div>
+                  <div style={{ fontWeight: 500 }}>{detail.typical_check_size || 'â'}</div>
                 </div>
                 <div style={{ padding: 10, background: 'var(--card-bg)', borderRadius: 6 }}>
                   <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>GEO FOCUS</div>
-                  <div style={{ fontWeight: 500 }}>{detail.geographic_focus || '—'}</div>
+                  <div style={{ fontWeight: 500 }}>{detail.geographic_focus || 'â'}</div>
                 </div>
               </div>
               {detail.sector_interest && detail.sector_interest.length > 0 && (
@@ -1467,10 +1561,10 @@ Kieran`;
                     {/* Location / Industry */}
                     <div style={{ display: 'flex', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
                       {enr.location && (
-                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>📍 {enr.location}</span>
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>ð {enr.location}</span>
                       )}
                       {enr.industry && (
-                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>🏢 {enr.industry}</span>
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>ð¢ {enr.industry}</span>
                       )}
                     </div>
                     {/* Job History */}
@@ -1487,7 +1581,7 @@ Kieran`;
                             <div style={{ fontWeight: 500 }}>{job.title || 'Unknown Role'}</div>
                             <div style={{ color: 'var(--muted)', fontSize: 11 }}>
                               {job.company || 'Unknown Company'}
-                              {job.start_date && <span> · {job.start_date}{job.end_date ? ` – ${job.end_date}` : ' – Present'}</span>}
+                              {job.start_date && <span> Â· {job.start_date}{job.end_date ? ` â ${job.end_date}` : ' â Present'}</span>}
                             </div>
                           </div>
                         ))}
@@ -1507,7 +1601,7 @@ Kieran`;
                         {enr.education.map((edu, ei) => (
                           <div key={ei} style={{ padding: '4px 10px', fontSize: 12, marginBottom: 2 }}>
                             <span style={{ fontWeight: 500 }}>{edu.school || 'Unknown'}</span>
-                            {edu.degree && <span style={{ color: 'var(--muted)' }}> — {edu.degree}</span>}
+                            {edu.degree && <span style={{ color: 'var(--muted)' }}> â {edu.degree}</span>}
                             {edu.field_of_study && <span style={{ color: 'var(--muted)' }}> ({edu.field_of_study})</span>}
                           </div>
                         ))}
@@ -1534,7 +1628,7 @@ Kieran`;
                     )}
                     <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>
                       Enriched {enr.enriched_at ? timeAgo(enr.enriched_at) : 'recently'} via People Data Labs
-                      {enr.pdl_likelihood && <span> · Confidence: {enr.pdl_likelihood}/10</span>}
+                      {enr.pdl_likelihood && <span> Â· Confidence: {enr.pdl_likelihood}/10</span>}
                     </div>
                   </div>
                 );
@@ -1544,7 +1638,7 @@ Kieran`;
                     <div>
                       <div style={{ marginBottom: 8 }}>
                         <a href={detail.linkedin_url} target="_blank" rel="noopener noreferrer"
-                          style={{ color: '#0077B5', fontSize: 12 }}>View LinkedIn Profile →</a>
+                          style={{ color: '#0077B5', fontSize: 12 }}>View LinkedIn Profile â</a>
                       </div>
                       <button className="btn btn-sm btn-secondary"
                         style={{ background: '#0077B5', color: 'white', border: 'none' }}
@@ -1613,7 +1707,7 @@ Kieran`;
                 }}
                 style={{ padding: '6px 14px', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: generatingIntro ? 'default' : 'pointer',
                   background: '#003B76', color: '#fff', border: 'none', opacity: generatingIntro ? 0.6 : 1 }}>
-                {generatingIntro ? 'Generating…' : '✉ Draft Intro Email'}
+                {generatingIntro ? 'Generatingâ¦' : 'â Draft Intro Email'}
               </button>
 
               {introEmail && introEmail.lp_company === detail?.company && (
@@ -1713,7 +1807,7 @@ Kieran`;
                         padding: '5px 14px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
                         border: 'none', background: emailCopied ? '#059669' : '#003B76', color: 'white'
                       }}>
-                      {emailCopied ? '✓ Copied' : 'Copy to Clipboard'}
+                      {emailCopied ? 'â Copied' : 'Copy to Clipboard'}
                     </button>
                     {emailDraft.to && (
                       <a
@@ -1770,7 +1864,7 @@ Kieran`;
             {detail.warm_intro_paths && detail.warm_intro_paths.length > 0 && (
               <div className="detail-section">
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: '#F59E0B' }}>🤝</span> Warm Intro Paths
+                  <span style={{ color: '#F59E0B' }}>ð¤</span> Warm Intro Paths
                   <span style={{ fontSize: 11, background: '#F59E0B', color: 'white', padding: '2px 8px', borderRadius: 10 }}>
                     {detail.warm_intro_paths.reduce((sum, p) => sum + p.known_contacts.length, 0)} contact{detail.warm_intro_paths.reduce((sum, p) => sum + p.known_contacts.length, 0) !== 1 ? 's' : ''}
                   </span>
@@ -1810,7 +1904,7 @@ Kieran`;
                             )}
                             {kc.linkedin_url && (
                               <a href={kc.linkedin_url} target="_blank" rel="noopener noreferrer"
-                                style={{ fontSize: 10, color: '#0077B5' }}>LinkedIn →</a>
+                                style={{ fontSize: 10, color: '#0077B5' }}>LinkedIn â</a>
                             )}
                           </div>
                         </div>
@@ -1821,9 +1915,9 @@ Kieran`;
                         )}
                         <div style={{ marginTop: 6, fontSize: 11, color: '#92400E', display: 'flex', alignItems: 'center', gap: 4 }}>
                           <span style={{ opacity: 0.6 }}>{path.team_member_name}</span>
-                          <span style={{ opacity: 0.4 }}>→</span>
+                          <span style={{ opacity: 0.4 }}>â</span>
                           <span>{kc.full_name}</span>
-                          <span style={{ opacity: 0.4 }}>→</span>
+                          <span style={{ opacity: 0.4 }}>â</span>
                           <span style={{ fontWeight: 500 }}>{detail.full_name || detail.name}</span>
                         </div>
                       </div>
@@ -1849,7 +1943,7 @@ Kieran`;
                     border: '1px solid #0077B5', background: showAddConnection ? '#0077B5' : 'transparent',
                     color: showAddConnection ? '#fff' : '#0077B5', cursor: 'pointer',
                   }}>
-                  {showAddConnection ? '✕ Cancel' : '+ Add'}
+                  {showAddConnection ? 'â Cancel' : '+ Add'}
                 </button>
               </h3>
 
@@ -1926,7 +2020,7 @@ Kieran`;
                           {conn.linkedin_url && (
                             <a href={conn.linkedin_url} target="_blank" rel="noopener noreferrer"
                               style={{ fontSize: 10, color: '#0077B5', textDecoration: 'none', background: '#DBEAFE', padding: '1px 5px', borderRadius: 3 }}>
-                              LinkedIn ↗
+                              LinkedIn â
                             </a>
                           )}
                         </div>
@@ -1949,7 +2043,7 @@ Kieran`;
                         style={{
                           padding: '2px 7px', borderRadius: 4, fontSize: 10, border: '1px solid #FCA5A5',
                           background: 'transparent', color: '#DC2626', cursor: 'pointer', marginLeft: 8, flexShrink: 0,
-                        }}>✕</button>
+                        }}>â</button>
                     </div>
                   ))}
                 </div>
@@ -1963,7 +2057,7 @@ Kieran`;
             {/* Apollo Contacts */}
             <div className="detail-section">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: '#6366F1' }}>⚡</span> Apollo Contacts
+                <span style={{ color: '#6366F1' }}>â¡</span> Apollo Contacts
                 {apolloContacts.length > 0 && (
                   <span style={{ fontSize: 11, background: '#6366F1', color: 'white', padding: '2px 8px', borderRadius: 10 }}>
                     {apolloContacts.length}
@@ -2025,7 +2119,7 @@ Kieran`;
                     }
                   }}
                 >
-                  ⚡ Search Apollo Live
+                  â¡ Search Apollo Live
                 </button>
               )}
               {apolloLoading ? (
@@ -2079,20 +2173,20 @@ Kieran`;
                       </div>
                       {(contact.city || contact.state || contact.country) && (
                         <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
-                          📍 {[contact.city, contact.state, contact.country].filter(Boolean).join(', ')}
+                          ð {[contact.city, contact.state, contact.country].filter(Boolean).join(', ')}
                         </div>
                       )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                         {contact.linkedin_url && (
                           <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer"
                             style={{ fontSize: 11, color: '#0077B5' }}>
-                            View LinkedIn →
+                            View LinkedIn â
                           </a>
                         )}
                         {contact.enriched && contact.email ? (
                           <span style={{ fontSize: 10, color: '#059669', background: '#ECFDF5', padding: '2px 6px', borderRadius: 3 }}>Enriched</span>
                         ) : contact.enriched && !contact.email ? (
-                          <span style={{ fontSize: 10, color: '#D97706', background: '#FFFBEB', padding: '2px 6px', borderRadius: 3 }}>Enriched · No email</span>
+                          <span style={{ fontSize: 10, color: '#D97706', background: '#FFFBEB', padding: '2px 6px', borderRadius: 3 }}>Enriched Â· No email</span>
                         ) : contact.full_name && contact.last_name && contact.last_name.includes('***') ? (
                           <span style={{ fontSize: 10, color: '#6366F1', background: '#EEF2FF', padding: '2px 6px', borderRadius: 3 }}>Name resolved</span>
                         ) : contact.last_name && contact.last_name.includes('***') ? (
@@ -2146,7 +2240,7 @@ Kieran`;
                             color: isKnown ? 'white' : 'var(--muted)',
                           }}
                         >
-                          {isKnown ? '✓ I know them' : 'I know them'}
+                          {isKnown ? 'â I know them' : 'I know them'}
                         </button>
                       </div>
                       {isKnown && (
