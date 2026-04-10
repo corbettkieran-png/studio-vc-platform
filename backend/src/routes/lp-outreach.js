@@ -27,7 +27,7 @@ function parseCSV(csvContent) {
   const lines = cleaned.trim().split('\n');
   if (lines.length === 0) return [];
 
-  // Find the actual header row — LinkedIn CSVs sometimes have metadata lines at the top.
+  // Find the actual header row â LinkedIn CSVs sometimes have metadata lines at the top.
   // Look for a line that contains known CSV header keywords.
   const headerKeywords = ['first name', 'last name', 'email', 'company', 'name', 'position', 'title', 'connected', 'organization', 'full_name'];
   let headerIdx = 0;
@@ -221,7 +221,7 @@ async function runMatching() {
         }
       };
 
-      // ── Layer 1: Direct matches (name + email) ──
+      // ââ Layer 1: Direct matches (name + email) ââ
       // The LP target IS one of your LinkedIn connections
       for (const conn of connections) {
         // Direct name match
@@ -240,7 +240,7 @@ async function runMatching() {
         }
       }
 
-      // ── Layer 2: Same company (colleague match) ──
+      // ââ Layer 2: Same company (colleague match) ââ
       // Your LinkedIn connection works at the same company as the LP target.
       // They're not the LP target themselves, but they could intro you.
       if (lp.company) {
@@ -260,7 +260,7 @@ async function runMatching() {
         }
       }
 
-      // ── Layer 3: LP name matches a company ──
+      // ââ Layer 3: LP name matches a company ââ
       // The LP target's full_name field is actually a firm name (e.g., "Sequoia Heritage")
       // and your LinkedIn connection works at that firm.
       // Check if lp.full_name looks like it could be a company name
@@ -368,6 +368,174 @@ async function runMatching() {
 // ============================================================
 // TEAM MEMBERS
 // ============================================================
+
+// ============================================================
+// CURRENT USER'S TEAM MEMBER (auto-create on first access)
+// ============================================================
+
+// GET /api/lp/me/team-member - Get or auto-create the team_member record for the logged-in user
+router.get('/me/team-member', authenticate, async (req, res) => {
+  try {
+    // Look for existing team_member linked to this user
+    const { rows: existing } = await db.query(
+      'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE user_id = $1',
+      [req.user.id]
+    );
+
+    if (existing.length > 0) {
+      return res.json({ team_member: existing[0] });
+    }
+
+    // Auto-create one linked to this user using their profile info
+    const { rows: userRows } = await db.query(
+      'SELECT full_name FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const fullName = userRows[0]?.full_name || req.user.email;
+    const tmId = uuid();
+    await db.query(
+      'INSERT INTO team_members (id, user_id, full_name) VALUES ($1, $2, $3)',
+      [tmId, req.user.id, fullName]
+    );
+
+    const { rows } = await db.query(
+      'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE id = $1',
+      [tmId]
+    );
+    res.status(201).json({ team_member: rows[0] });
+  } catch (err) {
+    console.error('Error fetching/creating user team member:', err);
+    res.status(500).json({ error: 'Failed to get team member' });
+  }
+});
+
+// POST /api/lp/me/connections - Upload LinkedIn CSV for the logged-in user
+router.post('/me/connections', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'File is required' });
+
+    // Get or create the team_member for this user
+    let { rows: tmRows } = await db.query(
+      'SELECT id FROM team_members WHERE user_id = $1',
+      [req.user.id]
+    );
+
+    let teamMemberId;
+    if (tmRows.length > 0) {
+      teamMemberId = tmRows[0].id;
+    } else {
+      const { rows: userRows } = await db.query('SELECT full_name FROM users WHERE id = $1', [req.user.id]);
+      const fullName = userRows[0]?.full_name || req.user.email;
+      teamMemberId = uuid();
+      await db.query(
+        'INSERT INTO team_members (id, user_id, full_name) VALUES ($1, $2, $3)',
+        [teamMemberId, req.user.id, fullName]
+      );
+    }
+
+    // Reuse existing CSV parsing logic by forwarding to the team/:id/connections handler
+    req.params = { id: teamMemberId };
+    return router.handle(Object.assign(req, { url: `/team/${teamMemberId}/connections`, method: 'POST', params: { id: teamMemberId } }), res, () => {});
+  } catch (err) {
+    console.error('Error uploading user connections:', err);
+    res.status(500).json({ error: 'Failed to upload connections' });
+  }
+});
+
+// POST /api/lp/me/connections/upload - Upload LinkedIn CSV for the logged-in user (direct implementation)
+router.post('/me/connections/upload', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'File is required' });
+
+    // Get or create the team_member for this user
+    let { rows: tmRows } = await db.query(
+      'SELECT id FROM team_members WHERE user_id = $1',
+      [req.user.id]
+    );
+
+    let teamMemberId;
+    if (tmRows.length > 0) {
+      teamMemberId = tmRows[0].id;
+    } else {
+      const { rows: userRows } = await db.query('SELECT full_name FROM users WHERE id = $1', [req.user.id]);
+      const fullName = userRows[0]?.full_name || req.user.email;
+      teamMemberId = uuid();
+      await db.query(
+        'INSERT INTO team_members (id, user_id, full_name) VALUES ($1, $2, $3)',
+        [teamMemberId, req.user.id, fullName]
+      );
+    }
+
+    // Parse CSV (same logic as /team/:id/connections)
+    const csvContent = req.file.buffer.toString('utf-8');
+    const parsedRows = parseCSV(csvContent);
+
+    function findConnCol(row, ...candidates) {
+      for (const key of candidates) {
+        if (row[key] && row[key].trim()) return row[key].trim();
+      }
+      const rowKeys = Object.keys(row);
+      for (const key of candidates) {
+        const match = rowKeys.find(k => k.includes(key));
+        if (match && row[match] && row[match].trim()) return row[match].trim();
+      }
+      return '';
+    }
+
+    const normalizedRows = parsedRows.map(row => ({
+      first_name: findConnCol(row, 'first name', 'firstname', 'first_name', 'first'),
+      last_name: findConnCol(row, 'last name', 'lastname', 'last_name', 'last'),
+      full_name: `${findConnCol(row, 'first name', 'firstname', 'first_name', 'first')} ${findConnCol(row, 'last name', 'lastname', 'last_name', 'last')}`.trim()
+        || findConnCol(row, 'name', 'full name', 'full_name'),
+      email: findConnCol(row, 'email address', 'email', 'email_address'),
+      company: findConnCol(row, 'company', 'organization', 'employer'),
+      position: findConnCol(row, 'position', 'title', 'job title', 'job_title'),
+      connected_on: findConnCol(row, 'connected on', 'date connected', 'connected_on', 'connection date') || null,
+    }));
+
+    const validRows = normalizedRows.filter(r => r.full_name);
+    if (validRows.length === 0) {
+      return res.status(400).json({ error: 'No valid connections found in CSV' });
+    }
+
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM linkedin_connections WHERE team_member_id = $1', [teamMemberId]);
+
+      for (const row of validRows) {
+        let connectedDate = null;
+        if (row.connected_on) {
+          const parsed = new Date(row.connected_on);
+          if (!isNaN(parsed.getTime())) connectedDate = parsed.toISOString().split('T')[0];
+        }
+        await client.query(
+          `INSERT INTO linkedin_connections (id, team_member_id, first_name, last_name, full_name, email, company, position, connected_on)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [uuid(), teamMemberId, row.first_name, row.last_name, row.full_name, row.email || null, row.company || null, row.position || null, connectedDate]
+        );
+      }
+
+      await client.query(
+        'UPDATE team_members SET connections_count = $1, last_upload_at = NOW() WHERE id = $2',
+        [validRows.length, teamMemberId]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    await runMatching();
+    res.json({ message: 'Connections imported successfully', count: validRows.length });
+  } catch (err) {
+    console.error('Error uploading user connections:', err);
+    res.status(500).json({ error: 'Failed to upload connections' });
+  }
+});
 
 // GET /api/lp/team - List team members
 router.get('/team', authenticate, async (req, res) => {
@@ -730,13 +898,14 @@ router.get('/targets', authenticate, async (req, res) => {
            ) ORDER BY lc.full_name)
            FROM linkedin_connections lc
            JOIN team_members tm ON tm.id = lc.team_member_id
-           WHERE LOWER(TRIM(lc.company)) = LOWER(TRIM(t.company))
-              OR LOWER(TRIM(lc.company)) LIKE '%' || LOWER(TRIM(t.company)) || '%'
+           WHERE tm.user_id = $1
+             AND (LOWER(TRIM(lc.company)) = LOWER(TRIM(t.company))
+               OR LOWER(TRIM(lc.company)) LIKE '%' || LOWER(TRIM(t.company)) || '%')
           ),
           '[]'::json
         ) as linkedin_matches
       FROM lp_targets t WHERE 1=1`;
-    const params = [];
+    const params = [req.user.id];
 
     // Filters
     if (status) {
@@ -827,7 +996,7 @@ router.get('/targets/:id', authenticate, async (req, res) => {
 
     const lp = lpRows[0];
 
-    // Get all connectors for this LP
+    // Get connectors for this LP â filtered to the current user's network
     const { rows: connectors } = await db.query(
       `SELECT
         tm.id, tm.full_name, lcm.match_type, lcm.match_confidence,
@@ -835,8 +1004,9 @@ router.get('/targets/:id', authenticate, async (req, res) => {
        FROM lp_connection_matches lcm
        JOIN team_members tm ON lcm.team_member_id = tm.id
        WHERE lcm.lp_target_id = $1
+         AND tm.user_id = $2
        ORDER BY lcm.match_confidence DESC`,
-      [id]
+      [id, req.user.id]
     );
 
     // Get activity log
@@ -849,7 +1019,7 @@ router.get('/targets/:id', authenticate, async (req, res) => {
       [id]
     );
 
-    // ── Warm Intro Paths (powered by known_contacts + Apollo) ──
+    // ââ Warm Intro Paths (powered by known_contacts + Apollo) ââ
     // Find Apollo contacts at this LP's company that a team member has flagged as "I know them"
     let warmIntroPaths = [];
     const { rows: knownAtCompany } = await db.query(
@@ -861,10 +1031,11 @@ router.get('/targets/:id', authenticate, async (req, res) => {
        JOIN apollo_company_contacts ac ON kc.apollo_contact_id = ac.id
        JOIN team_members tm ON kc.team_member_id = tm.id
        WHERE ac.lp_target_id = $1
+         AND tm.user_id = $2
        ORDER BY
          CASE ac.seniority WHEN 'c_suite' THEN 1 WHEN 'vp' THEN 2 WHEN 'director' THEN 3 WHEN 'manager' THEN 4 WHEN 'senior' THEN 5 ELSE 6 END,
          ac.full_name`,
-      [id]
+      [id, req.user.id]
     );
 
     if (knownAtCompany.length > 0) {
@@ -893,7 +1064,7 @@ router.get('/targets/:id', authenticate, async (req, res) => {
       warmIntroPaths.sort((a, b) => b.known_contacts.length - a.known_contacts.length);
     }
 
-    // ── LinkedIn Enrichment (from People Data Labs) ──
+    // ââ LinkedIn Enrichment (from People Data Labs) ââ
     const { rows: enrichmentRows } = await db.query(
       'SELECT * FROM linkedin_enrichments WHERE lp_target_id = $1 ORDER BY enriched_at DESC LIMIT 1',
       [id]
@@ -1048,7 +1219,7 @@ router.patch('/targets/:id', authenticate, async (req, res) => {
 // INTRO EMAIL GENERATION
 // ============================================================
 
-// POST /api/lp/targets/:id/draft-intro  — generate personalised intro email
+// POST /api/lp/targets/:id/draft-intro  â generate personalised intro email
 router.post('/targets/:id/draft-intro', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1077,19 +1248,19 @@ router.post('/targets/:id/draft-intro', authenticate, async (req, res) => {
       ? `I was introduced to you by ${req.body.connector_name}.`
       : '';
 
-    const subject = `Introduction — CQ Fund III | Studio VC`;
+    const subject = `Introduction â CQ Fund III | Studio VC`;
 
     const body = `${salutation}
 
 ${connectors ? connectors + '\n\n' : ''}I'm ${sender.full_name} from Studio VC. I wanted to reach out as we're currently raising CQ Fund III, our early-stage seed fund focused on B2B software, fintech, and deep tech companies across the US and Europe.
 
-Given ${lp.company}'s profile as a ${fundType}${geo}${sectorLine}, I think there could be a strong fit — many of our LPs share a similar thesis and have found our deal flow and co-investment opportunities compelling.
+Given ${lp.company}'s profile as a ${fundType}${geo}${sectorLine}, I think there could be a strong fit â many of our LPs share a similar thesis and have found our deal flow and co-investment opportunities compelling.
 
 CQ Fund III highlights:
-• Target: $50M fund
-• Stage: Pre-seed and seed (initial cheques of $250K–$1M)
-• Focus: B2B SaaS, fintech infrastructure, and AI-native applications
-• Portfolio: 12 current investments across the US and Europe
+â¢ Target: $50M fund
+â¢ Stage: Pre-seed and seed (initial cheques of $250Kâ$1M)
+â¢ Focus: B2B SaaS, fintech infrastructure, and AI-native applications
+â¢ Portfolio: 12 current investments across the US and Europe
 
 I'd love to share our deck and have a brief 20-minute intro call at your convenience.
 
@@ -1418,7 +1589,7 @@ router.get('/apollo/status', authenticate, async (req, res) => {
   }
 });
 
-// ── Live Apollo enrichment (server-side, requires APOLLO_API_KEY) ──
+// ââ Live Apollo enrichment (server-side, requires APOLLO_API_KEY) ââ
 
 // Internal helper: search Apollo for a single LP target and persist results.
 // Returns { inserted, total_found, skipped_reason? }
@@ -1517,7 +1688,7 @@ async function enrichSingleLpTarget(lpTarget, opts = {}) {
   }
 }
 
-// POST /api/lp/apollo/live-search/:lpId — call Apollo live for one LP target
+// POST /api/lp/apollo/live-search/:lpId â call Apollo live for one LP target
 router.post('/apollo/live-search/:lpId', authenticate, async (req, res) => {
   if (!apollo.hasKey()) {
     return res.status(503).json({
@@ -1537,7 +1708,7 @@ router.post('/apollo/live-search/:lpId', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/apollo/bulk-enrich — enrich every LP target without contacts
+// POST /api/lp/apollo/bulk-enrich â enrich every LP target without contacts
 // Body: { only_missing?: true, limit?: 50 }
 router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
   const { only_missing = true, limit = 50, dry_run = false } = req.body || {};
@@ -1593,12 +1764,12 @@ router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/lp/apollo/key-status — does the backend have a key?
+// GET /api/lp/apollo/key-status â does the backend have a key?
 router.get('/apollo/key-status', authenticate, (req, res) => {
   res.json({ has_key: apollo.hasKey() });
 });
 
-// ── Known Contacts (Warm Intro Paths) ──────────────────────────
+// ââ Known Contacts (Warm Intro Paths) ââââââââââââââââââââââââââ
 
 // POST /api/lp/apollo/contacts/:contactId/know - Flag "I know this person"
 router.post('/apollo/contacts/:contactId/know', authenticate, async (req, res) => {
@@ -1633,7 +1804,6 @@ router.post('/apollo/contacts/:contactId/know', authenticate, async (req, res) =
        RETURNING *`,
       [contactId, teamMemberId, relationship_note || null]
     );
-
     res.json({ known_contact: rows[0] });
   } catch (err) {
     console.error('Error flagging known contact:', err);
@@ -1689,7 +1859,7 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
       || (contact.full_name && contact.full_name !== contact.first_name ? contact.full_name : null)
       || [contact.first_name, contact.last_name].filter(Boolean).join(' ');
 
-    // Build RocketReach query — prioritize LinkedIn URL for most reliable match
+    // Build RocketReach query â prioritize LinkedIn URL for most reliable match
     const linkedinUrl = bodyLinkedin || contact.linkedin_url;
     const rrParams = new URLSearchParams();
     if (linkedinUrl) {
@@ -1880,7 +2050,7 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
           || (contact.full_name && contact.full_name !== contact.first_name ? contact.full_name : null)
           || [contact.first_name, contact.last_name].filter(Boolean).join(' ');
 
-        // Build RocketReach query — prioritize LinkedIn URL for reliable match
+        // Build RocketReach query â prioritize LinkedIn URL for reliable match
         const linkedinUrl = overrides.linkedin_url || contact.linkedin_url;
         const rrParams = new URLSearchParams();
 
@@ -2231,7 +2401,7 @@ router.get('/companies', authenticate, async (req, res) => {
   }
 })();
 
-// GET /api/lp/clay/settings — Get current Clay config
+// GET /api/lp/clay/settings â Get current Clay config
 router.get('/clay/settings', authenticate, async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM clay_settings LIMIT 1');
@@ -2250,12 +2420,12 @@ router.get('/clay/settings', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/clay/settings — Save Clay config
+// POST /api/lp/clay/settings â Save Clay config
 router.post('/clay/settings', authenticate, async (req, res) => {
   try {
     const { clay_table_webhook_url, clay_webhook_secret, clay_api_key } = req.body;
 
-    // Upsert — there should only ever be one row
+    // Upsert â there should only ever be one row
     const { rows: existing } = await db.query('SELECT id FROM clay_settings LIMIT 1');
     if (existing.length > 0) {
       const updates = [];
@@ -2284,7 +2454,7 @@ router.post('/clay/settings', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/clay/export — Push LP targets to Clay table webhook
+// POST /api/lp/clay/export â Push LP targets to Clay table webhook
 router.post('/clay/export', authenticate, async (req, res) => {
   try {
     const { rows: settingsRows } = await db.query('SELECT * FROM clay_settings LIMIT 1');
@@ -2416,9 +2586,9 @@ router.post('/clay/export', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/clay/webhook — Receive enriched data from Clay (HTTP action callback)
+// POST /api/lp/clay/webhook â Receive enriched data from Clay (HTTP action callback)
 // Clay sends enriched records back here after waterfall enrichment
-// This endpoint does NOT require JWT auth — it uses the webhook secret instead
+// This endpoint does NOT require JWT auth â it uses the webhook secret instead
 router.post('/clay/webhook', async (req, res) => {
   try {
     // Verify webhook secret if configured
@@ -2615,7 +2785,7 @@ router.post('/clay/webhook', async (req, res) => {
   }
 });
 
-// POST /api/lp/clay/import-csv — Import enriched CSV from Clay (manual upload)
+// POST /api/lp/clay/import-csv â Import enriched CSV from Clay (manual upload)
 // For users who prefer to download from Clay and upload directly
 router.post('/clay/import-csv', authenticate, upload.single('file'), async (req, res) => {
   try {
@@ -2738,7 +2908,7 @@ router.post('/clay/import-csv', authenticate, upload.single('file'), async (req,
   }
 });
 
-// GET /api/lp/clay/export-csv — Public CSV download of LP targets for Clay import
+// GET /api/lp/clay/export-csv â Public CSV download of LP targets for Clay import
 // Temporary convenience endpoint - no auth required but uses a time-limited token
 router.get('/clay/export-csv', async (req, res) => {
   try {
@@ -2749,7 +2919,7 @@ router.get('/clay/export-csv', async (req, res) => {
     };
     const headers = ['platform_id','record_type','full_name','email','company','title','linkedin_url','phone','fund_type','estimated_aum','geographic_focus','sector_interest','fit_score','outreach_status'];
     const csvRows = rows.map(t => [
-      t.id, 'lp_target', esc(t.full_name), esc(t.email), esc(t.company), esc(t.title),
+      t.id, 'p_target', esc(t.full_name), esc(t.email), esc(t.company), esc(t.title),
       esc(t.linkedin_url), esc(t.phone), esc(t.fund_type), esc(t.estimated_aum),
       esc(t.geographic_focus), esc((t.sector_interest || []).join('; ')),
       t.fit_score || 0, t.outreach_status || 'not_started'
@@ -2765,7 +2935,7 @@ router.get('/clay/export-csv', async (req, res) => {
   }
 });
 
-// GET /api/lp/clay/webhook-url — Return the platform's webhook URL for Clay to call back
+// GET /api/lp/clay/webhook-url â Return the platform's webhook URL for Clay to call back
 router.get('/clay/webhook-url', authenticate, async (req, res) => {
   const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
@@ -2776,9 +2946,9 @@ router.get('/clay/webhook-url', authenticate, async (req, res) => {
   });
 });
 
-// ── Manual Connections (Navigator-sourced warm paths) ──
+// ââ Manual Connections (Navigator-sourced warm paths) ââ
 
-// GET /api/lp/targets/:id/connections — list manual connections for an LP
+// GET /api/lp/targets/:id/connections â list manual connections for an LP
 router.get('/targets/:id/connections', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2796,7 +2966,7 @@ router.get('/targets/:id/connections', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/targets/:id/connections — add a manual connection
+// POST /api/lp/targets/:id/connections â add a manual connection
 router.post('/targets/:id/connections', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2830,7 +3000,7 @@ router.post('/targets/:id/connections', authenticate, async (req, res) => {
   }
 });
 
-// DELETE /api/lp/targets/:id/connections/:connId — remove a manual connection
+// DELETE /api/lp/targets/:id/connections/:connId â remove a manual connection
 router.delete('/targets/:id/connections/:connId', authenticate, async (req, res) => {
   try {
     const { id, connId } = req.params;
