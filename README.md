@@ -2,7 +2,7 @@
 
 Production-grade deal flow management platform for seed-stage venture capital.
 
-## Architecture
+## Architecture 
 
 ```
 frontend/          React + Vite (deployed to Vercel)
