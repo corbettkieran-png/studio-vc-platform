@@ -113,7 +113,7 @@ function StatusBadge({ status, color }) {
 
 export default function LPOutreach() {
   const { user } = useAuth();
-  const [tab, setTab] = useState('dashboard');
+  const [tab, setTab] = useState('lp-list');
   const [stats, setStats] = useState(null);
   const [targets, setTargets] = useState([]);
   const [selectedTarget, setSelectedTarget] = useState(null);
@@ -2379,10 +2379,6 @@ Kieran`;
       <div className="page-body">
         {/* Tabs */}
         <div className="tab-bar">
-          <button className={`tab-btn ${tab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setTab('dashboard')}>
-            Dashboard
-          </button>
           <button className={`tab-btn ${tab === 'lp-list' ? 'active' : ''}`}
             onClick={() => setTab('lp-list')}>
             LP List <span className="cnt">{targets.length}</span>
@@ -2390,6 +2386,10 @@ Kieran`;
           <button className={`tab-btn ${tab === 'setup' ? 'active' : ''}`}
             onClick={() => setTab('setup')}>
             Upload & Setup
+          </button>
+          <button className={`tab-btn ${tab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setTab('dashboard')}>
+            Dashboard
           </button>
         </div>
 
