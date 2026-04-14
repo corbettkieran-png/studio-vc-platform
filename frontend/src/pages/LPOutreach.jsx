@@ -1404,28 +1404,6 @@ Kieran`;
       </>
     );
   };
-        }}>
-                            {log.status}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {details.source === 'csv_upload' ? 'CSV upload' :
-                           details.filter ? `Filter: ${details.filter}` :
-                           details.total_received ? `Received: ${details.total_received}` : 'â'}
-                        </td>
-                        <td style={{ fontSize: 11, color: 'var(--muted)' }}>{timeAgo(log.created_at)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
-      </>
-    );
-  };
 
   // DETAIL PANEL
   const renderDetail = () => {
