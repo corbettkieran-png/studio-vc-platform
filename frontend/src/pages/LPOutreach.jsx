@@ -1702,6 +1702,7 @@ Kieran`;
                     setResearchError(null);
                     try {
                       const rd = await request(`/lp/targets/${detail.id}/research`, { method: 'POST', body: JSON.stringify({}) });
+                      if (rd?.error) throw new Error(rd.error);
                       setResearchBrief(rd);
                     } catch (e) {
                       setResearchError('Research failed. Check API key configuration.');
