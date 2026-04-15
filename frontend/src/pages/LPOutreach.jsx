@@ -165,6 +165,9 @@ export default function LPOutreach() {
   // Intro email modal
   const [introEmail, setIntroEmail] = useState(null);
   const [generatingIntro, setGeneratingIntro] = useState(false);
+  const [researchBrief, setResearchBrief] = useState(null);  // { brief, researched_at }
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchError, setResearchError] = useState(null);
   // Inline editable fields
   const [editingFollowup, setEditingFollowup] = useState(null); // lpId being edited
 
@@ -368,6 +371,8 @@ Kieran`;
     if (!selectedTarget) {
       setDetail(null);
       setApolloContacts([]);
+      setResearchBrief(null);
+      setResearchError(null);
       return;
     }
     const loadDetail = async () => {
@@ -381,6 +386,11 @@ Kieran`;
           setApolloContacts(apolloData.contacts || []);
         } catch { setApolloContacts([]); }
         setApolloLoading(false);
+        // Load cached research brief (if any)
+        try {
+          const rd = await request(`/lp/targets/${selectedTarget}/research`);
+          if (rd.brief) setResearchBrief(rd);
+        } catch { /* no cached research — that's fine */ }
       } catch (err) {
         console.error('Load detail error:', err);
       }
@@ -1672,6 +1682,170 @@ Kieran`;
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* ── LP Intelligence Brief ── */}
+            <div className="detail-section">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ margin: 0 }}>
+                  LP Intelligence Brief
+                  {researchBrief?.researched_at && (
+                    <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--muted)', marginLeft: 8 }}>
+                      {new Date(researchBrief.researched_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </h3>
+                <button
+                  disabled={researchLoading}
+                  onClick={async () => {
+                    setResearchLoading(true);
+                    setResearchError(null);
+                    try {
+                      const rd = await request(`/lp/targets/${detail.id}/research`, { method: 'POST', body: JSON.stringify({}) });
+                      setResearchBrief(rd);
+                    } catch (e) {
+                      setResearchError('Research failed. Check API key configuration.');
+                    } finally {
+                      setResearchLoading(false);
+                    }
+                  }}
+                  style={{
+                    padding: '5px 12px', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: researchLoading ? 'default' : 'pointer',
+                    background: researchBrief ? 'transparent' : '#7C3AED', color: researchBrief ? '#7C3AED' : '#fff',
+                    border: '1px solid #7C3AED', opacity: researchLoading ? 0.6 : 1, whiteSpace: 'nowrap'
+                  }}>
+                  {researchLoading ? '🔍 Researching…' : researchBrief ? '↻ Refresh' : '🔍 Run Research'}
+                </button>
+              </div>
+
+              {researchError && (
+                <div style={{ fontSize: 12, color: '#DC2626', padding: '8px 12px', background: '#FEF2F2', borderRadius: 4, marginBottom: 10 }}>
+                  {researchError}
+                </div>
+              )}
+
+              {researchLoading && !researchBrief && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', padding: '20px 0', textAlign: 'center' }}>
+                  Researching {detail.company}… this takes ~15 seconds
+                </div>
+              )}
+
+              {researchBrief?.brief && (() => {
+                const b = researchBrief.brief;
+                const fo = b.fund_overview || {};
+                return (
+                  <div style={{ fontSize: 12 }}>
+
+                    {/* Fund Overview */}
+                    {fo.strategy && (
+                      <div style={{ padding: '10px 12px', background: '#F8F4FF', borderRadius: 6, borderLeft: '3px solid #7C3AED', marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Fund Overview</div>
+                        <div style={{ lineHeight: 1.5, color: 'var(--text)' }}>{fo.strategy}</div>
+                        <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+                          {fo.aum_estimate && fo.aum_estimate !== 'Unknown' && (
+                            <span style={{ fontSize: 10, color: 'var(--muted)' }}>💰 AUM: <strong>{fo.aum_estimate}</strong></span>
+                          )}
+                          {fo.typical_commitment && fo.typical_commitment !== 'Unknown' && (
+                            <span style={{ fontSize: 10, color: 'var(--muted)' }}>📋 Commitment: <strong>{fo.typical_commitment}</strong></span>
+                          )}
+                          {fo.stage_focus && (
+                            <span style={{ fontSize: 10, color: 'var(--muted)' }}>🎯 Stage: <strong>{fo.stage_focus}</strong></span>
+                          )}
+                          {fo.confidence && (
+                            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 8, background: fo.confidence === 'high' ? '#ECFDF5' : fo.confidence === 'medium' ? '#FFF7ED' : '#FEF2F2', color: fo.confidence === 'high' ? '#059669' : fo.confidence === 'medium' ? '#D97706' : '#DC2626' }}>
+                              {fo.confidence} confidence
+                            </span>
+                          )}
+                        </div>
+                        {fo.notable_gp_relationships && fo.notable_gp_relationships.length > 0 && fo.notable_gp_relationships[0] !== 'Unknown' && (
+                          <div style={{ marginTop: 6, fontSize: 10, color: 'var(--muted)' }}>
+                            Known GP relationships: {fo.notable_gp_relationships.slice(0, 4).join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Warm Intro Angles */}
+                    {b.warm_intro_angles && b.warm_intro_angles.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>🤝 Warm Intro Angles</div>
+                        {b.warm_intro_angles.slice(0, 3).map((a, i) => (
+                          <div key={i} style={{ padding: '8px 10px', background: '#F0FDF4', borderRadius: 4, borderLeft: '3px solid #059669', marginBottom: 6 }}>
+                            <div style={{ fontWeight: 600, color: '#065F46', marginBottom: 2 }}>{a.angle}</div>
+                            <div style={{ color: 'var(--muted)', lineHeight: 1.4 }}>{a.rationale}</div>
+                            {a.suggested_approach && (
+                              <div style={{ marginTop: 4, fontSize: 11, color: '#059669', fontStyle: 'italic' }}>→ {a.suggested_approach}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Talking Points */}
+                    {b.talking_points && b.talking_points.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>💬 Talking Points</div>
+                        {b.talking_points.map((pt, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 5, alignItems: 'flex-start' }}>
+                            <span style={{ color: '#7C3AED', fontSize: 10, marginTop: 2, flexShrink: 0 }}>▸</span>
+                            <span style={{ lineHeight: 1.4, color: 'var(--text)' }}>{pt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Recent Activity */}
+                    {b.recent_activity && b.recent_activity.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>📰 Recent Activity</div>
+                        {b.recent_activity.slice(0, 4).map((ev, i) => (
+                          <div key={i} style={{ padding: '6px 10px', background: 'var(--card-bg)', borderRadius: 4, marginBottom: 4 }}>
+                            {ev.approximate_date && (
+                              <span style={{ fontSize: 10, color: 'var(--muted)', marginRight: 6 }}>{ev.approximate_date}</span>
+                            )}
+                            <span style={{ color: 'var(--text)' }}>{ev.event}</span>
+                            {ev.relevance && (
+                              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, fontStyle: 'italic' }}>↳ {ev.relevance}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Red Flags */}
+                    {b.red_flags && b.red_flags.length > 0 && b.red_flags[0] && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>⚠️ Watch Points</div>
+                        {b.red_flags.map((f, i) => (
+                          <div key={i} style={{ fontSize: 11, color: '#B91C1C', padding: '4px 10px', background: '#FEF2F2', borderRadius: 4, marginBottom: 3 }}>{f}</div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Recommended Approach */}
+                    {b.recommended_approach && (
+                      <div style={{ padding: '8px 12px', background: '#EFF6FF', borderRadius: 4, borderLeft: '3px solid #3B82F6', marginBottom: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Recommended Approach</div>
+                        <div style={{ color: '#1E3A8A', lineHeight: 1.5 }}>{b.recommended_approach}</div>
+                      </div>
+                    )}
+
+                    {/* Sources badge */}
+                    {b.data_quality?.sources_used && (
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>
+                        Sources: {b.data_quality.sources_used.map(s => s.replace(/_/g, ' ')).join(' · ')}
+                        {b.data_quality.notes && ` · ${b.data_quality.notes}`}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {!researchBrief && !researchLoading && (
+                <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>
+                  AI-powered research brief: fund strategy, warm intro angles, and tailored talking points synthesised from Apollo, LinkedIn, and web data.
+                </p>
+              )}
             </div>
 
             {/* Intro Email Generator */}

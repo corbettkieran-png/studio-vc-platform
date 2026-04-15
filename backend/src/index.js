@@ -106,6 +106,13 @@ async function autoMigrate() {
       ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS estimated_aum TEXT;
     `);
 
+    // LP Research Intelligence columns
+    await db.query(`
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS research_data JSONB DEFAULT NULL;
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS researched_at TIMESTAMPTZ DEFAULT NULL;
+      CREATE INDEX IF NOT EXISTS idx_lp_targets_researched ON lp_targets(researched_at DESC NULLS LAST);
+    `);
+
     // Deduplicate lp_targets: keep the oldest row per company name, delete the rest
     await db.query(`
       DELETE FROM lp_targets

@@ -4,6 +4,7 @@ const { v4: uuid } = require('uuid');
 const db = require('../config/db');
 const { authenticate } = require('../middleware/auth');
 const apollo = require('../services/apollo');
+const lpResearch = require('../services/lpResearch');
 
 const router = express.Router();
 
@@ -1273,6 +1274,73 @@ ${sender.email}`;
   } catch (err) {
     console.error('Draft intro error:', err);
     res.status(500).json({ error: 'Failed to generate intro email' });
+  }
+});
+
+// ============================================================
+// LP RESEARCH INTELLIGENCE
+// ============================================================
+
+// GET /api/lp/targets/:id/research — return cached research brief
+router.get('/targets/:id/research', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query(
+      'SELECT research_data, researched_at FROM lp_targets WHERE id = $1',
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'LP not found' });
+    const { research_data, researched_at } = rows[0];
+    if (!research_data) return res.json({ brief: null, researched_at: null });
+    return res.json({ brief: research_data, researched_at });
+  } catch (err) {
+    console.error('[research GET] error:', err);
+    res.status(500).json({ error: 'Failed to fetch research' });
+  }
+});
+
+// POST /api/lp/targets/:id/research — run (or re-run) research for a single LP
+router.post('/targets/:id/research', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const brief = await lpResearch.researchLP(id);
+    const { rows } = await db.query('SELECT researched_at FROM lp_targets WHERE id = $1', [id]);
+    res.json({ brief, researched_at: rows[0]?.researched_at });
+  } catch (err) {
+    console.error('[research POST] error:', err);
+    if (err.message === 'LP not found') return res.status(404).json({ error: err.message });
+    if (err.message.includes('ANTHROPIC_API_KEY')) return res.status(503).json({ error: 'AI research not configured' });
+    res.status(500).json({ error: err.message || 'Research failed' });
+  }
+});
+
+// POST /api/lp/research/bulk — queue research for multiple LPs (async, fire-and-forget per LP)
+router.post('/research/bulk', authenticate, async (req, res) => {
+  try {
+    const { ids, limit = 10 } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array required' });
+    }
+    const batch = ids.slice(0, Math.min(ids.length, limit));
+    res.json({ queued: batch.length, message: 'Research running in background' });
+
+    // Fire off research asynchronously — don't await, just log errors
+    (async () => {
+      for (const lpId of batch) {
+        try {
+          await lpResearch.researchLP(lpId);
+          console.log(`[research bulk] completed ${lpId}`);
+        } catch (e) {
+          console.warn(`[research bulk] failed ${lpId}:`, e.message);
+        }
+        // Small delay to avoid hammering Claude API
+        await new Promise(r => setTimeout(r, 1500));
+      }
+      console.log(`[research bulk] batch of ${batch.length} complete`);
+    })();
+  } catch (err) {
+    console.error('[research bulk] error:', err);
+    res.status(500).json({ error: 'Bulk research failed to start' });
   }
 });
 
