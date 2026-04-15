@@ -192,7 +192,7 @@ Generate a structured intelligence brief as JSON with exactly this schema:
 
   const response = await client.messages.create({
     model,
-    max_tokens: 2000,
+    max_tokens: 4096,
     messages: [{ role: 'user', content: userPrompt }],
     system: systemPrompt,
   });
