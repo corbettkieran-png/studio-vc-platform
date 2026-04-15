@@ -12,7 +12,7 @@ import {
 } from '../services/api';
 
 const request = (path, opts = {}) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('svc_token');
   return fetch(`/api${path}`, {
     ...opts,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(opts.headers || {}) },
