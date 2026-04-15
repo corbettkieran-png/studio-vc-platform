@@ -1705,7 +1705,7 @@ Kieran`;
                       if (rd?.error) throw new Error(rd.error);
                       setResearchBrief(rd);
                     } catch (e) {
-                      setResearchError('Research failed. Check API key configuration.');
+                      setResearchError(e.message || 'Research failed. Check API key configuration.');
                     } finally {
                       setResearchLoading(false);
                     }
