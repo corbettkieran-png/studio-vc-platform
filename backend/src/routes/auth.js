@@ -8,6 +8,48 @@ const { authenticate } = require('../middleware/auth');
 const router = express.Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+// ─── Login brute-force protection ─────────────────────────────────────────────
+// Tracks failed attempts per email. In-memory (resets on restart) — good enough
+// for a single-server setup. Replace with Redis for multi-instance deployments.
+const loginAttempts = new Map();
+const MAX_ATTEMPTS = 10;
+const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkLoginRateLimit(email) {
+  const key = email.toLowerCase().trim();
+  const now = Date.now();
+  const record = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
+  if (record.lockedUntil > now) {
+    const remaining = Math.ceil((record.lockedUntil - now) / 60000);
+    return { blocked: true, message: `Too many failed attempts. Try again in ${remaining} minute${remaining !== 1 ? 's' : ''}.` };
+  }
+  return { blocked: false };
+}
+
+function recordLoginFailure(email) {
+  const key = email.toLowerCase().trim();
+  const now = Date.now();
+  const record = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
+  record.count += 1;
+  if (record.count >= MAX_ATTEMPTS) {
+    record.lockedUntil = now + LOCKOUT_MS;
+    record.count = 0;
+  }
+  loginAttempts.set(key, record);
+}
+
+function clearLoginFailures(email) {
+  loginAttempts.delete(email.toLowerCase().trim());
+}
+
+// Clean up old entries every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of loginAttempts.entries()) {
+    if (v.lockedUntil < now - LOCKOUT_MS) loginAttempts.delete(k);
+  }
+}, 60 * 60 * 1000);
+
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
@@ -16,21 +58,30 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
+    // Brute-force check before hitting the DB
+    const rateCheck = checkLoginRateLimit(email);
+    if (rateCheck.blocked) {
+      return res.status(429).json({ error: rateCheck.message });
+    }
+
     const { rows } = await db.query(
       'SELECT id, email, password_hash, full_name, role FROM users WHERE email = $1 AND is_active = true',
       [email.toLowerCase().trim()]
     );
 
     if (!rows.length) {
+      recordLoginFailure(email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = rows[0];
-    const valid = await bcrypt.compare(password, user.password_hash);
+    const valid = user.password_hash && await bcrypt.compare(password, user.password_hash);
     if (!valid) {
+      recordLoginFailure(email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    clearLoginFailures(email);
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,

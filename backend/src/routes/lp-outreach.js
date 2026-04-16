@@ -8,9 +8,10 @@ const lpResearch = require('../services/lpResearch');
 
 const router = express.Router();
 
-// Configure multer for CSV uploads
+// Configure multer for CSV uploads — 10 MB max, CSV only
 const upload = multer({
   storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (req, file, cb) => {
     if (file.mimetype !== 'text/csv' && !file.originalname.endsWith('.csv')) {
       return cb(new Error('Only CSV files are allowed'));
@@ -18,6 +19,23 @@ const upload = multer({
     cb(null, true);
   },
 });
+
+// ─── Simple in-memory rate limiter for expensive API calls ────────────────────
+const rateLimitMap = new Map();
+function rateLimit(key, windowMs) {
+  const now = Date.now();
+  const last = rateLimitMap.get(key);
+  if (last && now - last < windowMs) return false; // blocked
+  rateLimitMap.set(key, now);
+  return true; // allowed
+}
+// Clean up rate limit map every 10 minutes to prevent memory growth
+setInterval(() => {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  for (const [k, v] of rateLimitMap.entries()) {
+    if (v < cutoff) rateLimitMap.delete(k);
+  }
+}, 10 * 60 * 1000);
 
 // ============================================================
 // Helper: Parse CSV
@@ -1789,6 +1807,11 @@ async function enrichSingleLpTarget(lpTarget, opts = {}) {
 
 // POST /api/lp/apollo/live-search/:lpId — call Apollo live for one LP target
 router.post('/apollo/live-search/:lpId', authenticate, async (req, res) => {
+  // Rate limit: max one live search per LP per 30 seconds per user
+  const rlKey = `apollo-search:${req.user.id}:${req.params.lpId}`;
+  if (!rateLimit(rlKey, 30 * 1000)) {
+    return res.status(429).json({ error: 'Please wait 30 seconds before searching this LP again.' });
+  }
   if (!apollo.hasKey()) {
     return res.status(503).json({
       error: 'APOLLO_API_KEY not configured. Set it in Railway environment variables to enable live enrichment.',
@@ -1810,6 +1833,10 @@ router.post('/apollo/live-search/:lpId', authenticate, async (req, res) => {
 // POST /api/lp/apollo/bulk-enrich — enrich every LP target without contacts
 // Body: { only_missing?: true, limit?: 50 }
 router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
+  // Rate limit: max one bulk enrich per user per 5 minutes
+  if (!rateLimit(`apollo-bulk:${req.user.id}`, 5 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Bulk enrich already running. Wait 5 minutes before trying again.' });
+  }
   const { only_missing = true, limit = 50, dry_run = false } = req.body || {};
   if (!dry_run && !apollo.hasKey()) {
     return res.status(503).json({

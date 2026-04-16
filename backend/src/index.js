@@ -22,16 +22,28 @@ const uploadDir = process.env.UPLOAD_DIR || './uploads';
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 // Middleware
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'https://studio-vc-platform.vercel.app',
+];
+// Allow Clay webhook origin only if explicitly configured
+if (process.env.CLAY_ORIGIN) allowedOrigins.push(process.env.CLAY_ORIGIN);
+
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:5173',
-    'https://app.clay.com',
-    'https://studio-vc-platform.vercel.app',
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman in dev)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some(o => origin === o || origin.startsWith(o))) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Body size limits — prevent oversized JSON payloads
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // Static file serving for uploads (authenticated)
 app.use('/uploads', express.static(path.resolve(uploadDir)));
@@ -154,24 +166,38 @@ async function autoMigrate() {
 autoMigrate();
 
 // Auto-seed if users table is empty
+// In production, only seeds the primary admin (no demo credentials)
 async function autoSeed() {
   try {
     const { rows } = await db.query('SELECT COUNT(*) FROM users');
-    if (parseInt(rows[0].count) === 0) {
-      console.log('No users found — running auto-seed...');
-      const passwordHash = await bcrypt.hash('demo123', 10);
-      const users = [
-        { email: 'kcorbett@studio.vc', name: 'Kieran Corbett', role: 'admin' },
-        { email: 'analyst@studiovc.com', name: 'Demo Analyst', role: 'analyst' },
-      ];
-      for (const u of users) {
-        await db.query(
-          `INSERT INTO users (id, email, password_hash, full_name, role)
-           VALUES ($1,$2,$3,$4,$5) ON CONFLICT (email) DO NOTHING`,
-          [uuid(), u.email, passwordHash, u.name, u.role]
-        );
-      }
-      console.log('Auto-seed complete. Login: kieran@studiovc.com / demo123');
+    if (parseInt(rows[0].count) > 0) return; // already have users
+
+    const isProd = process.env.NODE_ENV === 'production';
+    console.log(`No users found — running auto-seed (${isProd ? 'production' : 'development'})...`);
+
+    // Primary admin — password must be set via ADMIN_PASSWORD env var in production
+    const adminPassword = process.env.ADMIN_PASSWORD || (isProd ? null : 'demo123');
+    if (!adminPassword) {
+      console.error('ADMIN_PASSWORD env var required in production for initial seed. Skipping.');
+      return;
+    }
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
+    await db.query(
+      `INSERT INTO users (id, email, password_hash, full_name, role)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (email) DO NOTHING`,
+      [uuid(), 'kcorbett@studio.vc', passwordHash, 'Kieran Corbett', 'admin']
+    );
+
+    // Only create demo analyst in development
+    if (!isProd) {
+      await db.query(
+        `INSERT INTO users (id, email, password_hash, full_name, role)
+         VALUES ($1,$2,$3,$4,$5) ON CONFLICT (email) DO NOTHING`,
+        [uuid(), 'analyst@studiovc.com', passwordHash, 'Demo Analyst', 'analyst']
+      );
+      console.log('Dev seed complete. Login: kcorbett@studio.vc / demo123');
+    } else {
+      console.log('Prod seed complete. Admin: kcorbett@studio.vc');
     }
   } catch (err) {
     console.error('Auto-seed error:', err.message);
@@ -223,14 +249,38 @@ autoSeedLPTargets();
 // Process email queue every 30 seconds
 setInterval(processEmailQueue, 30000);
 
-// Error handler
+// Global error handler — catches any unhandled express errors
 app.use((err, req, res, _next) => {
-  console.error('Unhandled error:', err);
+  // Multer file size / type errors → 400
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'File too large. Maximum 10 MB.' });
+  }
+  if (err.message === 'Only CSV files are allowed') {
+    return res.status(400).json({ error: err.message });
+  }
+  // CORS errors → 403
+  if (err.message?.startsWith('CORS:')) {
+    return res.status(403).json({ error: 'Request blocked by CORS policy.' });
+  }
+  console.error('Unhandled error:', err.message || err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// Prevent unhandled promise rejections from crashing the process
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Promise Rejection:', reason);
+  // Log but do NOT exit — Railway will restart on crash anyway,
+  // but we want the server to keep serving other requests
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err.message);
+  // For truly unexpected exceptions, exit and let Railway restart cleanly
+  process.exit(1);
+});
+
 app.listen(PORT, () => {
-  console.log(`Studio VC API running on port ${PORT}`);
+  console.log(`Studio VC API running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
 });
 
 module.exports = app;
