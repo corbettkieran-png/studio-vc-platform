@@ -633,11 +633,11 @@ Senior Associate, Studio VC`;
       width: col.width,
       minWidth: col.width,
       maxWidth: col.width,
-      padding: '0 10px',
-      height: 42,
-      fontSize: 12,
-      borderRight: '1px solid #E5E7EB',
-      borderBottom: '1px solid #E5E7EB',
+      padding: '0 14px',
+      height: 50,
+      fontSize: 13,
+      borderRight: '1px solid #F1F5F9',
+      borderBottom: '1px solid #F1F5F9',
       overflow: 'hidden',
       whiteSpace: 'nowrap',
       textOverflow: 'ellipsis',
@@ -652,16 +652,17 @@ Senior Associate, Studio VC`;
 
     const headerCellStyle = (col) => ({
       ...cellStyle(col),
-      background: '#F9FAFB',
-      fontWeight: 600,
+      background: '#F8FAFC',
+      fontWeight: 700,
       fontSize: 11,
-      color: '#6B7280',
+      color: '#64748B',
       textTransform: 'uppercase',
-      letterSpacing: '0.5px',
-      height: 36,
+      letterSpacing: '0.6px',
+      height: 40,
       userSelect: 'none',
       cursor: 'pointer',
       zIndex: col.sticky ? 3 : 1,
+      borderBottom: '2px solid #E2E8F0',
     });
 
     return (
@@ -687,11 +688,12 @@ Senior Associate, Studio VC`;
                 : targets.filter(t => t.outreach_status === f.key).length;
               return (
                 <button key={f.key} onClick={() => { setStatusFilter(f.key); setPage(0); }} style={{
-                  padding: '4px 11px', borderRadius: 14, fontSize: 11, cursor: 'pointer', fontWeight: 600,
-                  border: isActive ? 'none' : '1px solid var(--border-light)',
-                  background: isActive ? f.color : 'transparent',
-                  color: isActive ? '#fff' : 'var(--muted)',
+                  padding: '5px 13px', borderRadius: 20, fontSize: 12, cursor: 'pointer', fontWeight: 600,
+                  border: isActive ? 'none' : '1.5px solid #E2E8F0',
+                  background: isActive ? f.color : '#fff',
+                  color: isActive ? '#fff' : '#64748B',
                   transition: 'all 0.15s',
+                  boxShadow: isActive ? '0 2px 6px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
                 }}>
                   {f.label} <span style={{ opacity: 0.7, fontWeight: 400 }}>{count}</span>
                 </button>
@@ -699,22 +701,23 @@ Senior Associate, Studio VC`;
             })}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div className="search-input" style={{ minWidth: 200 }}>
-              <span>🔍</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 8, padding: '7px 12px', minWidth: 240, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+              <span style={{ color: '#94A3B8', fontSize: 13 }}>🔍</span>
               <input placeholder="Search name, company..." value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
+                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, color: '#1D3557', width: '100%' }} />
             </div>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-              style={{ padding: '5px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 11 }}>
+              style={{ padding: '7px 10px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 12, color: '#475569', background: '#fff', cursor: 'pointer' }}>
               <option value="company">Company A→Z</option>
               <option value="name">Contact Name</option>
               <option value="outreach_status">Status</option>
             </select>
             <button onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
-              style={{ padding: '5px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 11, background: '#fff', cursor: 'pointer' }}>
+              style={{ padding: '7px 10px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, background: '#fff', cursor: 'pointer', color: '#475569' }}>
               {sortDir === 'desc' ? '↓' : '↑'}
             </button>
-            <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 12, color: '#94A3B8', whiteSpace: 'nowrap', background: '#EEF4FF', padding: '5px 12px', borderRadius: 20, fontWeight: 600, color: '#1D3557' }}>
               {filtered.length} LP{filtered.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -722,12 +725,12 @@ Senior Associate, Studio VC`;
 
         {/* Airtable-style grid */}
         <div style={{
-          border: '1px solid #E5E7EB',
-          borderRadius: 8,
+          border: '1px solid #E2E8F0',
+          borderRadius: 12,
           overflow: 'auto',
           background: '#fff',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          maxHeight: 'calc(100vh - 260px)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+          maxHeight: 'calc(100vh - 250px)',
           position: 'relative',
         }}>
           <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
@@ -753,16 +756,16 @@ Senior Associate, Studio VC`;
                 const rowBg = rowIdx % 2 === 0 ? '#fff' : '#FAFAFA';
                 return (
                   <tr key={t.id} style={{ cursor: 'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#EFF6FF'}
-                    onMouseLeave={e => e.currentTarget.style.background = ''}>
+                    onMouseEnter={e => { Array.from(e.currentTarget.cells).forEach(c => c.style.background = '#FAFBFF'); }}
+                    onMouseLeave={e => { Array.from(e.currentTarget.cells).forEach(c => c.style.background = ''); }}>
 
                     {/* Name / Company — sticky */}
-                    <td style={{ ...cellStyle(COLS[0]), background: rowBg, fontWeight: 500 }}
+                    <td style={{ ...cellStyle(COLS[0]), background: '#fff', fontWeight: 500 }}
                       onClick={() => setSelectedTarget(t.id)}>
-                      <div style={{ fontWeight: 600, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#1D3557' }}>
                         {t.full_name || t.name}
                       </div>
-                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {t.company}
                       </div>
                     </td>
@@ -781,10 +784,11 @@ Senior Associate, Studio VC`;
                         </select>
                       ) : (
                         <span style={{
-                          display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
-                          background: (OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF') + '22',
+                          display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                          background: (OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF') + '28',
                           color: OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF',
-                          cursor: 'pointer', border: `1px solid ${(OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF')}44`,
+                          cursor: 'pointer', border: `1px solid ${(OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF')}50`,
+                          whiteSpace: 'nowrap',
                         }}>
                           {OUTREACH_STATUS_LABELS[t.outreach_status] || t.outreach_status || 'Not Started'}
                         </span>
@@ -806,7 +810,7 @@ Senior Associate, Studio VC`;
                           }}
                           style={{ fontSize: 10, width: '100%', border: '1px solid var(--navy)', borderRadius: 3, padding: '2px 4px', outline: 'none' }} />
                       ) : (
-                        <span style={{ fontSize: 11, color: t.last_contacted_at ? '#374151' : '#D1D5DB', cursor: 'pointer' }}>
+                        <span style={{ fontSize: 12, color: t.last_contacted_at ? '#374151' : '#CBD5E1', cursor: 'pointer' }}>
                           {t.last_contacted_at ? new Date(t.last_contacted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
                         </span>
                       )}
