@@ -401,11 +401,8 @@ Senior Associate, Studio VC`;
           setApolloContacts(apolloData.contacts || []);
         } catch { setApolloContacts([]); }
         setApolloLoading(false);
-        // Load cached research brief (if any)
-        try {
-          const rd = await request(`/lp/targets/${selectedTarget}/research`);
-          if (rd.brief) setResearchBrief(rd);
-        } catch { /* no cached research — that's fine */ }
+        // Research brief is NOT auto-loaded — user must click "Run Research"
+        setResearchBrief(null);
       } catch (err) {
         console.error('Load detail error:', err);
       }
@@ -2270,7 +2267,7 @@ Senior Associate, Studio VC`;
                     }
                   }}
                 >
-                  Enrich All Contacts (LinkedIn + Email)
+                  ⚡ Enrich All via Apollo
                 </button>
               )}
               {apolloContacts.length > 0 && (
@@ -2403,7 +2400,7 @@ Senior Associate, Studio VC`;
                               border: '1px solid #6366F1', background: 'transparent', color: '#6366F1', fontWeight: 600
                             }}
                           >
-                            {contact.linkedin_url ? 'Enrich via RocketReach' : 'Enrich'}
+                            {contact.linkedin_url ? 'Enrich via Apollo' : 'Enrich via Apollo'}
                           </button>
                         )}
                         <button

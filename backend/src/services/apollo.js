@@ -129,8 +129,35 @@ async function enrichOrganization(domain) {
   return json.organization || null;
 }
 
+/**
+ * Match a specific person via Apollo People Match API.
+ * Returns enriched person data including email (if reveal_personal_emails credits available).
+ * LinkedIn URL is the most reliable identifier; falls back to name + company.
+ */
+async function matchPerson({ firstName, lastName, organizationName, linkedinUrl, title }) {
+  const body = {
+    reveal_personal_emails: true,
+    reveal_phone_number: false,
+  };
+
+  // LinkedIn URL is the most reliable match signal
+  if (linkedinUrl) body.linkedin_url = linkedinUrl;
+
+  // Name fields — strip Apollo's obfuscation asterisks from last names
+  if (firstName) body.first_name = firstName;
+  if (lastName) body.last_name = lastName.replace(/\*/g, '').trim();
+
+  // Company and title help when no LinkedIn URL is available
+  if (organizationName) body.organization_name = organizationName;
+  if (title) body.title = title;
+
+  const data = await apolloFetch('/people/match', body);
+  return data.person || null;
+}
+
 module.exports = {
   hasKey,
   searchPeopleAtCompany,
   enrichOrganization,
+  matchPerson,
 };
