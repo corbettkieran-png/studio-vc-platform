@@ -28,7 +28,7 @@ function parseCSV(csvContent) {
   const lines = cleaned.trim().split('\n');
   if (lines.length === 0) return [];
 
-  // Find the actual header row â LinkedIn CSVs sometimes have metadata lines at the top.
+  // Find the actual header row — LinkedIn CSVs sometimes have metadata lines at the top.
   // Look for a line that contains known CSV header keywords.
   const headerKeywords = ['first name', 'last name', 'email', 'company', 'name', 'position', 'title', 'connected', 'organization', 'full_name'];
   let headerIdx = 0;
@@ -222,7 +222,7 @@ async function runMatching() {
         }
       };
 
-      // ââ Layer 1: Direct matches (name + email) ââ
+      // ── Layer 1: Direct matches (name + email) ──
       // The LP target IS one of your LinkedIn connections
       for (const conn of connections) {
         // Direct name match
@@ -241,7 +241,7 @@ async function runMatching() {
         }
       }
 
-      // ââ Layer 2: Same company (colleague match) ââ
+      // ── Layer 2: Same company (colleague match) ──
       // Your LinkedIn connection works at the same company as the LP target.
       // They're not the LP target themselves, but they could intro you.
       if (lp.company) {
@@ -261,7 +261,7 @@ async function runMatching() {
         }
       }
 
-      // ââ Layer 3: LP name matches a company ââ
+      // ── Layer 3: LP name matches a company ‐ 
       // The LP target's full_name field is actually a firm name (e.g., "Sequoia Heritage")
       // and your LinkedIn connection works at that firm.
       // Check if lp.full_name looks like it could be a company name
@@ -997,7 +997,7 @@ router.get('/targets/:id', authenticate, async (req, res) => {
 
     const lp = lpRows[0];
 
-    // Get connectors for this LP â filtered to the current user's network
+    // Get connectors for this LP — filtered to the current user's network
     const { rows: connectors } = await db.query(
       `SELECT
         tm.id, tm.full_name, lcm.match_type, lcm.match_confidence,
@@ -1020,7 +1020,7 @@ router.get('/targets/:id', authenticate, async (req, res) => {
       [id]
     );
 
-    // ââ Warm Intro Paths (powered by known_contacts + Apollo) ââ
+    // ── Warm Intro Paths (powered by known_contacts + Apollo) ──
     // Find Apollo contacts at this LP's company that a team member has flagged as "I know them"
     let warmIntroPaths = [];
     const { rows: knownAtCompany } = await db.query(
@@ -1065,7 +1065,7 @@ router.get('/targets/:id', authenticate, async (req, res) => {
       warmIntroPaths.sort((a, b) => b.known_contacts.length - a.known_contacts.length);
     }
 
-    // ââ LinkedIn Enrichment (from People Data Labs) ââ
+    // ── LinkedIn Enrichment (from People Data Labs) ──
     const { rows: enrichmentRows } = await db.query(
       'SELECT * FROM linkedin_enrichments WHERE lp_target_id = $1 ORDER BY enriched_at DESC LIMIT 1',
       [id]
@@ -1220,7 +1220,7 @@ router.patch('/targets/:id', authenticate, async (req, res) => {
 // INTRO EMAIL GENERATION
 // ============================================================
 
-// POST /api/lp/targets/:id/draft-intro  â generate personalised intro email
+// POST /api/lp/targets/:id/draft-intro  — generate personalised intro email
 router.post('/targets/:id/draft-intro', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1249,25 +1249,27 @@ router.post('/targets/:id/draft-intro', authenticate, async (req, res) => {
       ? `I was introduced to you by ${req.body.connector_name}.`
       : '';
 
-    const subject = `Introduction â CQ Fund III | Studio VC`;
+    const subject = `Studio VC Fund III -- Introduction`;
 
     const body = `${salutation}
 
-${connectors ? connectors + '\n\n' : ''}I'm ${sender.full_name} from Studio VC. I wanted to reach out as we're currently raising CQ Fund III, our early-stage seed fund focused on B2B software, fintech, and deep tech companies across the US and Europe.
+${connectors ? connectors + '\n\n' : ''}I'm ${sender.full_name}, Senior Associate at Studio VC. I'm reaching out because we're currently raising Fund III and believe there could be strong alignment with ${lp.company}.
 
-Given ${lp.company}'s profile as a ${fundType}${geo}${sectorLine}, I think there could be a strong fit â many of our LPs share a similar thesis and have found our deal flow and co-investment opportunities compelling.
+Studio VC is a New York-based venture fund investing exclusively at the late-stage seed -- post-product companies with early revenue and a clear path to Series A. Our track record across Funds I & II: 38 portfolio companies collectively valued at over $3B, Fund II at 2.3x Net TVPI, and 50% of our seed investments reaching Series A within two years (roughly double the industry average).
 
-CQ Fund III highlights:
-â¢ Target: $50M fund
-â¢ Stage: Pre-seed and seed (initial cheques of $250Kâ$1M)
-â¢ Focus: B2B SaaS, fintech infrastructure, and AI-native applications
-â¢ Portfolio: 12 current investments across the US and Europe
+Given ${lp.company}'s profile as a ${fundType}${geo}${sectorLine}, I believe there's a compelling case for a conversation. Fund III highlights:
 
-I'd love to share our deck and have a brief 20-minute intro call at your convenience.
+- Target: $50M (hard cap $60M), 25 core positions
+- Stage: Late-stage seed, $750K-$1M first check
+- Sectors: Pure Play SaaS, SaaS-enabled Marketplaces, FinTech & Enterprise Analytics & AI
+- Co-investors: QED, Left Lane Capital, General Catalyst, Insight Partners
+- Team: Former CEO of Broadway.com ($600M+ revenue) and Bain Capital Ventures background
+
+We have limited LP capacity remaining. I'd love to share our deck and schedule a 20-minute call at your convenience.
 
 Best,
 ${sender.full_name}
-Studio VC
+Senior Associate, Studio VC
 ${sender.email}`;
 
     res.json({ subject, body, lp_name: lp.full_name, lp_company: lp.company, sender: sender.full_name });
@@ -1657,7 +1659,7 @@ router.get('/apollo/status', authenticate, async (req, res) => {
   }
 });
 
-// ââ Live Apollo enrichment (server-side, requires APOLLO_API_KEY) ââ
+// ── Live Apollo enrichment (server-side, requires APOLLO_API_KEY) ──
 
 // Internal helper: search Apollo for a single LP target and persist results.
 // Returns { inserted, total_found, skipped_reason? }
@@ -1756,7 +1758,7 @@ async function enrichSingleLpTarget(lpTarget, opts = {}) {
   }
 }
 
-// POST /api/lp/apollo/live-search/:lpId â call Apollo live for one LP target
+// POST /api/lp/apollo/live-search/:lpId — call Apollo live for one LP target
 router.post('/apollo/live-search/:lpId', authenticate, async (req, res) => {
   if (!apollo.hasKey()) {
     return res.status(503).json({
@@ -1776,7 +1778,7 @@ router.post('/apollo/live-search/:lpId', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/apollo/bulk-enrich â enrich every LP target without contacts
+// POST /api/lp/apollo/bulk-enrich — enrich every LP target without contacts
 // Body: { only_missing?: true, limit?: 50 }
 router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
   const { only_missing = true, limit = 50, dry_run = false } = req.body || {};
@@ -1832,12 +1834,12 @@ router.post('/apollo/bulk-enrich', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/lp/apollo/key-status â does the backend have a key?
+// GET /api/lp/apollo/key-status — does the backend have a key?
 router.get('/apollo/key-status', authenticate, (req, res) => {
   res.json({ has_key: apollo.hasKey() });
 });
 
-// ââ Known Contacts (Warm Intro Paths) ââââââââââââââââââââââââââ
+// ── Known Contacts (Warm Intro Paths) ──────────────────────────
 
 // POST /api/lp/apollo/contacts/:contactId/know - Flag "I know this person"
 router.post('/apollo/contacts/:contactId/know', authenticate, async (req, res) => {
@@ -1927,7 +1929,7 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
       || (contact.full_name && contact.full_name !== contact.first_name ? contact.full_name : null)
       || [contact.first_name, contact.last_name].filter(Boolean).join(' ');
 
-    // Build RocketReach query â prioritize LinkedIn URL for most reliable match
+    // Build RocketReach query — prioritize LinkedIn URL for most reliable match
     const linkedinUrl = bodyLinkedin || contact.linkedin_url;
     const rrParams = new URLSearchParams();
     if (linkedinUrl) {
@@ -2118,7 +2120,7 @@ router.post('/apollo/contacts/enrich-batch/:lpId', authenticate, async (req, res
           || (contact.full_name && contact.full_name !== contact.first_name ? contact.full_name : null)
           || [contact.first_name, contact.last_name].filter(Boolean).join(' ');
 
-        // Build RocketReach query â prioritize LinkedIn URL for reliable match
+        // Build RocketReach query — prioritize LinkedIn URL for reliable match
         const linkedinUrl = overrides.linkedin_url || contact.linkedin_url;
         const rrParams = new URLSearchParams();
 
@@ -2469,7 +2471,7 @@ router.get('/companies', authenticate, async (req, res) => {
   }
 })();
 
-// GET /api/lp/clay/settings â Get current Clay config
+// GET /api/lp/clay/settings — Get current Clay config
 router.get('/clay/settings', authenticate, async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM clay_settings LIMIT 1');
@@ -2488,12 +2490,12 @@ router.get('/clay/settings', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/clay/settings â Save Clay config
+// POST /api/lp/clay/settings — Save Clay config
 router.post('/clay/settings', authenticate, async (req, res) => {
   try {
     const { clay_table_webhook_url, clay_webhook_secret, clay_api_key } = req.body;
 
-    // Upsert â there should only ever be one row
+    // Upsert — there should only ever be one row
     const { rows: existing } = await db.query('SELECT id FROM clay_settings LIMIT 1');
     if (existing.length > 0) {
       const updates = [];
@@ -2522,7 +2524,7 @@ router.post('/clay/settings', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/clay/export â Push LP targets to Clay table webhook
+// POST /api/lp/clay/export — Push LP targets to Clay table webhook
 router.post('/clay/export', authenticate, async (req, res) => {
   try {
     const { rows: settingsRows } = await db.query('SELECT * FROM clay_settings LIMIT 1');
@@ -2654,9 +2656,9 @@ router.post('/clay/export', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/clay/webhook â Receive enriched data from Clay (HTTP action callback)
+// POST /api/lp/clay/webhook — Receive enriched data from Clay (HTTP action callback)
 // Clay sends enriched records back here after waterfall enrichment
-// This endpoint does NOT require JWT auth â it uses the webhook secret instead
+// This endpoint does NOT require JWT auth — it uses the webhook secret instead
 router.post('/clay/webhook', async (req, res) => {
   try {
     // Verify webhook secret if configured
@@ -2853,7 +2855,7 @@ router.post('/clay/webhook', async (req, res) => {
   }
 });
 
-// POST /api/lp/clay/import-csv â Import enriched CSV from Clay (manual upload)
+// POST /api/lp/clay/import-csv — Import enriched CSV from Clay (manual upload)
 // For users who prefer to download from Clay and upload directly
 router.post('/clay/import-csv', authenticate, upload.single('file'), async (req, res) => {
   try {
@@ -2976,7 +2978,7 @@ router.post('/clay/import-csv', authenticate, upload.single('file'), async (req,
   }
 });
 
-// GET /api/lp/clay/export-csv â Public CSV download of LP targets for Clay import
+// GET /api/lp/clay/export-csv — Public CSV download of LP targets for Clay import
 // Temporary convenience endpoint - no auth required but uses a time-limited token
 router.get('/clay/export-csv', async (req, res) => {
   try {
@@ -3003,7 +3005,7 @@ router.get('/clay/export-csv', async (req, res) => {
   }
 });
 
-// GET /api/lp/clay/webhook-url â Return the platform's webhook URL for Clay to call back
+// GET /api/lp/clay/webhook-url ℔ Return the platform's webhook URL for Clay to call back
 router.get('/clay/webhook-url', authenticate, async (req, res) => {
   const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
@@ -3014,9 +3016,9 @@ router.get('/clay/webhook-url', authenticate, async (req, res) => {
   });
 });
 
-// ââ Manual Connections (Navigator-sourced warm paths) ââ
+// ── Manual Connections (Navigator-sourced warm paths) ──
 
-// GET /api/lp/targets/:id/connections â list manual connections for an LP
+// GET /api/lp/targets/:id/connections — list manual connections for an LP
 router.get('/targets/:id/connections', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -3034,7 +3036,7 @@ router.get('/targets/:id/connections', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/targets/:id/connections â add a manual connection
+// POST /api/lp/targets/:id/connections — add a manual connection
 router.post('/targets/:id/connections', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -3068,7 +3070,7 @@ router.post('/targets/:id/connections', authenticate, async (req, res) => {
   }
 });
 
-// DELETE /api/lp/targets/:id/connections/:connId â remove a manual connection
+// DELETE /api/lp/targets/:id/connections/:connId — remove a manual connection
 router.delete('/targets/:id/connections/:connId', authenticate, async (req, res) => {
   try {
     const { id, connId } = req.params;
