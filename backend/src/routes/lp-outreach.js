@@ -1230,8 +1230,11 @@ router.delete('/targets/:id', authenticate, async (req, res) => {
     await client.query('DELETE FROM apollo_company_contacts WHERE lp_target_id = $1', [id]);
     await client.query('DELETE FROM linkedin_enrichments WHERE lp_target_id = $1', [id]);
     const result = await client.query('DELETE FROM lp_targets WHERE id = $1 RETURNING id', [id]);
+    if (!result.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'LP target not found' });
+    }
     await client.query('COMMIT');
-    if (!result.rowCount) return res.status(404).json({ error: 'LP target not found' });
     res.json({ deleted: true, id });
   } catch (err) {
     await client.query('ROLLBACK');
