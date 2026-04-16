@@ -626,6 +626,7 @@ Senior Associate, Studio VC`;
       { key: 'connections', label: '2nd-Degree (Manual)', width: 190 },
       { key: 'email', label: 'Email', width: 190 },
       { key: 'navigator', label: 'Navigator', width: 90 },
+      { key: 'delete', label: '', width: 46 },
     ];
 
     const cellStyle = (col, extra = {}) => ({
@@ -921,26 +922,61 @@ Senior Associate, Studio VC`;
 
                     {/* Navigator search */}
                     <td style={cellStyle(COLS[9])} onClick={e => e.stopPropagation()}>
-                      <a
-                        href={
-                          t.linkedin_url
-                            ? t.linkedin_url
-                            : `https://www.linkedin.com/sales/search/people?query=(${encodeURIComponent(`spellCorrectionEnabled:true,keywords:${(t.full_name || t.name) ? (t.full_name || t.name).replace(/,/g, '') : t.company.replace(/,/g, '')},filters:List((type:RELATIONSHIP,values:List((id:S,text:2nd Degree Connections,selectionType:INCLUDED))))`)})`
-                        }
-                        target="_blank" rel="noopener noreferrer"
-                        title={
-                          t.linkedin_url
-                            ? `View ${(t.full_name || t.name) || t.company}'s LinkedIn profile — mutual connections visible`
-                            : `Search for ${(t.full_name || t.name) ? (t.full_name || t.name) + ' at ' + t.company : t.company} in Sales Navigator (2nd-degree)`
-                        }
+                      {(() => {
+                        const personName = (t.full_name || t.name || '').replace(/,/g, '').trim();
+                        const companyName = (t.company || '').trim();
+                        const navHref = t.linkedin_url
+                          ? t.linkedin_url
+                          : personName && companyName
+                            ? `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${encodeURIComponent(personName)},filters:List((type:CURRENT_COMPANY,values:List((text:${encodeURIComponent(companyName)},selectionType:INCLUDED)))))`
+                            : `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${encodeURIComponent(personName || companyName)})`;
+                        const navTitle = t.linkedin_url
+                          ? `View ${personName || companyName}'s LinkedIn profile`
+                          : `Find ${personName} at ${companyName} in Sales Navigator`;
+                        return (
+                          <a href={navHref} target="_blank" rel="noopener noreferrer" title={navTitle}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                              background: '#0077B5', color: '#fff', textDecoration: 'none',
+                              border: 'none', cursor: 'pointer',
+                            }}>
+                            in Search
+                          </a>
+                        );
+                      })()}
+                    </td>
+
+                    {/* Delete record */}
+                    <td style={{ ...cellStyle(COLS[10]), textAlign: 'center', padding: '0 4px' }} onClick={e => e.stopPropagation()}>
+                      <button
+                        title="Delete this LP record"
+                        onClick={async () => {
+                          const name = (t.full_name || t.name || t.company || 'this record');
+                          if (!window.confirm(`Delete ${name}? This cannot be undone.`)) return;
+                          try {
+                            const token = localStorage.getItem('svc_token');
+                            const res = await fetch(`/api/lp/targets/${t.id}`, {
+                              method: 'DELETE',
+                              headers: { Authorization: `Bearer ${token}` },
+                            });
+                            if (!res.ok) { alert('Delete failed — please try again.'); return; }
+                            setTargets(prev => prev.filter(x => x.id !== t.id));
+                          } catch (e) {
+                            alert('Delete failed — please try again.');
+                          }
+                        }}
                         style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-                          background: '#0077B5', color: '#fff', textDecoration: 'none',
-                          border: 'none', cursor: 'pointer',
-                        }}>
-                        in Search
-                      </a>
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: '#9CA3AF', fontSize: 14, padding: '2px 4px',
+                          borderRadius: 3, lineHeight: 1,
+                          transition: 'color 0.15s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#DC2626'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#9CA3AF'}
+                      >
+                        🗑
+                      </button>
                     </td>
                   </tr>
                 );

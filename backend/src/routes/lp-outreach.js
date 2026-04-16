@@ -1217,6 +1217,32 @@ router.patch('/targets/:id', authenticate, async (req, res) => {
 });
 
 // ============================================================
+// DELETE /api/lp/targets/:id - Remove an LP target and all related data
+router.delete('/targets/:id', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Remove all child records first
+    await client.query('DELETE FROM lp_manual_connections WHERE lp_target_id = $1', [id]);
+    await client.query('DELETE FROM lp_activity_log WHERE lp_target_id = $1', [id]);
+    await client.query('DELETE FROM lp_connection_matches WHERE lp_target_id = $1', [id]);
+    await client.query('DELETE FROM apollo_company_contacts WHERE lp_target_id = $1', [id]);
+    await client.query('DELETE FROM linkedin_enrichments WHERE lp_target_id = $1', [id]);
+    const result = await client.query('DELETE FROM lp_targets WHERE id = $1 RETURNING id', [id]);
+    await client.query('COMMIT');
+    if (!result.rowCount) return res.status(404).json({ error: 'LP target not found' });
+    res.json({ deleted: true, id });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[DELETE /targets/:id]', err);
+    res.status(500).json({ error: 'Failed to delete LP target' });
+  } finally {
+    client.release();
+  }
+});
+
+// ============================================================
 // INTRO EMAIL GENERATION
 // ============================================================
 
