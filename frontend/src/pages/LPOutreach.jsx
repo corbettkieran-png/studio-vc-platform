@@ -191,53 +191,67 @@ export default function LPOutreach() {
 
     if (type === 'warm_intro' && connectors.length > 0) {
       const connector = connectors[0];
-      subject = `Introduction via ${connector.name} — Studio VC`;
+      subject = `Studio VC Fund III — Introduction via ${connector.name}`;
       body = `Hi ${firstName},
 
-${connector.name} suggested I reach out. I'm a partner at Studio VC, an early-stage seed fund focused on ${sectorText}.
+${connector.name} suggested I reach out — I'm Kieran Corbett, Senior Associate at Studio VC.
 
-${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I` : 'I'} think there could be strong alignment between our deal flow and your investment thesis.${sectors.length > 0 ? ` We're seeing compelling opportunities in ${sectorText} that may fit your mandate.` : ''}
+We're currently raising Fund III ($50M target) and I wanted to connect given ${connector.name}'s view that there could be strong alignment with ${company}.
 
-Would you have 15 minutes this week or next for a brief intro call?
+Studio VC focuses exclusively on late-stage seed — companies that are post-product, generating early revenue, and positioned for Series A within 12–18 months. Our portfolio (38 companies across Funds I & II) is collectively valued at over $3B, with Fund II at 2.3x Net TVPI. We invest $750K–$1M as a first check and consistently co-invest alongside firms like QED, Left Lane, and General Catalyst.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there's a real conversation to be had around our current pipeline and whether Fund III fits your mandate.` : ''}
+
+Would you have 20 minutes for a brief intro call? Happy to share our deck in advance.
 
 Best,
-Kieran`;
+Kieran Corbett
+Senior Associate, Studio VC`;
     } else if (type === 'warm_intro_path' && warmPaths.length > 0) {
       const path = warmPaths[0];
-      subject = `${path.contact_name} at ${company} — Studio VC Introduction`;
+      subject = `Studio VC Fund III — Introduction via ${path.contact_name}`;
       body = `Hi ${firstName},
 
-I understand we share a mutual connection in ${path.contact_name}${path.contact_title ? ` (${path.contact_title})` : ''} at ${company}. I'm a partner at Studio VC, where we invest at the seed stage in ${sectorText}.
+I'm Kieran Corbett, Senior Associate at Studio VC. I understand you know ${path.contact_name}${path.contact_title ? ` (${path.contact_title})` : ''} — I was hoping that connection might open the door to a brief conversation.
 
-${fundType ? `With ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I` : 'I'} believe there could be a strong fit for co-investment or LP participation.${detail.estimated_aum ? '' : ''} We typically deploy into pre-seed and seed rounds with a strong emphasis on founder quality and market timing.
+We're currently raising Fund III ($50M target, capped at $60M) and selectively engaging LPs who back high-quality early-stage managers. Studio VC has invested in 38 companies across two funds, with a portfolio collectively valued at over $3B. Fund II sits at 2.3x Net TVPI — and 50% of our seed investments have reached Series A within two years, roughly double the industry average.
 
-I'd welcome the chance to share our pipeline and thesis. Would a brief call work for you?
+Our edge is operational depth. Our Managing Partners bring backgrounds from Broadway.com (former CEO, $600M+ revenue) and Bain Capital Ventures, and we consistently invest ahead of firms including QED, Left Lane, Insight Partners, and General Catalyst.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I believe there's a strong case for a conversation around fit.` : ''}
+
+Would you be open to a 20-minute call? Happy to send our deck ahead of time.
 
 Best,
-Kieran`;
+Kieran Corbett
+Senior Associate, Studio VC`;
     } else if (type === 'follow_up') {
-      subject = `Following up — Studio VC`;
+      subject = `Following up — Studio VC Fund III`;
       body = `Hi ${firstName},
 
-I wanted to follow up on my earlier note. We've been making strong progress at Studio VC and have several active deals in ${sectorText} that I think would be of interest to ${company}.
+I wanted to follow up on my earlier note about Studio VC's Fund III raise.
 
-Happy to share our latest deck and portfolio update at your convenience.
+Since we last connected, we've continued to build strong momentum — our Fund II portfolio is now collectively valued at over $3B, and we're seeing compelling late-stage seed deal flow in ${sectorText} that I believe would be of interest to ${company}.
+
+Fund III is a $50M vehicle (capped at $60M) targeting 25 core positions at $750K–$1M first checks. We're actively deploying and have limited LP capacity remaining.
+
+If the timing makes sense, I'd welcome a 20-minute call to walk through our thesis and current pipeline. Happy to send the deck if useful.
 
 Best,
-Kieran`;
+Kieran Corbett
+Senior Associate, Studio VC`;
     } else {
       // Cold outreach
-      subject = `Studio VC — Seed-Stage Investment Opportunity`;
+      subject = `Studio VC Fund III — Late-Stage Seed, $3B+ Portfolio`;
       body = `Hi ${firstName},
 
-I'm Kieran, a partner at Studio VC. We're a seed-stage venture fund investing in ${sectorText}.
+I'm Kieran Corbett, Senior Associate at Studio VC. We're a New York-based venture fund currently raising Fund III ($50M target) and I wanted to reach out given what I know about ${company}.
 
-${fundType ? `I came across ${company} and given your focus on ${fundType.replace(/_/g, ' ')}, I believe there's` : `I believe there's`} meaningful overlap between our deal flow and what ${company} looks for in early-stage opportunities.${enrichment?.headline ? ` Given your background in ${enrichment.headline.toLowerCase()}, I think you'd find our thesis particularly relevant.` : ''}
+Studio VC invests exclusively at the late-stage seed — post-product companies with early revenue and a clear path to Series A. It's a de-risked entry point that carries some of the strongest risk-adjusted returns in venture. Our track record reflects that: 38 portfolio companies across Funds I & II, collectively valued at over $3B, with Fund II at 2.3x Net TVPI. 50% of our seed investments have reached Series A within two years — roughly double the industry average.
 
-We're currently deploying our fund and would love to explore whether a partnership makes sense. Would you have 15 minutes for a quick call?
+${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there could be meaningful alignment with our deal flow and LP base.` : `We focus on Pure Play SaaS, SaaS-enabled Marketplaces, and FinTech & Enterprise Analytics — sectors where we've built deep pattern recognition over nearly a decade.`}${enrichment?.headline ? ` Your background in ${enrichment.headline.toLowerCase()} also suggests you'd have a strong read on the types of companies we're backing.` : ''}
+
+Fund III is capped at $60M and we're selectively engaging LPs. Would you be open to a 20-minute call? Happy to share our deck in advance.
 
 Best,
-Kieran`;
+Kieran Corbett
+Senior Associate, Studio VC`;
     }
 
     setEmailDraft({ subject, body, to: detail.email || '', type });
