@@ -170,6 +170,7 @@ export default function LPOutreach() {
   const [researchError, setResearchError] = useState(null);
   // Inline editable fields
   const [editingFollowup, setEditingFollowup] = useState(null); // lpId being edited
+  const [editingLastContact, setEditingLastContact] = useState(null); // lpId being edited
 
   // Generate email draft based on LP target data
   const generateEmailDraft = (type = 'cold') => {
@@ -617,12 +618,9 @@ Senior Associate, Studio VC`;
     const COLS = [
       { key: 'name', label: 'Name / Company', width: 220, sticky: true },
       { key: 'status', label: 'Status', width: 148 },
-      { key: 'priority', label: 'Priority', width: 90 },
       { key: 'last_contacted', label: 'Last Contact', width: 120 },
       { key: 'next_followup', label: 'Follow-up', width: 110 },
-      { key: 'fit_score', label: 'Score', width: 80 },
       { key: 'fund_type', label: 'Fund Type', width: 130 },
-      { key: 'aum', label: 'AUM', width: 110 },
       { key: 'geo', label: 'Geography', width: 130 },
       { key: 'your_connections', label: 'Your Connections', width: 200 },
       { key: 'connections', label: '2nd-Degree (Manual)', width: 190 },
@@ -708,7 +706,6 @@ Senior Associate, Studio VC`;
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
               style={{ padding: '5px 8px', border: '1px solid var(--border-light)', borderRadius: 4, fontSize: 11 }}>
               <option value="company">Company A→Z</option>
-              <option value="fit_score">Score</option>
               <option value="name">Contact Name</option>
               <option value="outreach_status">Status</option>
             </select>
@@ -793,31 +790,29 @@ Senior Associate, Studio VC`;
                       )}
                     </td>
 
-                    {/* Priority */}
-                    <td style={cellStyle(COLS[2])} onClick={(e) => { e.stopPropagation(); }}>
-                      <select value={t.priority || 'medium'}
-                        onChange={async (e) => {
-                          const val = e.target.value;
-                          await updateLPTarget(t.id, { priority: val });
-                          setTargets(prev => prev.map(x => x.id === t.id ? { ...x, priority: val } : x));
-                        }}
-                        style={{ fontSize: 10, fontWeight: 700, border: 'none', background: 'transparent', cursor: 'pointer',
-                          color: t.priority === 'high' ? '#DC2626' : t.priority === 'low' ? '#9CA3AF' : '#D97706' }}>
-                        <option value="high">● High</option>
-                        <option value="medium">● Med</option>
-                        <option value="low">● Low</option>
-                      </select>
-                    </td>
-
-                    {/* Last Contact */}
-                    <td style={cellStyle(COLS[3])} onClick={() => setSelectedTarget(t.id)}>
-                      <span style={{ fontSize: 11, color: t.last_contacted_at ? '#374151' : '#D1D5DB' }}>
-                        {t.last_contacted_at ? new Date(t.last_contacted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
-                      </span>
+                    {/* Last Contact — inline editable date */}
+                    <td style={cellStyle(COLS[2])} onClick={(e) => { e.stopPropagation(); setEditingLastContact(t.id); }}>
+                      {editingLastContact === t.id ? (
+                        <input type="date" autoFocus
+                          defaultValue={t.last_contacted_at ? t.last_contacted_at.split('T')[0] : ''}
+                          onBlur={async (e) => {
+                            const val = e.target.value;
+                            setEditingLastContact(null);
+                            if (val !== (t.last_contacted_at || '').split('T')[0]) {
+                              await updateLPTarget(t.id, { last_contacted_at: val || null });
+                              setTargets(prev => prev.map(x => x.id === t.id ? { ...x, last_contacted_at: val } : x));
+                            }
+                          }}
+                          style={{ fontSize: 10, width: '100%', border: '1px solid var(--navy)', borderRadius: 3, padding: '2px 4px', outline: 'none' }} />
+                      ) : (
+                        <span style={{ fontSize: 11, color: t.last_contacted_at ? '#374151' : '#D1D5DB', cursor: 'pointer' }}>
+                          {t.last_contacted_at ? new Date(t.last_contacted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+                        </span>
+                      )}
                     </td>
 
                     {/* Follow-up date — inline editable */}
-                    <td style={cellStyle(COLS[4])} onClick={(e) => { e.stopPropagation(); setEditingFollowup(t.id); }}>
+                    <td style={cellStyle(COLS[3])} onClick={(e) => { e.stopPropagation(); setEditingFollowup(t.id); }}>
                       {editingFollowup === t.id ? (
                         <input type="date" autoFocus
                           defaultValue={t.next_followup_at ? t.next_followup_at.split('T')[0] : ''}
@@ -837,43 +832,22 @@ Senior Associate, Studio VC`;
                       )}
                     </td>
 
-                    {/* Fit Score */}
-                    <td style={cellStyle(COLS[5])} onClick={() => setSelectedTarget(t.id)}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <div style={{
-                          width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center',
-                          justifyContent: 'center', fontSize: 10, fontWeight: 700,
-                          background: getFitScoreColor(t.fit_score || 0) + '18',
-                          color: getFitScoreColor(t.fit_score || 0),
-                        }}>
-                          {t.fit_score || 0}
-                        </div>
-                      </div>
-                    </td>
-
                     {/* Fund Type */}
-                    <td style={cellStyle(COLS[6])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[4])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: '#374151' }}>
                         {t.fund_type ? t.fund_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : <span style={{ color: '#D1D5DB' }}>—</span>}
                       </span>
                     </td>
 
-                    {/* AUM */}
-                    <td style={cellStyle(COLS[7])} onClick={() => setSelectedTarget(t.id)}>
-                      <span style={{ fontSize: 11, color: '#374151' }}>
-                        {t.estimated_aum || <span style={{ color: '#D1D5DB' }}>—</span>}
-                      </span>
-                    </td>
-
                     {/* Geography */}
-                    <td style={cellStyle(COLS[8])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[5])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: '#374151' }}>
                         {t.geographic_focus || <span style={{ color: '#D1D5DB' }}>—</span>}
                       </span>
                     </td>
 
                     {/* Your Connections — from uploaded LinkedIn CSV */}
-                    <td style={cellStyle(COLS[9], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
+                    <td style={cellStyle(COLS[6], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
                       onClick={() => setSelectedTarget(t.id)}>
                       {(() => {
                         const matches = t.linkedin_matches || [];
@@ -899,7 +873,7 @@ Senior Associate, Studio VC`;
                     </td>
 
                     {/* 2nd-Degree Connections (manual / Navigator-sourced) */}
-                    <td style={cellStyle(COLS[10], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
+                    <td style={cellStyle(COLS[7], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
                       onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', minHeight: 28 }}>
                         {manualConns.slice(0, 3).map(conn => (
@@ -939,14 +913,14 @@ Senior Associate, Studio VC`;
                     </td>
 
                     {/* Email */}
-                    <td style={cellStyle(COLS[11])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[8])} onClick={() => setSelectedTarget(t.id)}>
                       {t.email
                         ? <span style={{ fontSize: 11, color: '#059669' }}>{t.email}</span>
                         : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
                     </td>
 
                     {/* Navigator search */}
-                    <td style={cellStyle(COLS[12])} onClick={e => e.stopPropagation()}>
+                    <td style={cellStyle(COLS[9])} onClick={e => e.stopPropagation()}>
                       <a
                         href={
                           t.linkedin_url
@@ -1986,13 +1960,15 @@ Senior Associate, Studio VC`;
                     </button>
                     {emailDraft.to && (
                       <a
-                        href={`mailto:${emailDraft.to}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`}
+                        href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailDraft.to)}&su=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         style={{
                           padding: '5px 14px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                          border: '1px solid #003B76', background: 'transparent', color: '#003B76',
+                          border: 'none', background: '#EA4335', color: 'white',
                           textDecoration: 'none', display: 'inline-block'
                         }}>
-                        Open in Mail
+                        Open in Gmail →
                       </a>
                     )}
                     <button
