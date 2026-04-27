@@ -158,6 +158,19 @@ async function autoMigrate() {
       UPDATE email_queue SET status = 'pending', attempts = 0
       WHERE status IN ('failed', 'pending') AND attempts > 0
     `);
+
+    // Add linkedin_url column to linkedin_connections if not present
+    await db.query(`
+      ALTER TABLE linkedin_connections ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR(500);
+    `);
+
+    // Pre-create Joseph Coyne's user account so Google SSO links correctly (role: admin)
+    await db.query(`
+      INSERT INTO users (id, email, full_name, role)
+      VALUES (gen_random_uuid(), 'jcoyne@studio.vc', 'Joseph Coyne', 'admin')
+      ON CONFLICT (email) DO NOTHING
+    `);
+
     console.log('Auto-migrate: contacts schema applied.');
   } catch (err) {
     console.error('Auto-migrate error:', err.message);
@@ -245,6 +258,95 @@ async function autoSeedLPTargets() {
   }
 }
 autoSeedLPTargets();
+
+// Auto-seed Joseph Coyne's LinkedIn connections (7,776 contacts from his CSV export)
+// Runs once: skips if his team_member already has connections loaded.
+async function autoSeedJoeConnections() {
+  try {
+    const connectionsData = require('./data/joe_connections_seed.json');
+
+    // Ensure Joe's user account exists (idempotent — autoMigrate also does this,
+    // but both functions start concurrently so we upsert here too to be safe)
+    await db.query(`
+      INSERT INTO users (id, email, full_name, role)
+      VALUES (gen_random_uuid(), 'jcoyne@studio.vc', 'Joseph Coyne', 'admin')
+      ON CONFLICT (email) DO NOTHING
+    `);
+    const { rows: userRows } = await db.query(
+      "SELECT id FROM users WHERE email = 'jcoyne@studio.vc' LIMIT 1"
+    );
+    if (!userRows.length) return;
+
+    const userId = userRows[0].id;
+
+    // Get or create Joe's team_member record
+    let { rows: tmRows } = await db.query(
+      'SELECT id, connections_count FROM team_members WHERE user_id = $1',
+      [userId]
+    );
+
+    let teamMemberId;
+    if (tmRows.length > 0) {
+      // Already seeded if connections_count matches
+      if (parseInt(tmRows[0].connections_count) >= connectionsData.length) {
+        return; // fully seeded
+      }
+      teamMemberId = tmRows[0].id;
+    } else {
+      const { rows: created } = await db.query(
+        "INSERT INTO team_members (id, user_id, full_name) VALUES (gen_random_uuid(), $1, 'Joseph Coyne') RETURNING id",
+        [userId]
+      );
+      teamMemberId = created[0].id;
+    }
+
+    console.log(`Joe connections seed: inserting ${connectionsData.length} connections...`);
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM linkedin_connections WHERE team_member_id = $1', [teamMemberId]);
+
+      for (const r of connectionsData) {
+        let connectedDate = null;
+        if (r.connected_on) {
+          const parsed = new Date(r.connected_on);
+          if (!isNaN(parsed.getTime())) connectedDate = parsed.toISOString().split('T')[0];
+        }
+        await client.query(
+          `INSERT INTO linkedin_connections
+           (id, team_member_id, first_name, last_name, full_name, email, company, position, linkedin_url, connected_on)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            teamMemberId,
+            r.first_name || null,
+            r.last_name || null,
+            r.full_name,
+            r.email || null,
+            r.company || null,
+            r.position || null,
+            r.linkedin_url || null,
+            connectedDate,
+          ]
+        );
+      }
+
+      await client.query(
+        'UPDATE team_members SET connections_count = $1, last_upload_at = NOW() WHERE id = $2',
+        [connectionsData.length, teamMemberId]
+      );
+      await client.query('COMMIT');
+      console.log(`Joe connections seed complete: ${connectionsData.length} connections inserted.`);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('Joe connections seed error:', err.message);
+  }
+}
+autoSeedJoeConnections();
 
 // Process email queue every 30 seconds
 setInterval(processEmailQueue, 30000);

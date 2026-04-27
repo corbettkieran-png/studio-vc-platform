@@ -29,7 +29,11 @@ async function request(path, options = {}) {
   } catch {
     throw new Error('Server returned an unexpected response. Please try again.');
   }
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  if (!res.ok) {
+    const err = new Error(data.error || 'Request failed');
+    if (data.detail) err.detail = data.detail;
+    throw err;
+  }
   return data;
 }
 

@@ -2043,8 +2043,10 @@ router.post('/apollo/contacts/:contactId/enrich', authenticate, async (req, res)
       },
     });
   } catch (err) {
-    console.error('Error enriching contact via Apollo:', err);
-    res.status(500).json({ error: 'Failed to enrich contact', detail: err.message });
+    // Log the full Apollo error body so Railway logs show the actual cause
+    console.error('Error enriching contact via Apollo:', err.message, err.body || '');
+    const detail = err.body?.error || err.body?.message || err.message || 'Unknown error';
+    res.status(500).json({ error: 'Failed to enrich contact', detail });
   }
 });
 

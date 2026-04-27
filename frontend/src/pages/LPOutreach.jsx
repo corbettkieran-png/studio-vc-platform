@@ -2392,7 +2392,7 @@ Senior Associate, Studio VC`;
                                 const apolloData = await getApolloContacts(selectedTarget);
                                 setApolloContacts(apolloData.contacts || []);
                               } catch (err) {
-                                alert('Enrich failed: ' + err.message);
+                                alert('Enrich failed: ' + (err.detail || err.message));
                               }
                             }}
                             style={{

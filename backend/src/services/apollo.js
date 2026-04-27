@@ -136,7 +136,7 @@ async function enrichOrganization(domain) {
  */
 async function matchPerson({ firstName, lastName, organizationName, linkedinUrl, title }) {
   const body = {
-    reveal_personal_emails: true,
+    reveal_personal_emails: false,
     reveal_phone_number: false,
   };
 
