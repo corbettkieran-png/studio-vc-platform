@@ -265,6 +265,10 @@ async function autoSeedJoeConnections() {
   try {
     const connectionsData = require('./data/joe_connections_seed.json');
 
+    // Ensure linkedin_url column exists before bulk insert (autoMigrate runs concurrently
+    // so we guard here too — idempotent)
+    await db.query('ALTER TABLE linkedin_connections ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR(500)');
+
     // Ensure Joe's user account exists (idempotent — autoMigrate also does this,
     // but both functions start concurrently so we upsert here too to be safe)
     await db.query(`
