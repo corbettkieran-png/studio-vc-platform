@@ -75,6 +75,9 @@ export const addProgressCheck = (id, data) =>
 export const analyzeSubmission = (id) =>
   request(`/submissions/${id}/analyze`, { method: 'POST' });
 
+export const deleteSubmission = (id) =>
+  request(`/submissions/${id}`, { method: 'DELETE' });
+
 export const setIntroSource = (id, data) =>
   request(`/submissions/${id}/intro-source`, { method: 'PATCH', body: JSON.stringify(data) });
 

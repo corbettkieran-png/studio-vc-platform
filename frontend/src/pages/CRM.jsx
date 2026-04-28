@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSubmissions, getStats, updateStatus, addNote, addProgressCheck, getActivity, analyzeSubmission, setIntroSource, getContacts } from '../services/api';
+import { getSubmissions, getStats, updateStatus, addNote, addProgressCheck, getActivity, analyzeSubmission, deleteSubmission, setIntroSource, getContacts } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
 const STATUS_LABELS = {
@@ -148,6 +148,18 @@ export default function CRM() {
     }
   };
 
+  const handleDelete = async (id, companyName) => {
+    if (!confirm(`Permanently delete "${companyName}"? This cannot be undone.`)) return;
+    try {
+      await deleteSubmission(id);
+      setSelected(null);
+      setDetail(null);
+      loadData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const matchedCount = stats ? parseInt(stats.matched) : 0;
   const pipelineCount = stats ? parseInt(stats.reviewing) + parseInt(stats.contacted) + parseInt(stats.passed || 0) : 0;
   const rejectedCount = stats ? parseInt(stats.rejected) : 0;
@@ -266,7 +278,16 @@ export default function CRM() {
                 <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{detail.company_name}</h2>
                 <p style={{ fontSize: 13, color: 'var(--muted)' }}>{detail.one_liner}</p>
               </div>
-              <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => handleDelete(detail.id, detail.company_name)}
+                  title="Delete deal"
+                  style={{ background: 'none', border: '1px solid #e5c5c5', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: '#b00', fontWeight: 500 }}
+                >
+                  Delete
+                </button>
+                <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}>✕</button>
+              </div>
             </div>
 
             <div className="detail-body">

@@ -529,4 +529,16 @@ router.post('/:id/analyze', authenticate, async (req, res) => {
   }
 });
 
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id FROM submissions WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    await db.query('DELETE FROM submissions WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete submission error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
