@@ -8,7 +8,7 @@ import {
   flagKnownContact, unflagKnownContact, enrichLPTarget,
   enrichApolloContact, enrichApolloContactsBatch,
   getClaySettings, saveClaySettings, exportToClay, importClayCSV, getClayWebhookUrl,
-  addManualConnection, deleteManualConnection,
+  addManualConnection, deleteManualConnection, deleteLPTarget,
 } from '../services/api';
 
 const request = (path, opts = {}) => {
@@ -575,6 +575,17 @@ Senior Associate, Studio VC`;
       alert('Failed to update status');
     } finally {
       setEditingStatusId(null);
+    }
+  };
+
+  const handleDeleteTarget = async (id, name) => {
+    if (!confirm(`Permanently delete "${name}" from the LP list? This cannot be undone.`)) return;
+    try {
+      await deleteLPTarget(id);
+      setSelectedTarget(null);
+      setTargets(prev => prev.filter(t => t.id !== id));
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -1456,10 +1467,19 @@ Senior Associate, Studio VC`;
                   {detail.title ? `${detail.title} · ` : ''}{detail.company}
                 </p>
               </div>
-              <button onClick={() => setSelectedTarget(null)} style={{
-                background: 'none', border: 'none', fontSize: 20, cursor: 'pointer',
-                color: 'var(--muted)'
-              }}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => handleDeleteTarget(detail.id, detail.full_name || detail.name || detail.company)}
+                  title="Delete LP"
+                  style={{ background: 'none', border: '1px solid #e5c5c5', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: '#b00', fontWeight: 500 }}
+                >
+                  Delete
+                </button>
+                <button onClick={() => setSelectedTarget(null)} style={{
+                  background: 'none', border: 'none', fontSize: 20, cursor: 'pointer',
+                  color: 'var(--muted)'
+                }}>✕</button>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
               <StatusBadge

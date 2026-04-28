@@ -126,6 +126,8 @@ export const getLPTargets = (params = {}) => {
 export const getLPTarget = (id) => request(`/lp/targets/${id}`);
 export const updateLPTarget = (id, data) =>
   request(`/lp/targets/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const deleteLPTarget = (id) =>
+  request(`/lp/targets/${id}`, { method: 'DELETE' });
 export const addLPActivity = (id, data) =>
   request(`/lp/targets/${id}/activity`, { method: 'POST', body: JSON.stringify(data) });
 export const runLPMatching = () =>
