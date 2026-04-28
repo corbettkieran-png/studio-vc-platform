@@ -929,7 +929,7 @@ Senior Associate, Studio VC`;
                         const navHref = t.linkedin_url
                           ? t.linkedin_url
                           : personName && companyName
-                            ? `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${encodeURIComponent(personName)},filters:List((type:CURRENT_COMPANY,values:List((text:${encodeURIComponent(companyName)},selectionType:INCLUDED)))))`
+                            ? `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${encodeURIComponent(personName + ' ' + companyName)})`
                             : `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${encodeURIComponent(personName || companyName)})`;
                         const navTitle = t.linkedin_url
                           ? `View ${personName || companyName}'s LinkedIn profile`
