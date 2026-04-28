@@ -164,6 +164,46 @@ async function autoMigrate() {
       ALTER TABLE linkedin_connections ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR(500);
     `);
 
+    // Add email engagement tracking columns to lp_targets
+    await db.query(`
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS last_email_opened_at TIMESTAMPTZ;
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS last_email_clicked_at TIMESTAMPTZ;
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS email_open_count INT DEFAULT 0;
+      ALTER TABLE lp_targets ADD COLUMN IF NOT EXISTS email_click_count INT DEFAULT 0;
+    `);
+
+    // Email events table for Resend webhook tracking
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS lp_email_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        lp_target_id UUID REFERENCES lp_targets(id) ON DELETE CASCADE,
+        resend_email_id VARCHAR(255),
+        event_type VARCHAR(50),
+        occurred_at TIMESTAMPTZ DEFAULT NOW(),
+        metadata JSONB
+      );
+      CREATE INDEX IF NOT EXISTS idx_lp_email_events_target ON lp_email_events(lp_target_id);
+      CREATE INDEX IF NOT EXISTS idx_lp_email_events_resend ON lp_email_events(resend_email_id);
+    `);
+
+    // Bulk-recalculate fit scores for all LP targets using the updated scoring function.
+    // We pull all rows and compute in JS so the same logic is used everywhere.
+    {
+      const { computeFitScoreForMigration } = require('./routes/lp-outreach');
+      if (computeFitScoreForMigration) {
+        const { rows: allLPs } = await db.query('SELECT * FROM lp_targets WHERE fit_score = 0 OR fit_score IS NULL');
+        let rescored = 0;
+        for (const lp of allLPs) {
+          const score = computeFitScoreForMigration(lp);
+          if (score > 0) {
+            await db.query('UPDATE lp_targets SET fit_score = $1 WHERE id = $2', [score, lp.id]);
+            rescored++;
+          }
+        }
+        if (rescored > 0) console.log(`Fit score migration: rescored ${rescored} LP targets.`);
+      }
+    }
+
     // Pre-create Joseph Coyne's user account so Google SSO links correctly (role: admin)
     await db.query(`
       INSERT INTO users (id, email, full_name, role)

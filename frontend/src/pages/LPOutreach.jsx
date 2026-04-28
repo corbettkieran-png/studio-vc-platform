@@ -1982,7 +1982,7 @@ Senior Associate, Studio VC`;
                       fontFamily: 'inherit'
                     }}
                   />
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(`Subject: ${emailDraft.subject}\n\n${emailDraft.body}`);
@@ -1993,8 +1993,27 @@ Senior Associate, Studio VC`;
                         padding: '5px 14px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
                         border: 'none', background: emailCopied ? '#059669' : '#003B76', color: 'white'
                       }}>
-                      {emailCopied ? '✓ Copied' : 'Copy to Clipboard'}
+                      {emailCopied ? '✓ Copied' : 'Copy'}
                     </button>
+                    {emailDraft.to && (
+                      <button
+                        onClick={async () => {
+                          if (!emailDraft.to) return;
+                          try {
+                            const { sendIntro } = await import('../services/api.js');
+                            await sendIntro(detail.id, { subject: emailDraft.subject, body: emailDraft.body, to_email: emailDraft.to });
+                            alert(`Sent to ${emailDraft.to} — opens & clicks will now be tracked.`);
+                          } catch (err) {
+                            alert('Send failed: ' + (err.detail || err.message));
+                          }
+                        }}
+                        style={{
+                          padding: '5px 14px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                          border: 'none', background: '#059669', color: 'white'
+                        }}>
+                        Send & Track →
+                      </button>
+                    )}
                     {emailDraft.to && (
                       <a
                         href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailDraft.to)}&su=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`}
@@ -2005,7 +2024,7 @@ Senior Associate, Studio VC`;
                           border: 'none', background: '#EA4335', color: 'white',
                           textDecoration: 'none', display: 'inline-block'
                         }}>
-                        Open in Gmail →
+                        Open in Gmail
                       </a>
                     )}
                     <button
@@ -2025,26 +2044,73 @@ Senior Associate, Studio VC`;
             {/* Connectors */}
             {detail.connectors && detail.connectors.length > 0 && (
               <div className="detail-section">
-                <h3>Connectors ({detail.connectors.length})</h3>
-                {detail.connectors.map((conn, i) => (
-                  <div key={i} style={{
-                    padding: 10, background: 'var(--card-bg)', borderRadius: 6, marginBottom: 8,
-                    fontSize: 12
-                  }}>
-                    <div style={{ fontWeight: 500, marginBottom: 4 }}>{conn.name}</div>
-                    {conn.email && <div style={{ color: 'var(--muted)' }}>{conn.email}</div>}
-                    {conn.connection_type && (
-                      <div style={{ marginTop: 4 }}>
-                        <span className="badge" style={{
-                          background: CONNECTION_STRENGTH_COLORS[conn.connection_type] || '#9CA3AF',
-                          color: 'white', padding: '2px 6px', borderRadius: 3, fontSize: 10
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🔗 Intro Paths
+                  <span style={{ fontSize: 11, background: '#4F46E5', color: 'white', padding: '2px 8px', borderRadius: 10 }}>
+                    {[...new Set(detail.connectors.map(c => c.team_member_id))].length} team member{[...new Set(detail.connectors.map(c => c.team_member_id))].length !== 1 ? 's' : ''}
+                  </span>
+                </h3>
+                {/* Group by team member */}
+                {Object.entries(
+                  detail.connectors.reduce((acc, c) => {
+                    const key = c.team_member_id;
+                    if (!acc[key]) acc[key] = { name: c.team_member_name, conns: [] };
+                    acc[key].conns.push(c);
+                    return acc;
+                  }, {})
+                ).map(([tmId, group]) => (
+                  <div key={tmId} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                      via {group.name}
+                    </div>
+                    {group.conns.map((conn, i) => {
+                      const matchLabel = { direct_linkedin: 'Direct (LinkedIn)', direct_name: 'Direct', direct_email: 'Direct (Email)', same_company: 'Same Company', lp_is_company: 'Fund Match' };
+                      const matchColor = { direct_linkedin: '#059669', direct_name: '#059669', direct_email: '#059669', same_company: '#D97706', lp_is_company: '#7C3AED' };
+                      const type = conn.match_type;
+                      return (
+                        <div key={i} style={{
+                          padding: '8px 12px', background: '#F8FAFC', borderRadius: 6, marginBottom: 5,
+                          borderLeft: `3px solid ${matchColor[type] || '#9CA3AF'}`, fontSize: 12
                         }}>
-                          {CONNECTION_STRENGTH_LABELS[conn.connection_type] || conn.connection_type}
-                        </span>
-                      </div>
-                    )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ fontWeight: 600, color: '#1D3557' }}>
+                              {conn.connection_name || '—'}
+                            </div>
+                            <span style={{ fontSize: 10, background: matchColor[type] || '#9CA3AF', color: 'white', padding: '1px 6px', borderRadius: 10 }}>
+                              {matchLabel[type] || type} · {conn.match_confidence}%
+                            </span>
+                          </div>
+                          {(conn.connection_company || conn.connection_position) && (
+                            <div style={{ color: '#64748B', marginTop: 2 }}>
+                              {conn.connection_position}{conn.connection_position && conn.connection_company ? ' · ' : ''}{conn.connection_company}
+                            </div>
+                          )}
+                          {conn.connection_linkedin_url && (
+                            <a href={conn.connection_linkedin_url} target="_blank" rel="noopener noreferrer"
+                              style={{ fontSize: 10, color: '#4F46E5', textDecoration: 'none' }}>
+                              LinkedIn →
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
+
+                {/* Email engagement summary */}
+                {(detail.email_open_count > 0 || detail.email_click_count > 0) && (
+                  <div style={{ marginTop: 10, padding: '8px 12px', background: '#ECFDF5', borderRadius: 6, fontSize: 12, display: 'flex', gap: 16 }}>
+                    {detail.email_open_count > 0 && (
+                      <span style={{ color: '#059669' }}>👁 {detail.email_open_count} open{detail.email_open_count !== 1 ? 's' : ''}</span>
+                    )}
+                    {detail.email_click_count > 0 && (
+                      <span style={{ color: '#7C3AED' }}>🖱 {detail.email_click_count} click{detail.email_click_count !== 1 ? 's' : ''}</span>
+                    )}
+                    {detail.last_email_opened_at && (
+                      <span style={{ color: '#64748B' }}>Last opened {timeAgo(detail.last_email_opened_at)}</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

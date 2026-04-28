@@ -5,6 +5,7 @@ const db = require('../config/db');
 const { authenticate } = require('../middleware/auth');
 const apollo = require('../services/apollo');
 const lpResearch = require('../services/lpResearch');
+const { notifyIntroRequest } = require('../services/email');
 
 const router = express.Router();
 
@@ -100,45 +101,51 @@ function parseCSV(csvContent) {
 // ============================================================
 // Helper: Compute LP Fit Score
 // ============================================================
+// Studio VC thesis: Pure Play SaaS, SaaS-enabled Marketplaces,
+// FinTech & Enterprise Analytics & AI — late-stage seed, $750K–$1M check.
 function computeFitScore(lp) {
   let score = 0;
 
-  // Fund type (30 pts max)
-  const fundTypeScores = {
-    fund_of_funds: 30,
-    endowment: 30,
-    pension: 20,
-    family_office: 25,
-    hni: 15,
-    corporate: 10,
-  };
-  score += fundTypeScores[lp.fund_type] || 0;
+  // ── Fund type (30 pts) ──────────────────────────────────────
+  const ft = (lp.fund_type || '').toLowerCase();
+  if (/fund.of.funds|fof/.test(ft))                              score += 30;
+  else if (/endowment|university|foundation/.test(ft))           score += 30;
+  else if (/family.office|hnwi|hni|high.net.worth/.test(ft))     score += 25;
+  else if (/pension|sovereign.wealth|swf/.test(ft))              score += 20;
+  else if (/venture|vc fund/.test(ft))                           score += 15;
+  else if (/corporate|strategic/.test(ft))                       score += 10;
+  else if (ft)                                                    score += 5;
 
-  // AUM (25 pts max)
-  const aumScores = {
-    over_1b: 25,
-    '250m_1b': 20,
-    '50m_250m': 15,
-    under_50m: 5,
-  };
-  score += aumScores[lp.estimated_aum] || 0;
+  // ── Sector alignment with Studio VC thesis (25 pts) ─────────
+  const THESIS = [
+    'fintech', 'financial tech', 'financial services', 'payments', 'insurtech',
+    'saas', 'b2b saas', 'enterprise software', 'enterprise', 'software',
+    'ai', 'artificial intelligence', 'machine learning', 'analytics', 'data',
+    'marketplace', 'b2b', 'technology', 'tech',
+  ];
+  const lpSectors = (lp.sector_interest || []).map(s => s.toLowerCase());
+  const hits = lpSectors.filter(s => THESIS.some(k => s.includes(k) || k.includes(s))).length;
+  if      (hits >= 3) score += 25;
+  else if (hits >= 2) score += 18;
+  else if (hits >= 1) score += 10;
 
-  // Check size (25 pts max)
-  const checkSizeScores = {
-    over_5m: 25,
-    '2m_5m': 20,
-    '500k_2m': 15,
-    under_500k: 5,
-  };
-  score += checkSizeScores[lp.typical_check_size] || 0;
+  // ── Geography — prefer US / global (15 pts) ─────────────────
+  const geo = (lp.geographic_focus || '').toLowerCase();
+  if (/global|worldwide|international|agnostic/.test(geo))                              score += 15;
+  else if (/north america|usa|united states|new york|nyc|silicon valley|california/.test(geo)) score += 15;
+  else if (/europe|uk|canada|israel|australia/.test(geo))                              score += 8;
+  else if (geo)                                                                         score += 3;
 
-  // Sector interest (20 pts max)
-  const fundThesis = ['fintech', 'b2b_saas', 'enterprise_ai'];
-  const lpSectors = lp.sector_interest || [];
-  const overlap = fundThesis.some(sector => lpSectors.includes(sector));
-  if (overlap) {
-    score += 20;
-  }
+  // ── Connection strength bonus (15 pts) ──────────────────────
+  if      (lp.connection_strength === 'direct')        score += 15;
+  else if (lp.connection_strength === 'company_match') score += 8;
+
+  // ── AUM proxy — bigger fund = more capacity (15 pts) ────────
+  const aum = (lp.estimated_aum || '').toLowerCase();
+  if      (/\$.*b|billion|\d+b\b/.test(aum))                            score += 15;
+  else if (/[5-9]\d{2}\s*m|[1-9]\d{3}\s*m|500m|750m/.test(aum))       score += 12;
+  else if (/[1-4]\d{2}\s*m|100m|200m|300m|400m/.test(aum))             score += 8;
+  else if (/\d+\s*m/.test(aum))                                         score += 4;
 
   return Math.min(score, 100);
 }
@@ -239,6 +246,19 @@ async function runMatching() {
           lpMatches[key] = { tmId, type, confidence, connectionId };
         }
       };
+
+      // ── Layer 0: LinkedIn URL exact match (most reliable) ──
+      if (lp.linkedin_url) {
+        const normLP = lp.linkedin_url.toLowerCase().replace(/\/$/, '').replace(/https?:\/\/(www\.)?linkedin\.com\/in\//, '');
+        for (const conn of connections) {
+          if (conn.linkedin_url) {
+            const normConn = conn.linkedin_url.toLowerCase().replace(/\/$/, '').replace(/https?:\/\/(www\.)?linkedin\.com\/in\//, '');
+            if (normLP === normConn && normLP.length > 2) {
+              addMatch(conn.team_member_id, 'direct_linkedin', 100, conn.id);
+            }
+          }
+        }
+      }
 
       // ── Layer 1: Direct matches (name + email) ──
       // The LP target IS one of your LinkedIn connections
@@ -395,29 +415,41 @@ async function runMatching() {
 // GET /api/lp/me/team-member - Get or auto-create the team_member record for the logged-in user
 router.get('/me/team-member', authenticate, async (req, res) => {
   try {
-    // Look for existing team_member linked to this user
+    // 1. Already linked to this user?
     const { rows: existing } = await db.query(
       'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE user_id = $1',
       [req.user.id]
     );
+    if (existing.length > 0) return res.json({ team_member: existing[0] });
 
-    if (existing.length > 0) {
-      return res.json({ team_member: existing[0] });
+    // 2. Try to claim an orphaned team_member by name match (prevents duplicates when
+    //    the team_member was seeded before the user account existed)
+    const { rows: userRows } = await db.query(
+      'SELECT full_name, email FROM users WHERE id = $1', [req.user.id]
+    );
+    const fullName = userRows[0]?.full_name || req.user.email;
+
+    const { rows: orphan } = await db.query(
+      `SELECT id FROM team_members
+       WHERE user_id IS NULL AND LOWER(full_name) = LOWER($1)
+       ORDER BY connections_count DESC, created_at ASC LIMIT 1`,
+      [fullName]
+    );
+    if (orphan.length > 0) {
+      await db.query('UPDATE team_members SET user_id = $1 WHERE id = $2', [req.user.id, orphan[0].id]);
+      const { rows } = await db.query(
+        'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE id = $1',
+        [orphan[0].id]
+      );
+      return res.json({ team_member: rows[0] });
     }
 
-    // Auto-create one linked to this user using their profile info
-    const { rows: userRows } = await db.query(
-      'SELECT full_name FROM users WHERE id = $1',
-      [req.user.id]
-    );
-
-    const fullName = userRows[0]?.full_name || req.user.email;
+    // 3. Nothing found — create fresh
     const tmId = uuid();
     await db.query(
       'INSERT INTO team_members (id, user_id, full_name) VALUES ($1, $2, $3)',
       [tmId, req.user.id, fullName]
     );
-
     const { rows } = await db.query(
       'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE id = $1',
       [tmId]
@@ -1015,17 +1047,20 @@ router.get('/targets/:id', authenticate, async (req, res) => {
 
     const lp = lpRows[0];
 
-    // Get connectors for this LP — filtered to the current user's network
+    // Get all team connectors for this LP (all team members, not just current user)
+    // Each entry includes the connection detail so the UI can show who specifically
     const { rows: connectors } = await db.query(
       `SELECT
-        tm.id, tm.full_name, lcm.match_type, lcm.match_confidence,
-        lcm.linkedin_connection_id
+        tm.id as team_member_id, tm.full_name as team_member_name,
+        lcm.match_type, lcm.match_confidence,
+        lc.full_name as connection_name, lc.company as connection_company,
+        lc.position as connection_position, lc.linkedin_url as connection_linkedin_url
        FROM lp_connection_matches lcm
        JOIN team_members tm ON lcm.team_member_id = tm.id
+       LEFT JOIN linkedin_connections lc ON lcm.linkedin_connection_id = lc.id
        WHERE lcm.lp_target_id = $1
-         AND tm.user_id = $2
-       ORDER BY lcm.match_confidence DESC`,
-      [id, req.user.id]
+       ORDER BY lcm.match_confidence DESC, tm.full_name ASC`,
+      [id]
     );
 
     // Get activity log
@@ -1227,7 +1262,35 @@ router.patch('/targets/:id', authenticate, async (req, res) => {
     await db.query(query, params);
 
     const { rows: updatedRows } = await db.query('SELECT * FROM lp_targets WHERE id = $1', [id]);
-    res.json({ lp_target: updatedRows[0] });
+    const updatedLp = updatedRows[0];
+
+    // ── Intro request notification ────────────────────────────
+    // If status just changed to intro_requested, email the best connector
+    if (outreach_status === 'intro_requested' && lp.outreach_status !== 'intro_requested') {
+      try {
+        if (updatedLp.best_connector_id) {
+          // Find the user linked to the best connector team_member
+          const { rows: tmRows } = await db.query(
+            `SELECT u.full_name, u.email
+             FROM team_members tm
+             LEFT JOIN users u ON tm.user_id = u.id
+             WHERE tm.id = $1`,
+            [updatedLp.best_connector_id]
+          );
+          const { rows: requesterRows } = await db.query(
+            'SELECT full_name, email FROM users WHERE id = $1', [req.user.id]
+          );
+          if (tmRows[0]?.email) {
+            await notifyIntroRequest(updatedLp, requesterRows[0], tmRows[0]);
+          }
+        }
+      } catch (notifyErr) {
+        // Non-fatal — don't fail the PATCH if email queueing fails
+        console.error('Intro notification error:', notifyErr.message);
+      }
+    }
+
+    res.json({ lp_target: updatedLp });
   } catch (err) {
     console.error('Error updating LP target:', err);
     res.status(500).json({ error: 'Failed to update LP target' });
@@ -1323,6 +1386,132 @@ ${sender.email}`;
   } catch (err) {
     console.error('Draft intro error:', err);
     res.status(500).json({ error: 'Failed to generate intro email' });
+  }
+});
+
+// ============================================================
+// SEND INTRO EMAIL (with Resend tracking)
+// ============================================================
+
+// POST /api/lp/targets/:id/send-intro — send the intro email via Resend and record the email_id
+router.post('/targets/:id/send-intro', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { subject, body, to_email } = req.body;
+    if (!subject || !body || !to_email) {
+      return res.status(400).json({ error: 'subject, body, and to_email are required' });
+    }
+
+    const { rows: lpRows } = await db.query('SELECT * FROM lp_targets WHERE id = $1', [id]);
+    if (!lpRows.length) return res.status(404).json({ error: 'LP not found' });
+
+    const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
+    if (!apiKey) return res.status(503).json({ error: 'Email sending not configured (RESEND_API_KEY missing)' });
+
+    const { rows: userRows } = await db.query('SELECT full_name, email FROM users WHERE id = $1', [req.user.id]);
+    const sender = userRows[0];
+    const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+
+    // Send via Resend — request open/click tracking
+    const resendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: sender?.email ? `${sender.full_name} <${fromEmail}>` : fromEmail,
+        to: [to_email],
+        subject,
+        text: body,
+        // Resend tracking is enabled per-domain in dashboard; no extra params needed
+      }),
+    });
+    const resendData = await resendRes.json();
+    if (!resendRes.ok) {
+      return res.status(502).json({ error: 'Failed to send email', detail: resendData.message });
+    }
+
+    const resendEmailId = resendData.id;
+
+    // Record the sent email linked to this LP target
+    await db.query(
+      `INSERT INTO lp_email_events (lp_target_id, resend_email_id, event_type)
+       VALUES ($1, $2, 'sent')`,
+      [id, resendEmailId]
+    );
+
+    // Log in activity
+    await db.query(
+      `INSERT INTO lp_activity_log (lp_target_id, user_id, action, details)
+       VALUES ($1, $2, 'email_sent', $3)`,
+      [id, req.user.id, JSON.stringify({ to: to_email, subject, resend_id: resendEmailId })]
+    );
+
+    // Mark as outreach started if still not_started
+    await db.query(
+      `UPDATE lp_targets SET outreach_status = 'identified', last_outreach_at = NOW(), updated_at = NOW()
+       WHERE id = $1 AND outreach_status = 'not_started'`,
+      [id]
+    );
+
+    res.json({ sent: true, resend_email_id: resendEmailId });
+  } catch (err) {
+    console.error('Send intro error:', err);
+    res.status(500).json({ error: 'Failed to send intro email', detail: err.message });
+  }
+});
+
+// ============================================================
+// RESEND WEBHOOK — email open/click events
+// POST /api/lp/email-events/resend (no auth — Resend posts here)
+// ============================================================
+router.post('/email-events/resend', async (req, res) => {
+  try {
+    const event = req.body;
+    const resendEmailId = event?.data?.email_id || event?.email_id;
+    const eventType = event?.type; // 'email.opened', 'email.clicked', etc.
+
+    if (!resendEmailId || !eventType) return res.json({ ok: true });
+
+    // Find the LP target linked to this email
+    const { rows } = await db.query(
+      'SELECT lp_target_id FROM lp_email_events WHERE resend_email_id = $1 LIMIT 1',
+      [resendEmailId]
+    );
+    if (!rows.length) return res.json({ ok: true }); // email not from LP outreach
+
+    const lpTargetId = rows[0].lp_target_id;
+
+    // Record the event
+    await db.query(
+      `INSERT INTO lp_email_events (lp_target_id, resend_email_id, event_type, metadata)
+       VALUES ($1, $2, $3, $4)`,
+      [lpTargetId, resendEmailId, eventType, JSON.stringify(event)]
+    );
+
+    // Update LP target engagement counters
+    if (eventType === 'email.opened') {
+      await db.query(
+        `UPDATE lp_targets
+         SET last_email_opened_at = NOW(),
+             email_open_count = COALESCE(email_open_count, 0) + 1,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [lpTargetId]
+      );
+    } else if (eventType === 'email.clicked') {
+      await db.query(
+        `UPDATE lp_targets
+         SET last_email_clicked_at = NOW(),
+             email_click_count = COALESCE(email_click_count, 0) + 1,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [lpTargetId]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Resend webhook error:', err.message);
+    res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
 
@@ -3053,3 +3242,4 @@ router.delete('/targets/:id/connections/:connId', authenticate, async (req, res)
 });
 
 module.exports = router;
+module.exports.computeFitScoreForMigration = computeFitScore;

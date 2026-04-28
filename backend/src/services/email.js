@@ -267,10 +267,64 @@ async function notifyDealMemo(submission, analysis) {
   }
 }
 
+// Notify the best connector that an intro has been requested for an LP
+async function notifyIntroRequest(lp, requestedBy, connector) {
+  if (!connector?.email) return;
+
+  const platformUrl = process.env.FRONTEND_URL || 'https://studio-vc-platform.vercel.app';
+  const lpUrl = `${platformUrl}/lp`;
+  const firstName = connector.full_name?.split(' ')[0] || connector.full_name || 'there';
+  const requesterName = requestedBy?.full_name || requestedBy?.email || 'A team member';
+  const lpFirstName = lp.full_name?.split(' ')[0] || lp.full_name;
+
+  const subject = `[Studio VC] Intro requested — ${lp.full_name} at ${lp.company}`;
+  const body = `
+<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;color:#1D3557;">
+
+  <div style="background:#1D3557;padding:24px 32px;border-radius:8px 8px 0 0;">
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#A8DADC;margin-bottom:4px;">Studio VC · LP Outreach</div>
+    <div style="font-size:22px;font-weight:700;color:#fff;">Intro Request</div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:28px 32px;border-radius:0 0 8px 8px;">
+    <p style="margin:0 0 16px;font-size:15px;">Hi ${firstName},</p>
+    <p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#444;">
+      ${requesterName} is requesting a warm intro to <strong>${lp.full_name}</strong> at <strong>${lp.company}</strong>
+      ${lp.fund_type ? ` (${lp.fund_type})` : ''} for Studio VC's Fund III raise.
+    </p>
+
+    <div style="background:#F0F4F8;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+      <div style="font-size:12px;font-weight:700;color:#64748B;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">LP Details</div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr><td style="padding:3px 0;color:#64748B;width:120px;">Name</td><td style="padding:3px 0;font-weight:600;">${lp.full_name}</td></tr>
+        <tr><td style="padding:3px 0;color:#64748B;">Fund</td><td style="padding:3px 0;">${lp.company}</td></tr>
+        ${lp.fund_type ? `<tr><td style="padding:3px 0;color:#64748B;">Type</td><td style="padding:3px 0;">${lp.fund_type}</td></tr>` : ''}
+        ${lp.geographic_focus ? `<tr><td style="padding:3px 0;color:#64748B;">Location</td><td style="padding:3px 0;">${lp.geographic_focus}</td></tr>` : ''}
+      </table>
+    </div>
+
+    <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#444;">
+      You've been identified as the best connection path to ${lpFirstName}. When you're ready to make the intro,
+      you can reference Studio VC's Fund III pitch: <em>late-stage seed, $50M target, 38 portfolio companies
+      collectively valued at $3B+, 2.3x Net TVPI on Fund II.</em>
+    </p>
+
+    <div style="text-align:center;">
+      <a href="${lpUrl}" style="display:inline-block;background:#1D3557;color:#fff;text-decoration:none;padding:12px 28px;border-radius:50px;font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;">
+        View LP in Platform →
+      </a>
+    </div>
+  </div>
+</div>`;
+
+  await queueEmail(connector.email, subject, body);
+}
+
 module.exports = {
   queueEmail,
   processEmailQueue,
   notifyNewSubmission,
   notifyStatusChange,
   notifyDealMemo,
+  notifyIntroRequest,
 };
