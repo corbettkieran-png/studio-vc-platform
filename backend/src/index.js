@@ -10,6 +10,7 @@ const activityRoutes = require('./routes/activity');
 const lpOutreachRoutes = require('./routes/lp-outreach');
 const contactsRoutes = require('./routes/contacts');
 const { processEmailQueue } = require('./services/email');
+const { authenticate } = require('./middleware/auth');
 const db = require('./config/db');
 const bcrypt = require('bcryptjs');
 const { v4: uuid } = require('uuid');
@@ -45,8 +46,9 @@ app.use(cors({
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
-// Static file serving for uploads (authenticated)
-app.use('/uploads', express.static(path.resolve(uploadDir)));
+// Static file serving for uploads — gated behind JWT auth
+// Pitch decks and founder videos must not be publicly accessible by URL
+app.use('/uploads', authenticate, express.static(path.resolve(uploadDir)));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -125,21 +127,35 @@ async function autoMigrate() {
       CREATE INDEX IF NOT EXISTS idx_lp_targets_researched ON lp_targets(researched_at DESC NULLS LAST);
     `);
 
-    // Deduplicate lp_targets: keep the oldest row per company name, delete the rest
+    // One-time dedup: keep the oldest row per company name, delete the rest.
+    // Guarded by a migration_flags table so it never runs again after the first pass.
     await db.query(`
-      DELETE FROM lp_targets
-      WHERE id IN (
-        SELECT id FROM (
-          SELECT id,
-            ROW_NUMBER() OVER (
-              PARTITION BY LOWER(TRIM(company))
-              ORDER BY imported_at ASC NULLS LAST, id ASC
-            ) AS rn
-          FROM lp_targets
-        ) ranked
-        WHERE rn > 1
+      CREATE TABLE IF NOT EXISTS migration_flags (
+        flag_key VARCHAR(100) PRIMARY KEY,
+        ran_at   TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    const { rows: dedupFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_targets_dedup_v1'`
+    );
+    if (!dedupFlag.length) {
+      const { rowCount } = await db.query(`
+        DELETE FROM lp_targets
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id,
+              ROW_NUMBER() OVER (
+                PARTITION BY LOWER(TRIM(company))
+                ORDER BY imported_at ASC NULLS LAST, id ASC
+              ) AS rn
+            FROM lp_targets
+          ) ranked
+          WHERE rn > 1
+        )
+      `);
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_targets_dedup_v1')`);
+      if (rowCount > 0) console.log(`LP dedup migration: removed ${rowCount} duplicate rows.`);
+    }
 
     // Google OAuth: add google_id column and make password_hash nullable
     await db.query(`
@@ -153,11 +169,17 @@ async function autoMigrate() {
       UPDATE users SET email = 'kcorbett@studio.vc'
       WHERE email = 'kieran@studiovc.com'
     `);
-    // Reset failed/stuck emails so they're retried after SMTP → Resend API switch
-    await db.query(`
-      UPDATE email_queue SET status = 'pending', attempts = 0
-      WHERE status IN ('failed', 'pending') AND attempts > 0
-    `);
+    // One-time: reset failed/stuck emails after SMTP → Resend API switch
+    const { rows: emailResetFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'email_queue_reset_v1'`
+    ).catch(() => ({ rows: [] }));
+    if (!emailResetFlag.length) {
+      await db.query(`
+        UPDATE email_queue SET status = 'pending', attempts = 0
+        WHERE status IN ('failed', 'pending') AND attempts > 0
+      `);
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('email_queue_reset_v1')`).catch(() => {});
+    }
 
     // Add linkedin_url column to linkedin_connections if not present
     await db.query(`

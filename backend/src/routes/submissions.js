@@ -244,7 +244,10 @@ router.get('/stats', authenticate, async (req, res) => {
 });
 
 // GET /api/submissions/:id
+// UUID guard prevents named sub-routes like /analytics/overview being shadowed
+const UUID_RE_ROUTE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 router.get('/:id', authenticate, async (req, res) => {
+  if (!UUID_RE_ROUTE.test(req.params.id)) return res.status(404).json({ error: 'Not found' });
   try {
     const { rows } = await db.query(
       `SELECT s.*,
@@ -530,6 +533,9 @@ router.post('/:id/analyze', authenticate, async (req, res) => {
 });
 
 router.delete('/:id', authenticate, async (req, res) => {
+  if (!['admin', 'partner'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Only admins can delete submissions' });
+  }
   try {
     const { rows } = await db.query('SELECT id FROM submissions WHERE id = $1', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });

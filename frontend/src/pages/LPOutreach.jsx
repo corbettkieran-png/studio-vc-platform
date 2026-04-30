@@ -140,6 +140,8 @@ export default function LPOutreach() {
   const [emailDraftType, setEmailDraftType] = useState('cold');
   const [showEmailDraft, setShowEmailDraft] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSentMsg, setEmailSentMsg] = useState('');
   const [contactFilter, setContactFilter] = useState('all'); // all, c_suite, vp, director, has_email, known
   const [statusFilter, setStatusFilter] = useState('all'); // outreach status filter for LP list
   const [pageSize] = useState(50);
@@ -1453,6 +1455,32 @@ Senior Associate, Studio VC`;
 
   // DETAIL PANEL
   const renderDetail = () => {
+    // Loading skeleton — show immediately on selection while fetch resolves
+    if (selectedTarget && !detail) {
+      return (
+        <>
+          <div className="detail-overlay" onClick={() => setSelectedTarget(null)} />
+          <div className="detail-panel open" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="detail-header" style={{ justifyContent: 'space-between' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ height: 18, width: '55%', background: 'var(--card-bg)', borderRadius: 4, marginBottom: 8 }} />
+                <div style={{ height: 13, width: '70%', background: 'var(--card-bg)', borderRadius: 4 }} />
+              </div>
+              <button onClick={() => setSelectedTarget(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}>✕</button>
+            </div>
+            <div style={{ padding: '16px 20px' }}>
+              {[1,2,3,4].map(i => (
+                <div key={i} className="detail-section">
+                  <div style={{ height: 13, width: '25%', background: 'var(--card-bg)', borderRadius: 4, marginBottom: 10 }} />
+                  <div style={{ height: 50, background: 'var(--card-bg)', borderRadius: 6 }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      );
+    }
+
     if (!detail) return null;
 
     return (
@@ -2015,24 +2043,43 @@ Senior Associate, Studio VC`;
                       }}>
                       {emailCopied ? '✓ Copied' : 'Copy'}
                     </button>
-                    {emailDraft.to && (
-                      <button
-                        onClick={async () => {
-                          if (!emailDraft.to) return;
-                          try {
-                            const { sendIntro } = await import('../services/api.js');
-                            await sendIntro(detail.id, { subject: emailDraft.subject, body: emailDraft.body, to_email: emailDraft.to });
-                            alert(`Sent to ${emailDraft.to} — opens & clicks will now be tracked.`);
-                          } catch (err) {
-                            alert('Send failed: ' + (err.detail || err.message));
-                          }
-                        }}
-                        style={{
-                          padding: '5px 14px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
-                          border: 'none', background: '#059669', color: 'white'
-                        }}>
-                        Send & Track →
-                      </button>
+                    {/* Send & Track — show email input if no address stored */}
+                    {!emailDraft.to && (
+                      <input
+                        type="email"
+                        placeholder="Enter LP email to send..."
+                        style={{ padding: '4px 8px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4, flex: 1, minWidth: 180 }}
+                        onChange={(e) => setEmailDraft({ ...emailDraft, to: e.target.value })}
+                      />
+                    )}
+                    <button
+                      disabled={emailSending || !emailDraft.to}
+                      onClick={async () => {
+                        if (!emailDraft.to) return;
+                        setEmailSending(true);
+                        setEmailSentMsg('');
+                        try {
+                          const { sendIntro } = await import('../services/api.js');
+                          await sendIntro(detail.id, { subject: emailDraft.subject, body: emailDraft.body, to_email: emailDraft.to });
+                          setEmailSentMsg(`✓ Sent to ${emailDraft.to}`);
+                          setTimeout(() => setEmailSentMsg(''), 5000);
+                        } catch (err) {
+                          setEmailSentMsg('✗ ' + (err.detail || err.message));
+                        } finally {
+                          setEmailSending(false);
+                        }
+                      }}
+                      style={{
+                        padding: '5px 14px', borderRadius: 4, fontSize: 11, cursor: emailSending ? 'wait' : 'pointer', fontWeight: 600,
+                        border: 'none', background: emailSending ? '#9CA3AF' : '#059669', color: 'white',
+                        opacity: !emailDraft.to ? 0.5 : 1,
+                      }}>
+                      {emailSending ? 'Sending…' : 'Send & Track →'}
+                    </button>
+                    {emailSentMsg && (
+                      <span style={{ fontSize: 11, color: emailSentMsg.startsWith('✓') ? '#059669' : '#b00', alignSelf: 'center', fontWeight: 600 }}>
+                        {emailSentMsg}
+                      </span>
                     )}
                     {emailDraft.to && (
                       <a

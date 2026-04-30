@@ -618,7 +618,9 @@ router.post('/me/connections/upload', authenticate, upload.single('file'), async
       client.release();
     }
 
-    await runMatching();
+    // Fire-and-forget — matching can take 30-60s on large datasets;
+    // don't block the upload response
+    runMatching().catch(e => console.error('Background matching error:', e.message));
     res.json({ message: 'Connections imported successfully', count: validRows.length });
   } catch (err) {
     console.error('Error uploading user connections:', err);
@@ -802,8 +804,8 @@ router.post('/team/:id/connections', authenticate, upload.single('file'), async 
       client.release();
     }
 
-    // Trigger matching algorithm
-    await runMatching();
+    // Fire-and-forget matching — respond immediately, match in background
+    runMatching().catch(e => console.error('Background matching error:', e.message));
 
     res.json({ message: 'Connections imported successfully', count: validRows.length });
   } catch (err) {
@@ -943,8 +945,8 @@ router.post('/targets/import', authenticate, upload.single('file'), async (req, 
       client.release();
     }
 
-    // Trigger matching algorithm
-    await runMatching();
+    // Fire-and-forget matching
+    runMatching().catch(e => console.error('Background matching error:', e.message));
 
     res.json({ message: 'LP targets imported successfully', count: validRows.length });
   } catch (err) {

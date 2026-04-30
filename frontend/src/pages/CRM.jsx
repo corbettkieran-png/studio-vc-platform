@@ -268,7 +268,29 @@ export default function CRM() {
         </div>
       </div>
 
-      {/* Detail Panel */}
+      {/* Detail Panel — loading skeleton shown while fetch resolves */}
+      {selected && !detail && (
+        <>
+          <div className="detail-overlay" onClick={() => setSelected(null)} />
+          <div className="detail-panel open">
+            <div className="detail-header" style={{ justifyContent: 'space-between' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ height: 18, width: '60%', background: 'var(--card-bg)', borderRadius: 4, marginBottom: 8 }} />
+                <div style={{ height: 13, width: '80%', background: 'var(--card-bg)', borderRadius: 4 }} />
+              </div>
+              <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}>✕</button>
+            </div>
+            <div className="detail-body">
+              {[1,2,3].map(i => (
+                <div key={i} className="detail-section">
+                  <div style={{ height: 13, width: '30%', background: 'var(--card-bg)', borderRadius: 4, marginBottom: 12 }} />
+                  <div style={{ height: 60, background: 'var(--card-bg)', borderRadius: 6 }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
       {selected && detail && (
         <>
           <div className="detail-overlay" onClick={() => setSelected(null)} />
