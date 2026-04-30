@@ -154,18 +154,31 @@ function computeFitScore(lp) {
 // Helper: Fuzzy match name
 // ============================================================
 function fuzzyMatchName(targetName, candidateName) {
+  if (!targetName || !candidateName) return 0;
   const target = targetName.toLowerCase().trim();
   const candidate = candidateName.toLowerCase().trim();
 
   if (target === candidate) return 100;
-  if (target.includes(candidate) || candidate.includes(target)) return 85;
 
-  // Check if words overlap
-  const targetWords = target.split(/\s+/);
-  const candidateWords = candidate.split(/\s+/);
+  // Split into meaningful words — filter out initials and very short tokens
+  // to prevent "John" matching "John Anderson" and "John Smith" as equivalent
+  const targetWords = target.split(/\s+/).filter(w => w.length >= 3);
+  const candidateWords = candidate.split(/\s+/).filter(w => w.length >= 3);
+
+  if (targetWords.length === 0 || candidateWords.length === 0) return 0;
+
   const commonWords = targetWords.filter(w => candidateWords.includes(w));
-  if (commonWords.length > 0) {
-    return Math.min(70 + commonWords.length * 5, 90);
+
+  // Require at least 2 meaningful words to match (i.e., both first AND last name).
+  // A single shared word (e.g., the first name "David") is far too common across
+  // 7,000+ connections and produces massive false-positive "Direct" matches.
+  if (commonWords.length >= 2) {
+    return Math.min(80 + commonWords.length * 5, 95);
+  }
+
+  // Edge case: both names are a single meaningful word (mononym) and they match
+  if (targetWords.length === 1 && candidateWords.length === 1 && commonWords.length === 1) {
+    return 90;
   }
 
   return 0;
@@ -290,7 +303,8 @@ async function runMatching() {
             // Exclude if this connection already matched as a direct match
             const directKey = `${conn.team_member_id}:direct_name`;
             const directEmailKey = `${conn.team_member_id}:direct_email`;
-            if (!lpMatches[directKey] && !lpMatches[directEmailKey]) {
+            const directLinkedInKey = `${conn.team_member_id}:direct_linkedin`;
+            if (!lpMatches[directKey] && !lpMatches[directEmailKey] && !lpMatches[directLinkedInKey]) {
               // Confidence: 40-65 depending on company match quality
               const confidence = Math.round(30 + (compScore / 100) * 35);
               addMatch(conn.team_member_id, 'same_company', confidence, conn.id);
@@ -342,7 +356,7 @@ async function runMatching() {
         bestConnectorId = bestMatchResult.rows[0].team_member_id;
         const matchType = bestMatchResult.rows[0].match_type;
 
-        if (matchType === 'direct_email' || matchType === 'direct_name') {
+        if (matchType === 'direct_email' || matchType === 'direct_name' || matchType === 'direct_linkedin') {
           connectionStrength = 'direct';
         } else if (matchType === 'same_company') {
           connectionStrength = 'company_match';
@@ -429,6 +443,7 @@ router.get('/me/team-member', authenticate, async (req, res) => {
     );
     const fullName = userRows[0]?.full_name || req.user.email;
 
+    // Exact name match first
     const { rows: orphan } = await db.query(
       `SELECT id FROM team_members
        WHERE user_id IS NULL AND LOWER(full_name) = LOWER($1)
@@ -442,6 +457,29 @@ router.get('/me/team-member', authenticate, async (req, res) => {
         [orphan[0].id]
       );
       return res.json({ team_member: rows[0] });
+    }
+
+    // Fallback: try matching on last name + email domain to handle nickname mismatches
+    // (e.g., Google profile "Joe Coyne" vs seeded name "Joseph Coyne")
+    const emailDomain = (req.user.email || '').split('@')[1];
+    const lastName = fullName.split(' ').slice(-1)[0];
+    if (lastName && lastName.length > 2 && emailDomain) {
+      const { rows: domainOrphan } = await db.query(
+        `SELECT id FROM team_members
+         WHERE user_id IS NULL
+           AND LOWER(full_name) LIKE $1
+           AND connections_count > 0
+         ORDER BY connections_count DESC LIMIT 1`,
+        [`%${lastName.toLowerCase()}%`]
+      );
+      if (domainOrphan.length > 0) {
+        await db.query('UPDATE team_members SET user_id = $1 WHERE id = $2', [req.user.id, domainOrphan[0].id]);
+        const { rows } = await db.query(
+          'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE id = $1',
+          [domainOrphan[0].id]
+        );
+        return res.json({ team_member: rows[0] });
+      }
     }
 
     // 3. Nothing found — create fresh
