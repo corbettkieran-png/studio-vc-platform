@@ -2248,13 +2248,21 @@ Senior Associate, Studio VC`;
               </div>
             )}
 
-            {/* Manual Connections (Navigator / 2nd-degree) */}
+            {/* 2nd-Degree Connections — auto-populated from LinkedIn CSV matches + manual Navigator additions */}
+            {(() => {
+              // Auto-detected: same_company and lp_is_company matches from LinkedIn CSVs
+              const autoConns = (detail.connectors || []).filter(c =>
+                c.match_type === 'same_company' || c.match_type === 'lp_is_company'
+              );
+              const manualConns = detail.manual_connections || [];
+              const totalCount = autoConns.length + manualConns.length;
+              return (
             <div className="detail-section">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <span style={{ color: '#0077B5' }}>in</span> 2nd-Degree Connections
-                {(detail.manual_connections || []).length > 0 && (
+                {totalCount > 0 && (
                   <span style={{ fontSize: 11, background: '#0077B5', color: 'white', padding: '2px 8px', borderRadius: 10 }}>
-                    {(detail.manual_connections || []).length}
+                    {totalCount}
                   </span>
                 )}
                 <button
@@ -2269,8 +2277,49 @@ Senior Associate, Studio VC`;
               </h3>
 
               <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
-                People you found via LinkedIn Navigator who can connect you to <strong>{detail.company || detail.full_name}</strong>.
+                Connections who can intro you to <strong>{detail.company || detail.full_name}</strong> — auto-detected from your LinkedIn CSVs, or added manually via Navigator.
               </div>
+
+              {/* Auto-detected from LinkedIn CSV matching */}
+              {autoConns.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#0077B5', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                    From LinkedIn Connections
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {autoConns.map((conn, i) => (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                        padding: '8px 12px', background: '#F0F9FF', borderRadius: 6,
+                        border: '1px solid #BAE6FD', fontSize: 12,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 600, color: '#1E40AF' }}>{conn.connection_name || '—'}</span>
+                            <span style={{ fontSize: 10, background: '#DBEAFE', color: '#1E40AF', padding: '1px 6px', borderRadius: 3 }}>
+                              via {conn.team_member_name}
+                            </span>
+                            {conn.connection_linkedin_url && (
+                              <a href={conn.connection_linkedin_url} target="_blank" rel="noopener noreferrer"
+                                style={{ fontSize: 10, color: '#0077B5', textDecoration: 'none', background: '#DBEAFE', padding: '1px 5px', borderRadius: 3 }}>
+                                LinkedIn ↗
+                              </a>
+                            )}
+                          </div>
+                          {(conn.connection_position || conn.connection_company) && (
+                            <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                              {conn.connection_position}{conn.connection_position && conn.connection_company ? ' · ' : ''}{conn.connection_company}
+                            </div>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 8, whiteSpace: 'nowrap' }}>
+                          {conn.match_confidence}% match
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Add connection form */}
               {showAddConnection && (
@@ -2326,54 +2375,63 @@ Senior Associate, Studio VC`;
                 </div>
               )}
 
-              {/* Connection list */}
-              {(detail.manual_connections || []).length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {(detail.manual_connections || []).map(conn => (
-                    <div key={conn.id} style={{
-                      display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-                      padding: '8px 12px', background: '#F0F9FF', borderRadius: 6,
-                      border: '1px solid #BAE6FD', fontSize: 12,
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontWeight: 600, color: '#1E40AF' }}>{conn.name}</span>
-                          {conn.linkedin_url && (
-                            <a href={conn.linkedin_url} target="_blank" rel="noopener noreferrer"
-                              style={{ fontSize: 10, color: '#0077B5', textDecoration: 'none', background: '#DBEAFE', padding: '1px 5px', borderRadius: 3 }}>
-                              LinkedIn ↗
-                            </a>
+              {/* Manually added Navigator connections */}
+              {manualConns.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#0077B5', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                    Added via Navigator
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {manualConns.map(conn => (
+                      <div key={conn.id} style={{
+                        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                        padding: '8px 12px', background: '#F0F9FF', borderRadius: 6,
+                        border: '1px solid #BAE6FD', fontSize: 12,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 600, color: '#1E40AF' }}>{conn.name}</span>
+                            {conn.linkedin_url && (
+                              <a href={conn.linkedin_url} target="_blank" rel="noopener noreferrer"
+                                style={{ fontSize: 10, color: '#0077B5', textDecoration: 'none', background: '#DBEAFE', padding: '1px 5px', borderRadius: 3 }}>
+                                LinkedIn ↗
+                              </a>
+                            )}
+                          </div>
+                          {conn.relationship && (
+                            <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, fontStyle: 'italic' }}>{conn.relationship}</div>
                           )}
                         </div>
-                        {conn.relationship && (
-                          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, fontStyle: 'italic' }}>{conn.relationship}</div>
-                        )}
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Remove ${conn.name}?`)) return;
+                            try {
+                              await deleteManualConnection(detail.id, conn.id);
+                              const updated = await getLPTarget(detail.id);
+                              setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log, manual_connections: updated.manual_connections || [] });
+                              loadTargets();
+                            } catch (err) {
+                              alert(err.message);
+                            }
+                          }}
+                          style={{
+                            padding: '2px 7px', borderRadius: 4, fontSize: 10, border: '1px solid #FCA5A5',
+                            background: 'transparent', color: '#DC2626', cursor: 'pointer', marginLeft: 8, flexShrink: 0,
+                          }}>✕</button>
                       </div>
-                      <button
-                        onClick={async () => {
-                          if (!confirm(`Remove ${conn.name}?`)) return;
-                          try {
-                            await deleteManualConnection(detail.id, conn.id);
-                            const updated = await getLPTarget(detail.id);
-                            setDetail({ ...(updated.lp_target || updated.target), connectors: updated.connectors, warm_intro_paths: updated.warm_intro_paths || [], linkedin_enrichment: updated.linkedin_enrichment || null, activity: updated.activity_log, manual_connections: updated.manual_connections || [] });
-                            loadTargets();
-                          } catch (err) {
-                            alert(err.message);
-                          }
-                        }}
-                        style={{
-                          padding: '2px 7px', borderRadius: 4, fontSize: 10, border: '1px solid #FCA5A5',
-                          background: 'transparent', color: '#DC2626', cursor: 'pointer', marginLeft: 8, flexShrink: 0,
-                        }}>✕</button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              ) : (
+              )}
+
+              {totalCount === 0 && !showAddConnection && (
                 <div style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', padding: '16px 0' }}>
-                  No connections added yet. Use LinkedIn Navigator to find warm paths, then add them above.
+                  No 2nd-degree paths found. Use LinkedIn Navigator to find warm paths and add them above.
                 </div>
               )}
             </div>
+              ); // end IIFE return
+            })()} {/* end IIFE */}
 
             {/* Apollo Contacts */}
             <div className="detail-section">
