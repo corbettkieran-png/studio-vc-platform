@@ -184,6 +184,8 @@ export default function LPOutreach() {
     const sectors = detail.sector_interest || [];
     const fundType = detail.fund_type || '';
     const enrichment = detail.linkedin_enrichment;
+    const senderName = myTeamMember?.full_name || 'Kieran Corbett';
+    const senderTitle = 'Senior Associate, Studio VC';
 
     const sectorText = sectors.length > 0
       ? sectors.slice(0, 3).map(s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ')
@@ -197,7 +199,7 @@ export default function LPOutreach() {
       subject = `Studio VC Fund III — Introduction via ${connector.name}`;
       body = `Hi ${firstName},
 
-${connector.name} suggested I reach out — I'm Kieran Corbett, Senior Associate at Studio VC.
+${connector.name} suggested I reach out — I'm ${senderName}, Senior Associate at Studio VC.
 
 We're currently raising Fund III ($50M target) and I wanted to connect given ${connector.name}'s view that there could be strong alignment with ${company}.
 
@@ -206,14 +208,14 @@ Studio VC focuses exclusively on late-stage seed — companies that are post-pro
 Would you have 20 minutes for a brief intro call? Happy to share our deck in advance.
 
 Best,
-Kieran Corbett
-Senior Associate, Studio VC`;
+${senderName}
+${senderTitle}`;
     } else if (type === 'warm_intro_path' && warmPaths.length > 0) {
       const path = warmPaths[0];
       subject = `Studio VC Fund III — Introduction via ${path.contact_name}`;
       body = `Hi ${firstName},
 
-I'm Kieran Corbett, Senior Associate at Studio VC. I understand you know ${path.contact_name}${path.contact_title ? ` (${path.contact_title})` : ''} — I was hoping that connection might open the door to a brief conversation.
+I'm ${senderName}, Senior Associate at Studio VC. I understand you know ${path.contact_name}${path.contact_title ? ` (${path.contact_title})` : ''} — I was hoping that connection might open the door to a brief conversation.
 
 We're currently raising Fund III ($50M target, capped at $60M) and selectively engaging LPs who back high-quality early-stage managers. Studio VC has invested in 38 companies across two funds, with a portfolio collectively valued at over $3B. Fund II sits at 2.3x Net TVPI — and 50% of our seed investments have reached Series A within two years, roughly double the industry average.
 
@@ -222,8 +224,8 @@ Our edge is operational depth. Our Managing Partners bring backgrounds from Broa
 Would you be open to a 20-minute call? Happy to send our deck ahead of time.
 
 Best,
-Kieran Corbett
-Senior Associate, Studio VC`;
+${senderName}
+${senderTitle}`;
     } else if (type === 'follow_up') {
       subject = `Following up — Studio VC Fund III`;
       body = `Hi ${firstName},
@@ -237,14 +239,14 @@ Fund III is a $50M vehicle (capped at $60M) targeting 25 core positions at $750K
 If the timing makes sense, I'd welcome a 20-minute call to walk through our thesis and current pipeline. Happy to send the deck if useful.
 
 Best,
-Kieran Corbett
-Senior Associate, Studio VC`;
+${senderName}
+${senderTitle}`;
     } else {
       // Cold outreach
       subject = `Studio VC Fund III — Late-Stage Seed, $3B+ Portfolio`;
       body = `Hi ${firstName},
 
-I'm Kieran Corbett, Senior Associate at Studio VC. We're a New York-based venture fund currently raising Fund III ($50M target) and I wanted to reach out given what I know about ${company}.
+I'm ${senderName}, Senior Associate at Studio VC. We're a New York-based venture fund currently raising Fund III ($50M target) and I wanted to reach out given what I know about ${company}.
 
 Studio VC invests exclusively at the late-stage seed — post-product companies with early revenue and a clear path to Series A. It's a de-risked entry point that carries some of the strongest risk-adjusted returns in venture. Our track record reflects that: 38 portfolio companies across Funds I & II, collectively valued at over $3B, with Fund II at 2.3x Net TVPI. 50% of our seed investments have reached Series A within two years — roughly double the industry average.
 
@@ -253,8 +255,8 @@ ${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I thin
 Fund III is capped at $60M and we're selectively engaging LPs. Would you be open to a 20-minute call? Happy to share our deck in advance.
 
 Best,
-Kieran Corbett
-Senior Associate, Studio VC`;
+${senderName}
+${senderTitle}`;
     }
 
     setEmailDraft({ subject, body, to: detail.email || '', type });
