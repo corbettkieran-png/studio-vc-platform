@@ -101,8 +101,7 @@ function parseCSV(csvContent) {
 // ============================================================
 // Helper: Compute LP Fit Score
 // ============================================================
-// Studio VC thesis: Pure Play SaaS, SaaS-enabled Marketplaces,
-// FinTech & Enterprise Analytics & AI — late-stage seed, $750K–$1M check.
+// Studio VC thesis: B2B SaaS, Enterprise AI, Fintech — late-stage seed, $750K–$1M check.
 function computeFitScore(lp) {
   let score = 0;
 
@@ -1411,11 +1410,11 @@ Given ${lp.company}'s profile as a ${fundType}${geo}${sectorLine}, I believe the
 
 - Target: $50M (hard cap $60M), 25 core positions
 - Stage: Late-stage seed, $750K-$1M first check
-- Sectors: Pure Play SaaS, SaaS-enabled Marketplaces, FinTech & Enterprise Analytics & AI
-- Co-investors: QED, Left Lane Capital, General Catalyst, Insight Partners
+- Sectors: B2B SaaS, Enterprise AI, Fintech
+- Co-investors: Insight, General Catalyst, Bain Capital Ventures, Coatue, DST Global
 - Team: Former CEO of Broadway.com ($600M+ revenue) and Bain Capital Ventures background
 
-We have limited LP capacity remaining. I'd love to share our deck and schedule a 20-minute call at your convenience.
+I'd love to share our deck and schedule a 20-minute call at your convenience.
 
 Best,
 ${sender.full_name}

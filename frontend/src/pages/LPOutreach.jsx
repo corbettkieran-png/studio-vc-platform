@@ -201,7 +201,7 @@ ${connector.name} suggested I reach out — I'm Kieran Corbett, Senior Associate
 
 We're currently raising Fund III ($50M target) and I wanted to connect given ${connector.name}'s view that there could be strong alignment with ${company}.
 
-Studio VC focuses exclusively on late-stage seed — companies that are post-product, generating early revenue, and positioned for Series A within 12–18 months. Our portfolio (38 companies across Funds I & II) is collectively valued at over $3B, with Fund II at 2.3x Net TVPI. We invest $750K–$1M as a first check and consistently co-invest alongside firms like QED, Left Lane, and General Catalyst.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there's a real conversation to be had around our current pipeline and whether Fund III fits your mandate.` : ''}
+Studio VC focuses exclusively on late-stage seed — companies that are post-product, generating early revenue, and positioned for Series A within 12–18 months. Our portfolio (38 companies across Funds I & II) is collectively valued at over $3B, with Fund II at 2.3x Net TVPI. We invest $750K–$1M as a first check and consistently co-invest alongside firms like Insight, General Catalyst, Bain Capital Ventures, Coatue, and DST Global.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there's a real conversation to be had around our current pipeline and whether Fund III fits your mandate.` : ''}
 
 Would you have 20 minutes for a brief intro call? Happy to share our deck in advance.
 
@@ -217,7 +217,7 @@ I'm Kieran Corbett, Senior Associate at Studio VC. I understand you know ${path.
 
 We're currently raising Fund III ($50M target, capped at $60M) and selectively engaging LPs who back high-quality early-stage managers. Studio VC has invested in 38 companies across two funds, with a portfolio collectively valued at over $3B. Fund II sits at 2.3x Net TVPI — and 50% of our seed investments have reached Series A within two years, roughly double the industry average.
 
-Our edge is operational depth. Our Managing Partners bring backgrounds from Broadway.com (former CEO, $600M+ revenue) and Bain Capital Ventures, and we consistently invest ahead of firms including QED, Left Lane, Insight Partners, and General Catalyst.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I believe there's a strong case for a conversation around fit.` : ''}
+Our edge is operational depth. Our Managing Partners bring backgrounds from Broadway.com (former CEO, $600M+ revenue) and Bain Capital Ventures, and we consistently invest ahead of firms including Insight, General Catalyst, Bain Capital Ventures, Coatue, and DST Global.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I believe there's a strong case for a conversation around fit.` : ''}
 
 Would you be open to a 20-minute call? Happy to send our deck ahead of time.
 
@@ -232,7 +232,7 @@ I wanted to follow up on my earlier note about Studio VC's Fund III raise.
 
 Since we last connected, we've continued to build strong momentum — our Fund II portfolio is now collectively valued at over $3B, and we're seeing compelling late-stage seed deal flow in ${sectorText} that I believe would be of interest to ${company}.
 
-Fund III is a $50M vehicle (capped at $60M) targeting 25 core positions at $750K–$1M first checks. We're actively deploying and have limited LP capacity remaining.
+Fund III is a $50M vehicle (capped at $60M) targeting 25 core positions at $750K–$1M first checks.
 
 If the timing makes sense, I'd welcome a 20-minute call to walk through our thesis and current pipeline. Happy to send the deck if useful.
 
@@ -248,7 +248,7 @@ I'm Kieran Corbett, Senior Associate at Studio VC. We're a New York-based ventur
 
 Studio VC invests exclusively at the late-stage seed — post-product companies with early revenue and a clear path to Series A. It's a de-risked entry point that carries some of the strongest risk-adjusted returns in venture. Our track record reflects that: 38 portfolio companies across Funds I & II, collectively valued at over $3B, with Fund II at 2.3x Net TVPI. 50% of our seed investments have reached Series A within two years — roughly double the industry average.
 
-${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there could be meaningful alignment with our deal flow and LP base.` : `We focus on Pure Play SaaS, SaaS-enabled Marketplaces, and FinTech & Enterprise Analytics — sectors where we've built deep pattern recognition over nearly a decade.`}${enrichment?.headline ? ` Your background in ${enrichment.headline.toLowerCase()} also suggests you'd have a strong read on the types of companies we're backing.` : ''}
+${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there could be meaningful alignment with our deal flow and LP base.` : `We focus on B2B SaaS, Enterprise AI, and Fintech — sectors where we've built deep pattern recognition over nearly a decade.`}${enrichment?.headline ? ` Your background in ${enrichment.headline.toLowerCase()} also suggests you'd have a strong read on the types of companies we're backing.` : ''}
 
 Fund III is capped at $60M and we're selectively engaging LPs. Would you be open to a 20-minute call? Happy to share our deck in advance.
 
