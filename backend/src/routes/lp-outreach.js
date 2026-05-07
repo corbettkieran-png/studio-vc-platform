@@ -199,16 +199,18 @@ function fuzzyMatchCompany(companyA, companyB) {
   const bNorm = b.replace(suffixes, '').trim().replace(/\s+/g, ' ');
 
   if (aNorm === bNorm && aNorm.length > 2) return 95;
-  if (aNorm.includes(bNorm) && bNorm.length > 3) return 85;
-  if (bNorm.includes(aNorm) && aNorm.length > 3) return 85;
+  // Require min 6 chars for substring match — prevents short tokens like "bail" matching "bailard"
+  if (aNorm.includes(bNorm) && bNorm.length > 5) return 85;
+  if (bNorm.includes(aNorm) && aNorm.length > 5) return 85;
 
-  // Word overlap
+  // Word overlap — require at least 2 common meaningful words to avoid
+  // single-word surname collisions (e.g. "hill" in "Peter Hill" vs "Fortune Hill")
   const aWords = aNorm.split(/\s+/).filter(w => w.length > 2);
   const bWords = bNorm.split(/\s+/).filter(w => w.length > 2);
   if (aWords.length === 0 || bWords.length === 0) return 0;
   const common = aWords.filter(w => bWords.includes(w));
   const overlapRatio = common.length / Math.max(aWords.length, bWords.length);
-  if (overlapRatio >= 0.5 && common.length >= 1) return Math.round(60 + overlapRatio * 30);
+  if (overlapRatio >= 0.5 && common.length >= 2) return Math.round(60 + overlapRatio * 30);
 
   return 0;
 }
