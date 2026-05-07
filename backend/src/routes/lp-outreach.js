@@ -198,12 +198,10 @@ function fuzzyMatchCompany(companyA, companyB) {
   const aNorm = a.replace(suffixes, '').trim().replace(/\s+/g, ' ');
   const bNorm = b.replace(suffixes, '').trim().replace(/\s+/g, ' ');
 
+  // Exact normalized match only — same organisation name after stripping legal suffixes.
+  // e.g. "Bailard Inc" and "Bailard Wealth Management" both strip to "bailard" → match.
+  // Substring/containment removed: too many false positives from shared surnames and short tokens.
   if (aNorm === bNorm && aNorm.length > 2) return 95;
-  // Substring containment — one name is an abbreviated form of the other
-  // (e.g. "Goldman Sachs" within "Goldman Sachs Asset Management")
-  // Require min 6 chars to prevent short tokens like "bail" matching "bailard"
-  if (aNorm.includes(bNorm) && bNorm.length > 5) return 85;
-  if (bNorm.includes(aNorm) && aNorm.length > 5) return 85;
 
   return 0;
 }
