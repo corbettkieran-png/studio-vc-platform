@@ -186,6 +186,17 @@ function fuzzyMatchName(targetName, candidateName) {
 // ============================================================
 // Helper: Fuzzy company name matching
 // ============================================================
+// Generic single-word strings that should never be used as company identifiers.
+// These appear in LinkedIn data as informal employer entries ("Family", "Self-Employed", etc.)
+// and cause false positives when an LP's company field is poorly parsed.
+const GENERIC_COMPANY_TOKENS = new Set([
+  'family', 'home', 'private', 'personal', 'individual', 'self', 'freelance',
+  'independent', 'retired', 'consulting', 'investor', 'investments', 'office',
+  'unknown', 'na', 'n/a', 'none', 'various', 'other', 'multiple', 'global',
+  'international', 'national', 'american', 'european', 'digital', 'financial',
+  'wealth', 'asset', 'equity', 'credit', 'trust', 'direct', 'buyout', 'growth',
+]);
+
 function fuzzyMatchCompany(companyA, companyB) {
   if (!companyA || !companyB) return 0;
   const a = companyA.toLowerCase().trim().replace(/[,.\-()]/g, ' ').replace(/\s+/g, ' ');
@@ -198,10 +209,16 @@ function fuzzyMatchCompany(companyA, companyB) {
   const aNorm = a.replace(suffixes, '').trim().replace(/\s+/g, ' ');
   const bNorm = b.replace(suffixes, '').trim().replace(/\s+/g, ' ');
 
+  // Reject if either normalized name is a single generic token — these appear as
+  // informal LinkedIn entries ("Family", "Private", "Consulting") and cause false matches.
+  if (GENERIC_COMPANY_TOKENS.has(aNorm) || GENERIC_COMPANY_TOKENS.has(bNorm)) return 0;
+
+  // Require at least 4 chars after normalization to avoid matching on initials/abbreviations.
+  if (aNorm.length < 4 || bNorm.length < 4) return 0;
+
   // Exact normalized match only — same organisation name after stripping legal suffixes.
   // e.g. "Bailard Inc" and "Bailard Wealth Management" both strip to "bailard" → match.
-  // Substring/containment removed: too many false positives from shared surnames and short tokens.
-  if (aNorm === bNorm && aNorm.length > 2) return 95;
+  if (aNorm === bNorm) return 95;
 
   return 0;
 }
