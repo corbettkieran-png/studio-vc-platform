@@ -196,7 +196,7 @@
       "Industrial Services",
       "Retail & Fashion"
     ],
-    "full_name": "Justinas Milaš",
+    "full_name": "Justinas Mila\u0161",
     "email": "jmilasauskas@aegonam.com",
     "outreach_status": "not_started",
     "source": "main"
@@ -373,7 +373,7 @@
     "source": "main"
   },
   {
-    "company": "AllianceBernsteinTraditional Asset Manager (as LP)Nashville, Tn, United StatesUnited StatesBanking & Lending, Real Estate (PropTech), Investment StrategiesSeth Bernsteinseth.bernstein@alliancebernstein.comAllianz Global Investors",
+    "company": "AllianceBernstein",
     "fund_type": "Traditional Asset Manager (as LP)",
     "geographic_focus": "Hong Kong",
     "sector_interest": [
@@ -1173,7 +1173,7 @@
     "source": "main"
   },
   {
-    "company": "BaltisseSingle Family Office, Private Equity Firm, Real Estate Investment FirmGent, BelgiumBelgiumB2B Operations & Outsourcing, Retail & Fashion, Real Estate (PropTech), Industrial Services, Oil & Gas, Pharmaceuticals & Biotech, Other, Investment Strategies, Consumer Services, Logistics & Supply ChainFILIP BALCAENfilip.balcaen@baltisse.com Barshop Ventures, LLC",
+    "company": "Baltisse",
     "fund_type": "Single Family Office",
     "geographic_focus": "United States",
     "sector_interest": [
@@ -1418,7 +1418,7 @@
     "source": "main"
   },
   {
-    "company": "BergendahlsSingle Family OfficeMalmö, SwedenSwedenReal Estate (PropTech), Asset & Wealth Management, Logistics & Supply Chain, Retail & FashionJay Rogersjay.rogers@bergendahls.com Berggruen Holdings",
+    "company": "Bergendahls",
     "fund_type": "Single Family Office",
     "geographic_focus": "United States",
     "sector_interest": [
@@ -1521,7 +1521,7 @@
       "Software & SaaS",
       "Utilities"
     ],
-    "full_name": "Tomáš",
+    "full_name": "Tom\u00e1\u0161",
     "email": "tomas.krsek@bhmgroup.eu",
     "outreach_status": "not_started",
     "source": "main"
@@ -1605,7 +1605,7 @@
     "source": "endowment"
   },
   {
-    "company": "Black Spade Capital Limited 黑桃资本",
+    "company": "Black Spade Capital Limited \u9ed1\u6843\u8d44\u672c",
     "fund_type": "Single Family Office",
     "geographic_focus": "Hong Kong",
     "sector_interest": [
@@ -2004,7 +2004,7 @@
     "source": "main"
   },
   {
-    "company": "BuyoutPraesidiumFund of FundsLuxembourg , LULuxembourgGeneral Technology, Pharmaceuticals & Biotech, Deep Tech & Emerging, Investment Strategies, AgriTech, Cleantech & Sustainability, Software & SaaSDavid Bassanidavid.bassani@praesidium.euPrincipal Asset Management",
+    "company": "Praesidium",
     "fund_type": "Traditional Asset Manager (as LP)",
     "geographic_focus": "United States",
     "sector_interest": [
@@ -2675,7 +2675,7 @@
     "source": "endowment"
   },
   {
-    "company": "Citrino Gestão de Recursos",
+    "company": "Citrino Gest\u00e3o de Recursos",
     "fund_type": "Multi-Family Office",
     "geographic_focus": "Brazil",
     "sector_interest": [
@@ -2701,7 +2701,7 @@
       "Mobility & Automotive",
       "Investment Strategies"
     ],
-    "full_name": "Germany, Carsten Hä",
+    "full_name": "Germany, Carsten H\u00e4",
     "email": "minginfo@cjhfo.de",
     "outreach_status": "not_started",
     "source": "main"
@@ -2775,7 +2775,7 @@
     "source": "main"
   },
   {
-    "company": "Co-Investment, Fund of Funds, Direct PE/VC Deals, Value-Add, Repositioning, Direct Funds, Development, Direct",
+    "company": null,
     "fund_type": "Hedge Fund",
     "geographic_focus": "Saudi Arabia",
     "sector_interest": [
@@ -3223,7 +3223,7 @@
     "source": "main"
   },
   {
-    "company": "Céleste Management SA",
+    "company": "C\u00e9leste Management SA",
     "fund_type": "Single Family Office",
     "geographic_focus": "Switzerland",
     "sector_interest": [
@@ -3398,7 +3398,7 @@
     "source": "endowment"
   },
   {
-    "company": "Direct Securities, Fund of Funds, Buyout, Value-Add, Core, Development, Growth Capital Unigestion",
+    "company": "Unigestion",
     "fund_type": "Traditional Asset Manager (as LP)",
     "geographic_focus": "Switzerland",
     "sector_interest": [
@@ -3973,7 +3973,7 @@
     "source": "main"
   },
   {
-    "company": "ExigentMulti-Family Office, Investment BankJerusalem, IsraelIsraelSoftware & SaaS, Food & Beverage, Manufacturing & Production, Utilities, Cleantech & Sustainability, Education & EdTech, HR & Workforce, Pharmaceuticals & BiotechWes Clevelandwes@exigentcapital.com FAMILY PARTNERS",
+    "company": "Exigent",
     "fund_type": "Multi-Family Office",
     "geographic_focus": "France",
     "sector_interest": [
@@ -4199,7 +4199,7 @@
     "source": "endowment"
   },
   {
-    "company": "Financière Saint James",
+    "company": "Financi\u00e8re Saint James",
     "fund_type": "Single Family Office",
     "geographic_focus": "France",
     "sector_interest": [
@@ -4324,7 +4324,7 @@
     "source": "endowment"
   },
   {
-    "company": "Fonds Gabonais d'Investissements Stratégiques (FGIS)",
+    "company": "Fonds Gabonais d'Investissements Strat\u00e9giques (FGIS)",
     "fund_type": "Sovereign Wealth Fund",
     "geographic_focus": "Gabon",
     "sector_interest": [
@@ -4342,7 +4342,7 @@
     "source": "main"
   },
   {
-    "company": "FONSIS - Fonds Souverain du Sénégal",
+    "company": "FONSIS - Fonds Souverain du S\u00e9n\u00e9gal",
     "fund_type": "Sovereign Wealth Fund",
     "geographic_focus": "Senegal",
     "sector_interest": [
@@ -4403,7 +4403,7 @@
     "source": "main"
   },
   {
-    "company": "Fort Knox Förvaring AB",
+    "company": "Fort Knox F\u00f6rvaring AB",
     "fund_type": "Single Family Office",
     "geographic_focus": "Sweden",
     "sector_interest": [
@@ -4682,7 +4682,7 @@
     "source": "main"
   },
   {
-    "company": "General Technology, IT Services & Data, Renewable Energy, [+3]Venture Capital, Public Equity, Private EquityJudd MorgensternManaging Partner",
+    "company": null,
     "fund_type": null,
     "geographic_focus": null,
     "sector_interest": [],
@@ -5128,7 +5128,7 @@
     "source": "main"
   },
   {
-    "company": "Gullspång Invest",
+    "company": "Gullsp\u00e5ng Invest",
     "fund_type": "Single Family Office",
     "geographic_focus": "Sweden",
     "sector_interest": [
@@ -5225,7 +5225,7 @@
     "source": "main"
   },
   {
-    "company": "HAUCK AUFHÄUSER LAMPE",
+    "company": "HAUCK AUFH\u00c4USER LAMPE",
     "fund_type": "Institutional Wealth Manager",
     "geographic_focus": "Germany",
     "sector_interest": [
@@ -5270,7 +5270,7 @@
     "source": "main"
   },
   {
-    "company": "HELMSMANglobalSingle Family OfficeLas Vegas, NV, USAUnited StatesLeisure & Entertainment, Real Estate (PropTech), IT Services & Data, Health Services & Facilities, Asset & Wealth Management, Pharmaceuticals & Biotech, Investment StrategiesMARTIN GRIFFINhello@gehmsman.globalHS Group AB",
+    "company": "HELMSMANglobal",
     "fund_type": "Single Family Office",
     "geographic_focus": "Sweden",
     "sector_interest": [
@@ -5633,7 +5633,7 @@
     "source": "endowment"
   },
   {
-    "company": "ImpactAssetsFoundation (Non-University), Investment Consultant / OCIOBethesda, MD, USAUnited StatesMobility & Automotive, Cleantech & Sustainability, Asset & Wealth Management, Real Estate (PropTech), General Financial Services, OtherAlice Lowensteinalicelowenstein@impactassets.orgInLight Capital",
+    "company": "ImpactAssets",
     "fund_type": "Single Family Office",
     "geographic_focus": "United States",
     "sector_interest": [
@@ -5807,7 +5807,7 @@
       "Utilities",
       "Other"
     ],
-    "full_name": "José Luis",
+    "full_name": "Jos\u00e9 Luis",
     "email": "jmanzano@integracapital.com",
     "outreach_status": "not_started",
     "source": "main"
@@ -5836,7 +5836,7 @@
       "Utilities",
       "Other"
     ],
-    "full_name": "Francisco Massó",
+    "full_name": "Francisco Mass\u00f3",
     "email": "francisco.massolosa@maslosa.com",
     "outreach_status": "not_started",
     "source": "main"
@@ -6532,7 +6532,7 @@
       "General Technology",
       "Software & SaaS"
     ],
-    "full_name": "Private EquityAmélie FinazManaging Partner",
+    "full_name": "Private EquityAm\u00e9lie FinazManaging Partner",
     "email": "a.finaz@lamaisonpartners.fr",
     "outreach_status": "not_started",
     "source": "endowment"
@@ -6664,7 +6664,7 @@
     "source": "main"
   },
   {
-    "company": "LeFrakSingle Family Office, Real Estate Investment FirmNew York, New York, USUnited StatesLeisure & Entertainment, Real Estate (PropTech), General Technology, Retail & Fashion, Mining & Metals, Other, Pharmaceuticals & Biotech, Investment Strategies, Consumer Services, Oil & Gas, General Financial ServicesAdam Silfenadam.silfen@lefrak.com Lead Capital Partners",
+    "company": "LeFrak",
     "fund_type": "Multi-Family Office",
     "geographic_focus": "United States",
     "sector_interest": [
@@ -6709,7 +6709,7 @@
     "source": "main"
   },
   {
-    "company": "LegatumSingle Family OfficeDubai, United Arab EmiratesUnited Arab EmiratesGeneral Technology, Leisure & Entertainment, Infrastructure, Consumer Services, General Financial ServicesPhilip Vassiliouphilip.vassiliou@legatum.com Leitmotiv Group",
+    "company": "Legatum",
     "fund_type": "Single Family Office",
     "geographic_focus": "Hong Kong",
     "sector_interest": [
@@ -7161,7 +7161,7 @@
     "source": "main"
   },
   {
-    "company": "Mayfair Vermögensverwaltungs SE",
+    "company": "Mayfair Verm\u00f6gensverwaltungs SE",
     "fund_type": "Single Family Office",
     "geographic_focus": "Germany",
     "sector_interest": [
@@ -8450,7 +8450,7 @@
       "Consumer Services",
       "Software & SaaS"
     ],
-    "full_name": "Pierre-Edouard Sté",
+    "full_name": "Pierre-Edouard St\u00e9",
     "email": "rinpierreedouard@otiumcapital.com",
     "outreach_status": "not_started",
     "source": "main"
@@ -8763,7 +8763,7 @@
     "source": "main"
   },
   {
-    "company": "Península Participações",
+    "company": "Pen\u00ednsula Participa\u00e7\u00f5es",
     "fund_type": "Single Family Office",
     "geographic_focus": "Brazil",
     "sector_interest": [
@@ -8943,7 +8943,7 @@
     "source": "main"
   },
   {
-    "company": "PGIMTraditional Asset Manager (as LP)Newark, Nj, United StatesUnited StatesInfrastructure, Retail & Fashion, Other, Farming & Production, Real Estate (PropTech), Industrial Services, Asset & Wealth Management, Deep Tech & Emerging, General Financial Services, Logistics & Supply Chain, Banking & LendingMatthew Harveymatthew.harvey@pgim.comPIRQUE",
+    "company": "PGIM",
     "fund_type": "Single Family Office",
     "geographic_focus": "United States",
     "sector_interest": [
@@ -9040,7 +9040,7 @@
     "source": "endowment"
   },
   {
-    "company": "PitaliaSingle Family Office, Real Estate Investment FirmBolton, GBUnited KingdomGeneral Technology, Retail & Fashion, Real Estate (PropTech), Industrial Services, Other, Pharmaceuticals & Biotech, Manufacturing & ProductionJane Wrightjane.wright@pitalia.com Pittco Management, LLC",
+    "company": "Pitalia",
     "fund_type": "Single Family Office",
     "geographic_focus": "United States",
     "sector_interest": [
@@ -9326,7 +9326,7 @@
     "source": "main"
   },
   {
-    "company": "QICSovereign Wealth FundNew York, Ny, United StatesUnited StatesAsset & Wealth Management, Government & Public Sector, Real Estate (PropTech), Retail & Fashion, HR & Workforce, Other, Renewable Energy, Infrastructure, Utilities, Mobility & Automotive, Investment StrategiesPeter Forbesp.forbes@qic.comQatar Investment Authority (QIA)",
+    "company": "QIC",
     "fund_type": "Sovereign Wealth Fund",
     "geographic_focus": "Qatar",
     "sector_interest": [
@@ -9412,7 +9412,7 @@
     "source": "main"
   },
   {
-    "company": "Q·Advisers",
+    "company": "Q\u00b7Advisers",
     "fund_type": "Multi-Family Office",
     "geographic_focus": "Austria",
     "sector_interest": [
@@ -9979,7 +9979,7 @@
     "source": "main"
   },
   {
-    "company": "Schütz Family Office",
+    "company": "Sch\u00fctz Family Office",
     "fund_type": "Single Family Office",
     "geographic_focus": "Austria",
     "sector_interest": [
@@ -10091,7 +10091,7 @@
       "Deep Tech & Emerging",
       "Other"
     ],
-    "full_name": "Eduardo Sá",
+    "full_name": "Eduardo S\u00e1",
     "email": "eduardo.sanchez@segofinance.com",
     "outreach_status": "not_started",
     "source": "main"
@@ -10286,13 +10286,13 @@
       "Retail & Fashion",
       "Other"
     ],
-    "full_name": "Jean-François",
+    "full_name": "Jean-Fran\u00e7ois",
     "email": "jeanfrancois.burguet@sofinagroup.com",
     "outreach_status": "not_started",
     "source": "main"
   },
   {
-    "company": "SOFIOUESTFund of Funds, Private Equity FirmParis, FranceFranceGeneral Technology, Leisure & Entertainment, Industrial Services, Real Estate (PropTech), Investment Strategies, B2B Operations & OutsourcingPatrice Hutinpatrice.hutin@sofiouest.frSOLUTIO AG Anlagekonzepte für Institutionen",
+    "company": "SOFIOUEST",
     "fund_type": "Fund of Funds",
     "geographic_focus": "Germany",
     "sector_interest": [
@@ -10413,7 +10413,7 @@
     "source": "main"
   },
   {
-    "company": "SPDGSingle Family Office, Venture Capital FirmBrussels, BelgiumBelgiumInfrastructure, Mobility & Automotive, Cleantech & Sustainability, General Technology, Utilities, Hardware & Electronics, Digital Health (HealthTech)Philippe Mauchardphilippe.mauchard@spdg.be SPE - Serruya Private Equity",
+    "company": "SPDG",
     "fund_type": "Single Family Office",
     "geographic_focus": "Canada",
     "sector_interest": [
@@ -10558,7 +10558,7 @@
       "Infrastructure",
       "Other"
     ],
-    "full_name": "Əli Əsə",
+    "full_name": "\u018fli \u018fs\u0259",
     "email": "lsdov@oilfund.az",
     "outreach_status": "not_started",
     "source": "main"
@@ -10975,7 +10975,7 @@
     "source": "main"
   },
   {
-    "company": "TemasekSovereign Wealth FundSingapore, SingaporeSingaporeMobility & Automotive, General Technology, Leisure & Entertainment, Pharmaceuticals & Biotech, Industrial Services, Real Estate (PropTech), Retail & Fashion, General Financial Services, Investment Strategies, Consumer ServicesMukul Chawlamukulchawla@temasek.com.sgTenax Capital Ltd",
+    "company": "Temasek",
     "fund_type": "Traditional Asset Manager (as LP)",
     "geographic_focus": "United Kingdom",
     "sector_interest": [
@@ -11585,7 +11585,7 @@
     "source": "main"
   },
   {
-    "company": "TwinFocusMulti-Family OfficeBoston, Ma, United StatesUnited StatesReal Estate (PropTech), Industrial Services, Logistics & Supply Chain, Investment StrategiesJohn McGillianjohn.mcgillian@twinfocuscapital.com Tyche Asset Management",
+    "company": "TwinFocus",
     "fund_type": "Traditional Asset Manager (as LP)",
     "geographic_focus": "Australia",
     "sector_interest": [
@@ -11618,7 +11618,7 @@
     "source": "main"
   },
   {
-    "company": "Téthys Invest",
+    "company": "T\u00e9thys Invest",
     "fund_type": "Single Family Office",
     "geographic_focus": "France",
     "sector_interest": [
@@ -11634,7 +11634,7 @@
     "source": "main"
   },
   {
-    "company": "UBP - Union Bancaire Privée",
+    "company": "UBP - Union Bancaire Priv\u00e9e",
     "fund_type": "Multi-Family Office",
     "geographic_focus": "Switzerland",
     "sector_interest": [
@@ -11817,7 +11817,7 @@
       "General Technology",
       "Software & SaaS"
     ],
-    "full_name": "Venture CapitalMato KrahlGeschäftsführer",
+    "full_name": "Venture CapitalMato KrahlGesch\u00e4ftsf\u00fchrer",
     "email": "mato.krahl@mk-vc.com",
     "outreach_status": "not_started",
     "source": "endowment"
@@ -12354,7 +12354,7 @@
     "source": "main"
   },
   {
-    "company": "WyllieSingle Family Office, Private Equity FirmPerth, AUAustraliaReal Estate (PropTech), Mining & Metals, General Technology, Retail & Fashion, Farming & Production, Leisure & Entertainment, Other, Investment Strategies, Cleantech & SustainabilityMelissa Karlsonmelissa@wylliegroup.com Yellow Brick Capital (UK) Limited",
+    "company": "Wyllie",
     "fund_type": "Multi-Family Office",
     "geographic_focus": "United Kingdom",
     "sector_interest": [
@@ -12407,7 +12407,7 @@
     "source": "main"
   },
   {
-    "company": "ZOMALABSingle Family Office, Foundation (Non-University)Denver, Colorado, USUnited StatesEducation & EdTech, General Technology, Farming & Production, HR & Workforce, Renewable Energy, Manufacturing & Production, Utilities, Food & BeverageLUIS DUARTElduarte@zomalab.com Zain Ventures",
+    "company": "ZOMALAB",
     "fund_type": "Single Family Office",
     "geographic_focus": "United States",
     "sector_interest": [

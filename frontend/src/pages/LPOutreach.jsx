@@ -614,16 +614,15 @@ ${senderTitle}`;
       );
     }
 
-    // Fund type filter
+    // Fund type filter — matched against actual DB values
     if (fundTypeFilter !== 'all') {
       filtered = filtered.filter(t => {
         const ft = (t.fund_type || '').toLowerCase();
-        if (fundTypeFilter === 'fund_of_funds') return /fund.of.funds|fof/.test(ft);
-        if (fundTypeFilter === 'family_office') return /family.office|hnwi|hni|high.net.worth/.test(ft);
-        if (fundTypeFilter === 'endowment') return /endowment|university|foundation/.test(ft);
-        if (fundTypeFilter === 'pension') return /pension|sovereign.wealth|swf/.test(ft);
-        if (fundTypeFilter === 'venture') return /venture|vc.fund/.test(ft);
-        if (fundTypeFilter === 'institutional') return /institutional|bank|insurance|corporate|strategic/.test(ft);
+        if (fundTypeFilter === 'fund_of_funds')  return ft.includes('fund of funds') || ft.includes('fof');
+        if (fundTypeFilter === 'family_office')  return ft.includes('family office');
+        if (fundTypeFilter === 'endowment')      return ft.includes('endowment') || ft.includes('foundation') || ft.includes('university');
+        if (fundTypeFilter === 'institutional')  return ft.includes('asset manager') || ft.includes('institutional') || ft.includes('wealth manager') || ft.includes('sovereign') || ft.includes('pension') || ft.includes('ocio') || ft.includes('investment consultant') || ft.includes('secondary');
+        if (fundTypeFilter === 'venture')        return ft.includes('venture') || ft.includes('private equity') || ft.includes('co-investment');
         return false;
       });
     }
@@ -769,10 +768,9 @@ ${senderTitle}`;
             { key: 'all', label: 'All Types' },
             { key: 'fund_of_funds', label: 'Fund of Funds' },
             { key: 'family_office', label: 'Family Office' },
+            { key: 'institutional', label: 'Asset Manager / Institutional' },
             { key: 'endowment', label: 'Endowment / Foundation' },
-            { key: 'pension', label: 'Pension / Sovereign' },
-            { key: 'venture', label: 'Venture / VC' },
-            { key: 'institutional', label: 'Institutional' },
+            { key: 'venture', label: 'Venture / PE' },
           ].map(f => {
             const isActive = fundTypeFilter === f.key;
             return (
