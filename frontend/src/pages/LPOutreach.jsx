@@ -122,6 +122,8 @@ export default function LPOutreach() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('company');
   const [sortDir, setSortDir] = useState('asc');
+  const [fundTypeFilter, setFundTypeFilter] = useState('all');
+  const [sectorFilter, setSectorFilter] = useState('all');
   const [myTeamMember, setMyTeamMember] = useState(null);
   const [myConnectionsUploading, setMyConnectionsUploading] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -612,12 +614,35 @@ ${senderTitle}`;
       );
     }
 
+    // Fund type filter
+    if (fundTypeFilter !== 'all') {
+      filtered = filtered.filter(t => {
+        const ft = (t.fund_type || '').toLowerCase();
+        if (fundTypeFilter === 'fund_of_funds') return /fund.of.funds|fof/.test(ft);
+        if (fundTypeFilter === 'family_office') return /family.office|hnwi|hni|high.net.worth/.test(ft);
+        if (fundTypeFilter === 'endowment') return /endowment|university|foundation/.test(ft);
+        if (fundTypeFilter === 'pension') return /pension|sovereign.wealth|swf/.test(ft);
+        if (fundTypeFilter === 'venture') return /venture|vc.fund/.test(ft);
+        if (fundTypeFilter === 'institutional') return /institutional|bank|insurance|corporate|strategic/.test(ft);
+        return false;
+      });
+    }
+
+    // Sector filter
+    if (sectorFilter !== 'all') {
+      filtered = filtered.filter(t => {
+        const sectors = t.sector_interest || [];
+        return sectors.some(s => s.toLowerCase().includes(sectorFilter.toLowerCase()));
+      });
+    }
+
     // Client-side sort
     filtered = [...filtered].sort((a, b) => {
       let va, vb;
       if (sortBy === 'fit_score') { va = a.fit_score || 0; vb = b.fit_score || 0; }
       else if (sortBy === 'name') { va = (a.full_name || '').toLowerCase(); vb = (b.full_name || '').toLowerCase(); }
       else if (sortBy === 'company') { va = (a.company || '').toLowerCase(); vb = (b.company || '').toLowerCase(); }
+      else if (sortBy === 'fund_type') { va = (a.fund_type || '').toLowerCase(); vb = (b.fund_type || '').toLowerCase(); }
       else if (sortBy === 'outreach_status') { va = a.outreach_status || ''; vb = b.outreach_status || ''; }
       else { va = (a.company || '').toLowerCase(); vb = (b.company || '').toLowerCase(); }
       if (va < vb) return sortDir === 'desc' ? 1 : -1;
@@ -680,7 +705,7 @@ ${senderTitle}`;
     return (
       <>
         {/* Filter + toolbar row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
             {[
               { key: 'all', label: 'All', color: '#374151' },
@@ -723,6 +748,8 @@ ${senderTitle}`;
               style={{ padding: '7px 10px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 12, color: '#475569', background: '#fff', cursor: 'pointer' }}>
               <option value="company">Company A→Z</option>
               <option value="name">Contact Name</option>
+              <option value="fund_type">Fund Type</option>
+              <option value="fit_score">Fit Score</option>
               <option value="outreach_status">Status</option>
             </select>
             <button onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
@@ -733,6 +760,57 @@ ${senderTitle}`;
               {filtered.length} LP{filtered.length !== 1 ? 's' : ''}
             </span>
           </div>
+        </div>
+
+        {/* Fund type + sector filter row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 2 }}>Fund Type</span>
+          {[
+            { key: 'all', label: 'All Types' },
+            { key: 'fund_of_funds', label: 'Fund of Funds' },
+            { key: 'family_office', label: 'Family Office' },
+            { key: 'endowment', label: 'Endowment / Foundation' },
+            { key: 'pension', label: 'Pension / Sovereign' },
+            { key: 'venture', label: 'Venture / VC' },
+            { key: 'institutional', label: 'Institutional' },
+          ].map(f => {
+            const isActive = fundTypeFilter === f.key;
+            return (
+              <button key={f.key} onClick={() => { setFundTypeFilter(f.key); setPage(0); }} style={{
+                padding: '4px 11px', borderRadius: 20, fontSize: 12, cursor: 'pointer', fontWeight: 500,
+                border: isActive ? 'none' : '1.5px solid #E2E8F0',
+                background: isActive ? '#7C3AED' : '#fff',
+                color: isActive ? '#fff' : '#64748B',
+                transition: 'all 0.15s',
+                boxShadow: isActive ? '0 2px 6px rgba(124,58,237,0.2)' : '0 1px 2px rgba(0,0,0,0.04)',
+              }}>
+                {f.label}
+              </button>
+            );
+          })}
+          <div style={{ width: 1, height: 18, background: '#E2E8F0', margin: '0 4px' }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 2 }}>Sector</span>
+          <select value={sectorFilter} onChange={(e) => { setSectorFilter(e.target.value); setPage(0); }}
+            style={{ padding: '5px 10px', border: sectorFilter !== 'all' ? '1.5px solid #7C3AED' : '1.5px solid #E2E8F0', borderRadius: 20, fontSize: 12, color: sectorFilter !== 'all' ? '#7C3AED' : '#64748B', background: '#fff', cursor: 'pointer', fontWeight: sectorFilter !== 'all' ? 600 : 400 }}>
+            <option value="all">All Sectors</option>
+            <option value="b2b_saas">B2B SaaS</option>
+            <option value="enterprise_ai">Enterprise AI</option>
+            <option value="fintech">Fintech</option>
+            <option value="healthtech">Healthtech</option>
+            <option value="consumer">Consumer</option>
+            <option value="marketplace">Marketplace</option>
+            <option value="crypto">Crypto / Web3</option>
+            <option value="deep_tech">Deep Tech</option>
+            <option value="climate">Climate / Sustainability</option>
+          </select>
+          {(fundTypeFilter !== 'all' || sectorFilter !== 'all') && (
+            <button onClick={() => { setFundTypeFilter('all'); setSectorFilter('all'); }} style={{
+              padding: '4px 11px', borderRadius: 20, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+              border: 'none', background: '#FEE2E2', color: '#DC2626',
+            }}>
+              Clear filters ×
+            </button>
+          )}
         </div>
 
         {/* Airtable-style grid */}
