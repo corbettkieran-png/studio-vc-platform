@@ -305,28 +305,11 @@ async function runMatching() {
         }
       }
 
-      // ── Layer 3: LP name matches a company ──
-      // Only runs when lp.full_name is actually an institution name (e.g. "Sequoia Heritage"),
-      // NOT a person's name (e.g. "Ron Johnson"). Surnames in person names create false positives
-      // against company names like "Johnson & Johnson" or "Fortune Hill".
-      //
-      // Person heuristic: 1-3 plain alphabetic words with no company keywords → skip Layer 3.
-      const COMPANY_KEYWORDS = /\b(capital|partners|fund|funds|management|managers|advisors|advisory|ventures|holdings|group|trust|family|office|wealth|asset|assets|investments|financial|securities|bank|banking|global|international|associates|equity|credit|growth|income|hedge|endowment|foundation|pension|insurance|realty|property)\b/i;
-      const lpNameWords = lp.full_name.trim().split(/\s+/);
-      const lpNameLooksLikePerson = lpNameWords.length <= 3
-        && lpNameWords.every(w => /^[a-zA-Z'\-]+$/.test(w))
-        && !COMPANY_KEYWORDS.test(lp.full_name);
-
-      if (!lpNameLooksLikePerson) {
-        for (const conn of connections) {
-          if (!conn.company) continue;
-          const nameAsCompanyScore = fuzzyMatchCompany(lp.full_name, conn.company);
-          if (nameAsCompanyScore >= 75) {
-            const confidence = Math.round(25 + (nameAsCompanyScore / 100) * 35);
-            addMatch(conn.team_member_id, 'lp_is_company', confidence, conn.id);
-          }
-        }
-      }
+      // Layer 3 (lp_is_company) removed.
+      // Matching lp.full_name against connection company names produced persistent false positives
+      // (surnames, first names, and short tokens matching company names).
+      // Company matching is handled exclusively by Layer 2 (lp.company vs conn.company).
+      // Institutional LPs should have their firm name in the company field, not full_name.
 
       // Insert all matches into DB
       for (const match of Object.values(lpMatches)) {
@@ -360,8 +343,6 @@ async function runMatching() {
         if (matchType === 'direct_email' || matchType === 'direct_name' || matchType === 'direct_linkedin') {
           connectionStrength = 'direct';
         } else if (matchType === 'same_company') {
-          connectionStrength = 'company_match';
-        } else if (matchType === 'lp_is_company') {
           connectionStrength = 'company_match';
         } else {
           connectionStrength = 'mutual';
