@@ -307,17 +307,26 @@ async function runMatching() {
         }
       }
 
-      // ── Layer 3: LP name matches a company ‐ 
-      // The LP target's full_name field is actually a firm name (e.g., "Sequoia Heritage")
-      // and your LinkedIn connection works at that firm.
-      // Check if lp.full_name looks like it could be a company name
-      // (heuristic: if it doesn't have a typical first+last pattern, or matches a connection's company)
-      for (const conn of connections) {
-        if (!conn.company) continue;
-        const nameAsCompanyScore = fuzzyMatchCompany(lp.full_name, conn.company);
-        if (nameAsCompanyScore >= 75) {
-          const confidence = Math.round(25 + (nameAsCompanyScore / 100) * 35);
-          addMatch(conn.team_member_id, 'lp_is_company', confidence, conn.id);
+      // ── Layer 3: LP name matches a company ──
+      // Only runs when lp.full_name is actually an institution name (e.g. "Sequoia Heritage"),
+      // NOT a person's name (e.g. "Ron Johnson"). Surnames in person names create false positives
+      // against company names like "Johnson & Johnson" or "Fortune Hill".
+      //
+      // Person heuristic: 1-3 plain alphabetic words with no company keywords → skip Layer 3.
+      const COMPANY_KEYWORDS = /\b(capital|partners|fund|funds|management|managers|advisors|advisory|ventures|holdings|group|trust|family|office|wealth|asset|assets|investments|financial|securities|bank|banking|global|international|associates|equity|credit|growth|income|hedge|endowment|foundation|pension|insurance|realty|property)\b/i;
+      const lpNameWords = lp.full_name.trim().split(/\s+/);
+      const lpNameLooksLikePerson = lpNameWords.length <= 3
+        && lpNameWords.every(w => /^[a-zA-Z'\-]+$/.test(w))
+        && !COMPANY_KEYWORDS.test(lp.full_name);
+
+      if (!lpNameLooksLikePerson) {
+        for (const conn of connections) {
+          if (!conn.company) continue;
+          const nameAsCompanyScore = fuzzyMatchCompany(lp.full_name, conn.company);
+          if (nameAsCompanyScore >= 75) {
+            const confidence = Math.round(25 + (nameAsCompanyScore / 100) * 35);
+            addMatch(conn.team_member_id, 'lp_is_company', confidence, conn.id);
+          }
         }
       }
 
