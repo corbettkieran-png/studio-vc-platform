@@ -1017,7 +1017,7 @@ router.get('/targets', authenticate, async (req, res) => {
            FROM lp_connection_matches lcm
            JOIN team_members tm ON tm.id = lcm.team_member_id
            LEFT JOIN linkedin_connections lc ON lc.id = lcm.linkedin_connection_id
-           WHERE lcm.lp_target_id = t.id AND tm.user_id = $1
+           WHERE lcm.lp_target_id = t.id
           ),
           '[]'::json
         ) as connection_matches
