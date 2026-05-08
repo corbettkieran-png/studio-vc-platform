@@ -1929,16 +1929,21 @@ router.post('/admin/import-surnames', authenticate, upload.single('file'), async
   try {
     if (!req.file) return res.status(400).json({ error: 'CSV file required' });
 
-    const text = req.file.buffer.toString('utf8');
+    // Strip UTF-8 BOM (added by Excel on save-as-CSV) before parsing
+    const text = req.file.buffer.toString('utf8').replace(/^﻿/, '');
     const lines = text.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return res.status(400).json({ error: 'CSV appears empty' });
 
-    // Parse header row (case-insensitive)
-    const headerRow = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+    // Parse header row — strip BOM, quotes, whitespace, normalise case
+    const headerRow = lines[0]
+      .split(',')
+      .map(h => h.replace(/^﻿/, '').replace(/"/g, '').trim().toLowerCase());
     const idIdx = headerRow.indexOf('id');
     const nameIdx = headerRow.indexOf('full_name');
     if (idIdx === -1 || nameIdx === -1) {
-      return res.status(400).json({ error: 'CSV must have "id" and "full_name" columns' });
+      return res.status(400).json({
+        error: `CSV must have "id" and "full_name" columns. Found: ${headerRow.join(', ')}`,
+      });
     }
 
     // Simple CSV row parser (handles quoted fields)
