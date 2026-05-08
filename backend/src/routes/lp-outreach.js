@@ -305,8 +305,19 @@ async function runMatching() {
       // Your LinkedIn connection works at the same company as the LP target.
       // They're not the LP target themselves, but they could intro you.
       if (lp.company) {
+        // Pre-compute LP name tokens once for the collision guard below
+        const lpNameTokens = (lp.full_name || '').toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+        const companySuffixRe = /\b(inc|llc|llp|lp|ltd|corp|co|group|partners|capital|management|mgmt|advisors|advisory|fund|funds|ventures|investments|holdings|foundation|assoc|association)\b/g;
+
         for (const conn of connections) {
           if (!conn.company) continue;
+
+          // Name-collision guard: reject if either company normalises to just the LP's first or
+          // last name.  Prevents "Xavier Capital" → "xavier" matching every "Xavier *" company.
+          const lpCompNorm  = lp.company.toLowerCase().replace(/[,.\-()&]/g, ' ').replace(companySuffixRe, '').trim().replace(/\s+/g, ' ');
+          const connCompNorm = conn.company.toLowerCase().replace(/[,.\-()&]/g, ' ').replace(companySuffixRe, '').trim().replace(/\s+/g, ' ');
+          if (lpNameTokens.some(t => lpCompNorm === t || connCompNorm === t)) continue;
+
           const compScore = fuzzyMatchCompany(lp.company, conn.company);
           if (compScore >= 75) {
             // Exclude if this connection already matched as a direct match
