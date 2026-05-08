@@ -1880,6 +1880,94 @@ router.get('/stats', authenticate, async (req, res) => {
 });
 
 // ============================================================
+// ADMIN: SURNAME ENRICHMENT
+// ============================================================
+
+// POST /api/lp/admin/enrich-missing-surnames
+// Finds all LP records with only a first name, searches Apollo's free
+// people-search endpoint for a match by first_name + company, and updates
+// full_name when a confident match is found. No credit cost — uses search,
+// not enrichment. Admin only.
+//
+// Query params:
+//   limit  – max records to process in this run (default 50, max 200)
+//   dry_run – if "true", returns what would change without writing
+router.post('/admin/enrich-missing-surnames', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  if (!apollo.hasKey()) return res.status(500).json({ error: 'APOLLO_API_KEY not set' });
+
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const dryRun = req.query.dry_run === 'true';
+
+  try {
+    // Find LP records where full_name is a single token (no space)
+    const { rows } = await db.query(
+      `SELECT id, full_name, company
+       FROM lp_targets
+       WHERE full_name IS NOT NULL
+         AND TRIM(full_name) <> ''
+         AND full_name NOT LIKE '% %'
+       ORDER BY company
+       LIMIT $1`,
+      [limit]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ message: 'No single-name records found.', updated: 0, not_found: 0 });
+    }
+
+    const results = { updated: 0, not_found: 0, errors: 0, changes: [] };
+
+    for (const row of rows) {
+      try {
+        // 300ms delay between calls to respect Apollo rate limits
+        await new Promise(r => setTimeout(r, 300));
+
+        const match = await apollo.findPersonByFirstNameAndCompany(row.full_name, row.company);
+
+        if (!match) {
+          results.not_found++;
+          continue;
+        }
+
+        results.changes.push({
+          id: row.id,
+          company: row.company,
+          before: row.full_name,
+          after: match.full_name,
+          title: match.title,
+        });
+
+        if (!dryRun) {
+          await db.query(
+            `UPDATE lp_targets
+             SET full_name = $1,
+                 title = COALESCE(NULLIF(title, ''), $2)
+             WHERE id = $3`,
+            [match.full_name, match.title || null, row.id]
+          );
+        }
+        results.updated++;
+      } catch (err) {
+        results.errors++;
+        console.error(`Surname enrich error for ${row.full_name} @ ${row.company}:`, err.message);
+      }
+    }
+
+    res.json({
+      dry_run: dryRun,
+      processed: rows.length,
+      updated: results.updated,
+      not_found: results.not_found,
+      errors: results.errors,
+      changes: results.changes.slice(0, 50), // cap preview at 50
+    });
+  } catch (err) {
+    console.error('Surname enrichment error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // APOLLO INTEGRATION
 // ============================================================
 

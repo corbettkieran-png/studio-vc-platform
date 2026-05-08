@@ -386,6 +386,38 @@ ${senderEmail}`;
     }
   };
 
+  const [surnameEnrichRunning, setSurnameEnrichRunning] = useState(false);
+  const runSurnameEnrich = async () => {
+    if (surnameEnrichRunning) return;
+    if (!apolloKeyStatus?.has_key) {
+      alert('Apollo API key not configured. Add APOLLO_API_KEY in Railway → Variables and redeploy.');
+      return;
+    }
+    if (!confirm('Search Apollo for missing LP surnames? Runs in batches of 50 (free search — no credit cost). May take ~30 seconds per batch.')) return;
+    setSurnameEnrichRunning(true);
+    try {
+      const token = localStorage.getItem('svc_token');
+      let totalUpdated = 0;
+      // Process up to 200 records per click (4 batches of 50)
+      for (let i = 0; i < 4; i++) {
+        const res = await fetch('/api/lp/admin/enrich-missing-surnames?limit=50', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Enrichment failed');
+        totalUpdated += data.updated || 0;
+        if (data.processed < 50) break; // no more records
+      }
+      alert(`Surname enrichment complete: ${totalUpdated} LP names updated.`);
+      await loadTargets();
+    } catch (err) {
+      alert('Surname enrichment failed: ' + err.message);
+    } finally {
+      setSurnameEnrichRunning(false);
+    }
+  };
+
   useEffect(() => {
     loadTargets();
   }, [loadTargets]);
@@ -547,6 +579,14 @@ ${senderEmail}`;
                 onClick={runApolloBulkEnrich}
               >
                 {apolloBulkRunning ? 'Enriching…' : 'Run Live Apollo Enrich (missing only)'}
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                disabled={!apolloKeyStatus?.has_key || surnameEnrichRunning}
+                onClick={runSurnameEnrich}
+                style={{ marginLeft: 8 }}
+              >
+                {surnameEnrichRunning ? 'Looking up surnames…' : 'Fix Missing Surnames'}
               </button>
             </div>
           </div>

@@ -155,9 +155,44 @@ async function matchPerson({ firstName, lastName, organizationName, linkedinUrl,
   return data.person || null;
 }
 
+/**
+ * Search for a specific person by first name at a given company.
+ * Uses the free /mixed_people/search endpoint (no credit cost).
+ * Returns the best matching person object or null.
+ */
+async function findPersonByFirstNameAndCompany(firstName, companyName) {
+  if (!firstName || !companyName) return null;
+
+  const data = await apolloFetch('/mixed_people/search', {
+    q_organization_name: companyName,
+    q_keywords: firstName,
+    page: 1,
+    per_page: 10,
+  });
+
+  const people = data.people || [];
+  const first = firstName.toLowerCase().trim();
+
+  // Find a person whose first name matches (case-insensitive)
+  const match = people.find(
+    p => (p.first_name || '').toLowerCase().trim() === first && p.last_name
+  );
+
+  if (!match) return null;
+
+  return {
+    first_name: match.first_name,
+    last_name: match.last_name,
+    full_name: match.name || `${match.first_name} ${match.last_name}`.trim(),
+    title: match.title || null,
+    linkedin_url: match.linkedin_url || null,
+  };
+}
+
 module.exports = {
   hasKey,
   searchPeopleAtCompany,
   enrichOrganization,
   matchPerson,
+  findPersonByFirstNameAndCompany,
 };
