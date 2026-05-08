@@ -361,6 +361,94 @@ async function repairLPNames() {
 }
 repairLPNames();
 
+// Pattern-based name cleaning applied to ALL lp_targets rows (covers records added
+// after the initial seed — i.e. the ~136 CSV-imported extras not in lp_seed.json).
+// Idempotent: only updates rows where full_name actually changes.
+async function cleanAllLPNames() {
+  try {
+    const { rows } = await db.query(`SELECT id, full_name FROM lp_targets WHERE full_name IS NOT NULL`);
+
+    const ASSET_PREFIXES = [
+      'Venture Capital','Private Equity','Public Equity','Fixed Income','Real Estate',
+      'Hedge Funds','Hedge Fund','Private Credit','Digital Asset','Infrastructure',
+      'Others','Other','Capital','Funds','Fund','Income','Equity','Estate','Credit',
+    ];
+    const TITLE_SUFFIXES = [
+      /\s+(Co-)?Founder\b.*/i, /\s+CEO\b.*/i, /\s+CFO\b.*/i, /\s+CIO\b.*/i, /\s+COO\b.*/i,
+      /\s+(Managing\s+)?(Director|Partner|Member)\b.*/i, /\s+General\s+Partner\b.*/i,
+      /\s+Venture\s+Partner\b.*/i, /\s+President\b.*/i, /\s+Chief\b.*/i,
+      /\s+Shareholder\b.*/i, /\s+Geschäftsführer\b.*/i, /\s+bei\s+.*/i,
+      /\s+Relationship\s+Manager\b.*/i, /\s+Principal\b.*/i, /\s+Associate\b.*/i,
+      /\s+Analyst\b.*/i, /\s+Chairman\b.*/i, /\s+Advisor\b.*/i, /\s+Officer\b.*/i,
+      /\s+--$/, /,\s+[A-Z].+$/, /\s+Forest\b.*/i, /\s+Founding\b.*/i,
+    ];
+    const PURE_TITLES = new Set([
+      'ceo','cfo','cio','coo','president','founder','co-founder','managing partner',
+      'managing director','general partner','director','partner','officer','analyst',
+      'and chief investment officer','and co-chief investment officer',
+      'and chief compliance officer','and chief executive officer',
+      'executive officer and president','director of operations',
+      'compliance officer, wealth advisor','officer, investment advisor representative',
+      'real estate management, llc','and chief investment officer',
+    ]);
+    const COUNTRY_PREFIX = /^(?:United\s+States|United\s+Kingdom|Germany|France|Singapore|Luxembourg|South\s+Korea|China|Japan|Australia|SG|HK)[,\s]+/i;
+
+    function stripAssetPrefix(s) {
+      for (let i = 0; i < 4; i++) {
+        const before = s;
+        for (const ac of ASSET_PREFIXES) {
+          const re = new RegExp(`^${ac.replace(/[()]/g,'\\$&')}[,\\s]*`, 'i');
+          s = s.replace(re, '').trim();
+        }
+        if (s === before) break;
+      }
+      return s;
+    }
+
+    function cleanName(raw) {
+      let s = raw.trim();
+      if (PURE_TITLES.has(s.toLowerCase())) return null;
+      // Strip [+N] LinkedIn tags
+      s = s.replace(/\[\+\d+\]/g, ' ').trim();
+      // Strip country prefix
+      s = s.replace(COUNTRY_PREFIX, '').trim();
+      // Strip asset class prefixes (multiple passes)
+      s = stripAssetPrefix(s);
+      // Strip leading lowercase fragment (e.g. "s, ")
+      s = s.replace(/^[a-z,\s]+/, '').trim();
+      // Insert spaces at camelCase boundaries
+      s = s.replace(/([a-z])([A-Z])/g, '$1 $2');
+      // Strip title suffixes
+      for (const pat of TITLE_SUFFIXES) s = s.replace(pat, '').trim();
+      // Second prefix pass after suffix removal
+      s = stripAssetPrefix(s);
+      // Title-case ALL-CAPS words (not abbreviations)
+      s = s.split(' ').map(w =>
+        /^[A-Z]{3,}$/.test(w) && !['LLC','LP','LLP','SA','UK','US','CIO','CEO','CFO','COO','AI','VC','KG','III'].includes(w)
+          ? w.charAt(0) + w.slice(1).toLowerCase() : w
+      ).join(' ');
+      // Strip trailing punctuation
+      s = s.replace(/[\s\-,.]+$/, '').trim();
+      if (!s || PURE_TITLES.has(s.toLowerCase())) return null;
+      if (!/^[A-Z]/.test(s)) return null;
+      return s;
+    }
+
+    let fixed = 0;
+    for (const row of rows) {
+      const cleaned = cleanName(row.full_name);
+      if (cleaned && cleaned !== row.full_name) {
+        await db.query(`UPDATE lp_targets SET full_name = $1 WHERE id = $2`, [cleaned, row.id]);
+        fixed++;
+      }
+    }
+    if (fixed > 0) console.log(`LP name deep-clean: fixed ${fixed} records.`);
+  } catch (err) {
+    console.error('LP name deep-clean error:', err.message);
+  }
+}
+cleanAllLPNames();
+
 // Auto-seed Joseph Coyne's LinkedIn connections (7,776 contacts from his CSV export)
 // Runs once: skips if his team_member already has connections loaded.
 async function autoSeedJoeConnections() {

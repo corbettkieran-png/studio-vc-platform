@@ -1716,6 +1716,25 @@ router.post('/targets/:id/activity', authenticate, async (req, res) => {
 
 // ============================================================
 // MATCHING & SCORING
+// GET /api/lp/export-extras - Export LP records NOT present in the seed file
+// Used once to capture the ~136 DB-only records so they can be committed to lp_seed.json
+router.get('/export-extras', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const lpData = require('../data/lp_seed.json');
+    const seedCompanies = new Set(lpData.map(r => (r.company || '').toLowerCase().trim()));
+    const { rows } = await db.query(
+      `SELECT full_name, email, company, fund_type, sector_interest, geographic_focus, outreach_status
+       FROM lp_targets ORDER BY company`
+    );
+    const extras = rows.filter(r => !seedCompanies.has((r.company || '').toLowerCase().trim()));
+    res.json({ count: extras.length, records: extras });
+  } catch (err) {
+    console.error('Export extras error:', err);
+    res.status(500).json({ error: 'Failed to export extras' });
+  }
+});
+
 // ============================================================
 
 // POST /api/lp/match - Re-run matching algorithm
