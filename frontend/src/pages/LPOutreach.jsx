@@ -250,7 +250,7 @@ ${senderEmail}`;
       subject = `Studio VC Fund III, late-stage seed, $3B+ portfolio`;
       body = `Hi ${firstName},
 
-I'm ${senderName}, Senior Associate at Studio VC. We are a New York-based venture fund currently raising Fund III ($50M target) and ${company} came up as a firm worth reaching out to directly.
+I'm ${senderName}, Senior Associate at Studio VC. We are a New York-based venture fund currently raising Fund III ($50M target) and we wanted to reach out to ${company} directly.
 
 Studio VC invests exclusively at the late-stage seed: post-product companies with early revenue and a clear path to Series A. It is a de-risked entry point that carries some of the strongest risk-adjusted returns in venture. Our track record reflects that with 38 portfolio companies across Funds I and II, collectively valued at over $3B, Fund II at 2.3x Net TVPI, and 50% of our seed investments reaching Series A within two years, roughly double the industry average.
 
@@ -857,7 +857,7 @@ ${senderEmail}`;
                         {t.full_name || t.name}
                       </div>
                       <div style={{ fontSize: 12, color: '#64748B', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {t.company}
+                        {t.title ? <span style={{ fontStyle: 'italic', marginRight: 4 }}>{t.title} ·</span> : null}{t.company}
                       </div>
                     </td>
 

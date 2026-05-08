@@ -449,6 +449,121 @@ async function cleanAllLPNames() {
 }
 cleanAllLPNames();
 
+// Migrate misplaced job titles from geographic_focus → title column.
+// During the original CSV import, some records had their contact title
+// parsed into geographic_focus instead of title. This function detects
+// values that look like job titles (no city/country keywords) and moves
+// them. Idempotent: only updates rows where geographic_focus matches
+// the title pattern and title is currently null or empty.
+async function migrateGeoFocusToTitle() {
+  try {
+    const TITLE_KEYWORDS = [
+      'manager','partner','director','president','officer','analyst',
+      'associate','principal','advisor','trustee','chairman','founder',
+      'cio','ceo','cfo','coo','head of','investment','portfolio',
+      'managing','general partner','venture partner','senior',
+      'executive','vice president','vp','svp','evp',
+    ];
+
+    // Location keywords — if any appear, it's a real geo value, leave it alone
+    const GEO_KEYWORDS = [
+      'united states','united kingdom','canada','australia','germany',
+      'france','singapore','hong kong','japan','china','india','brazil',
+      'europe','asia','pacific','middle east','africa','latin america',
+      'new york','california','london','global','domestic','international',
+      'north america','south america','emerging market',
+    ];
+
+    const { rows } = await db.query(
+      `SELECT id, geographic_focus, title
+       FROM lp_targets
+       WHERE geographic_focus IS NOT NULL
+         AND TRIM(geographic_focus) <> ''
+         AND (title IS NULL OR TRIM(title) = '')`
+    );
+
+    let migrated = 0;
+    for (const row of rows) {
+      const geo = (row.geographic_focus || '').toLowerCase().trim();
+
+      // Skip if it contains any geo keyword
+      const isGeo = GEO_KEYWORDS.some(kw => geo.includes(kw));
+      if (isGeo) continue;
+
+      // Treat as a title if it matches a title keyword
+      const isTitle = TITLE_KEYWORDS.some(kw => geo.includes(kw));
+      if (!isTitle) continue;
+
+      await db.query(
+        `UPDATE lp_targets
+         SET title = $1, geographic_focus = NULL
+         WHERE id = $2`,
+        [row.geographic_focus.trim(), row.id]
+      );
+      migrated++;
+    }
+    if (migrated > 0) console.log(`LP title migration: moved ${migrated} geo_focus values to title.`);
+  } catch (err) {
+    console.error('LP title migration error:', err.message);
+  }
+}
+migrateGeoFocusToTitle();
+
+// Remove duplicate LP records — keeps the most data-complete record per
+// company (ranked by number of non-null fields), deletes the rest.
+// Fully idempotent: only deletes when >1 record shares the same normalised
+// company name.
+async function deduplicateLPTargets() {
+  try {
+    // Find all company groups with more than one record
+    const { rows: dupeGroups } = await db.query(`
+      SELECT LOWER(TRIM(company)) AS norm_company, COUNT(*) AS cnt
+      FROM lp_targets
+      GROUP BY LOWER(TRIM(company))
+      HAVING COUNT(*) > 1
+    `);
+
+    if (dupeGroups.length === 0) return;
+    console.log(`LP dedup: found ${dupeGroups.length} companies with duplicates.`);
+
+    let totalDeleted = 0;
+    for (const group of dupeGroups) {
+      const { rows: records } = await db.query(
+        `SELECT id,
+          (CASE WHEN full_name  IS NOT NULL AND TRIM(full_name)  <> '' THEN 1 ELSE 0 END +
+           CASE WHEN email      IS NOT NULL AND TRIM(email)      <> '' THEN 1 ELSE 0 END +
+           CASE WHEN title      IS NOT NULL AND TRIM(title)      <> '' THEN 1 ELSE 0 END +
+           CASE WHEN fund_type  IS NOT NULL THEN 1 ELSE 0 END +
+           CASE WHEN geographic_focus IS NOT NULL AND TRIM(geographic_focus) <> '' THEN 1 ELSE 0 END +
+           CASE WHEN sector_interest IS NOT NULL THEN 1 ELSE 0 END +
+           CASE WHEN linkedin_url IS NOT NULL AND TRIM(linkedin_url) <> '' THEN 1 ELSE 0 END +
+           CASE WHEN outreach_status IS NOT NULL AND outreach_status <> 'not_started' THEN 2 ELSE 0 END
+          ) AS completeness_score
+         FROM lp_targets
+         WHERE LOWER(TRIM(company)) = $1
+         ORDER BY completeness_score DESC, id ASC`,
+        [group.norm_company]
+      );
+
+      // Keep first (most complete), delete the rest
+      const keepId = records[0].id;
+      const deleteIds = records.slice(1).map(r => r.id);
+
+      if (deleteIds.length > 0) {
+        await db.query(
+          `DELETE FROM lp_targets WHERE id = ANY($1::uuid[])`,
+          [deleteIds]
+        );
+        totalDeleted += deleteIds.length;
+      }
+    }
+    if (totalDeleted > 0) console.log(`LP dedup: deleted ${totalDeleted} duplicate records.`);
+  } catch (err) {
+    console.error('LP dedup error:', err.message);
+  }
+}
+deduplicateLPTargets();
+
 // Auto-seed Joseph Coyne's LinkedIn connections (7,776 contacts from his CSV export)
 // Runs once: skips if his team_member already has connections loaded.
 async function autoSeedJoeConnections() {
