@@ -199,16 +199,14 @@ export default function LPOutreach() {
 
     if (type === 'warm_intro' && connectors.length > 0) {
       const connector = connectors[0];
-      subject = `Studio VC Fund III — Introduction via ${connector.name}`;
+      subject = `Studio VC Fund III, introduction via ${connector.name}`;
       body = `Hi ${firstName},
 
-${connector.name} suggested I reach out — I'm ${senderName}, Senior Associate at Studio VC.
+${connector.name} suggested I reach out. I'm ${senderName}, Senior Associate at Studio VC, a New York-based venture fund currently raising Fund III ($50M target).
 
-We're currently raising Fund III ($50M target) and I wanted to connect given ${connector.name}'s view that there could be strong alignment with ${company}.
+Studio VC invests exclusively at the late-stage seed: post-product companies with early revenue and a clear path to Series A. Our portfolio spans 38 companies across Funds I and II, collectively valued at over $3B, with Fund II at 2.3x Net TVPI. We invest $750K to $1M as a first check and consistently co-invest alongside Insight, General Catalyst, Bain Capital Ventures, Coatue, and DST Global.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there is a genuine case for a conversation about fit with our current pipeline and LP base.` : ''}
 
-Studio VC focuses exclusively on late-stage seed — companies that are post-product, generating early revenue, and positioned for Series A within 12–18 months. Our portfolio (38 companies across Funds I & II) is collectively valued at over $3B, with Fund II at 2.3x Net TVPI. We invest $750K–$1M as a first check and consistently co-invest alongside firms like Insight, General Catalyst, Bain Capital Ventures, Coatue, and DST Global.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there's a real conversation to be had around our current pipeline and whether Fund III fits your mandate.` : ''}
-
-Would you have 20 minutes for a brief intro call? Happy to share our deck in advance.
+Would you have 20 minutes for a call? Happy to share our deck in advance.
 
 Best,
 ${senderName}
@@ -216,14 +214,14 @@ ${senderTitle}
 ${senderEmail}`;
     } else if (type === 'warm_intro_path' && warmPaths.length > 0) {
       const path = warmPaths[0];
-      subject = `Studio VC Fund III — Introduction via ${path.contact_name}`;
+      subject = `Studio VC Fund III, introduction via ${path.contact_name}`;
       body = `Hi ${firstName},
 
-I'm ${senderName}, Senior Associate at Studio VC. I understand you know ${path.contact_name}${path.contact_title ? ` (${path.contact_title})` : ''} — I was hoping that connection might open the door to a brief conversation.
+I'm ${senderName}, Senior Associate at Studio VC. ${path.contact_name}${path.contact_title ? ` (${path.contact_title})` : ''} mentioned you as someone worth speaking with as we raise Fund III.
 
-We're currently raising Fund III ($50M target, capped at $60M) and selectively engaging LPs who back high-quality early-stage managers. Studio VC has invested in 38 companies across two funds, with a portfolio collectively valued at over $3B. Fund II sits at 2.3x Net TVPI — and 50% of our seed investments have reached Series A within two years, roughly double the industry average.
+We are currently raising Fund III ($50M target, capped at $60M) and selectively engaging LPs who back high-quality early-stage managers. Studio VC has invested in 38 companies across two funds, with a portfolio collectively valued at over $3B. Fund II sits at 2.3x Net TVPI, and 50% of our seed investments have reached Series A within two years, roughly double the industry average.
 
-Our edge is operational depth. Our Managing Partners bring backgrounds from Broadway.com (former CEO, $600M+ revenue) and Bain Capital Ventures, and we consistently invest ahead of firms including Insight, General Catalyst, Bain Capital Ventures, Coatue, and DST Global.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I believe there's a strong case for a conversation around fit.` : ''}
+Our Managing Partners bring backgrounds from Broadway.com (former CEO, $600M+ revenue) and Bain Capital Ventures. We consistently invest ahead of Insight, General Catalyst, Bain Capital Ventures, Coatue, and DST Global.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I believe there is a strong case for a conversation around fit.` : ''}
 
 Would you be open to a 20-minute call? Happy to send our deck ahead of time.
 
@@ -232,16 +230,16 @@ ${senderName}
 ${senderTitle}
 ${senderEmail}`;
     } else if (type === 'follow_up') {
-      subject = `Following up — Studio VC Fund III`;
+      subject = `Following up, Studio VC Fund III`;
       body = `Hi ${firstName},
 
 I wanted to follow up on my earlier note about Studio VC's Fund III raise.
 
-Since we last connected, we've continued to build strong momentum — our Fund II portfolio is now collectively valued at over $3B, and we're seeing compelling late-stage seed deal flow in ${sectorText} that I believe would be of interest to ${company}.
+Since we last connected, we have continued to build strong momentum. Our Fund II portfolio is now collectively valued at over $3B, and we are seeing compelling late-stage seed deal flow in ${sectorText} that I believe would be of interest to ${company}.
 
-Fund III is a $50M vehicle (capped at $60M) targeting 25 core positions at $750K–$1M first checks.
+Fund III is a $50M vehicle (capped at $60M) targeting 25 core positions at $750K to $1M first checks.
 
-If the timing makes sense, I'd welcome a 20-minute call to walk through our thesis and current pipeline. Happy to send the deck if useful.
+If the timing makes sense, I would welcome a 20-minute call to walk through our thesis and current pipeline. Happy to send the deck if useful.
 
 Best,
 ${senderName}
@@ -249,16 +247,16 @@ ${senderTitle}
 ${senderEmail}`;
     } else {
       // Cold outreach
-      subject = `Studio VC Fund III — Late-Stage Seed, $3B+ Portfolio`;
+      subject = `Studio VC Fund III, late-stage seed, $3B+ portfolio`;
       body = `Hi ${firstName},
 
-I'm ${senderName}, Senior Associate at Studio VC. We're a New York-based venture fund currently raising Fund III ($50M target) and I wanted to reach out given what I know about ${company}.
+I'm ${senderName}, Senior Associate at Studio VC. We are a New York-based venture fund currently raising Fund III ($50M target) and ${company} came up as a firm worth reaching out to directly.
 
-Studio VC invests exclusively at the late-stage seed — post-product companies with early revenue and a clear path to Series A. It's a de-risked entry point that carries some of the strongest risk-adjusted returns in venture. Our track record reflects that: 38 portfolio companies across Funds I & II, collectively valued at over $3B, with Fund II at 2.3x Net TVPI. 50% of our seed investments have reached Series A within two years — roughly double the industry average.
+Studio VC invests exclusively at the late-stage seed: post-product companies with early revenue and a clear path to Series A. It is a de-risked entry point that carries some of the strongest risk-adjusted returns in venture. Our track record reflects that with 38 portfolio companies across Funds I and II, collectively valued at over $3B, Fund II at 2.3x Net TVPI, and 50% of our seed investments reaching Series A within two years, roughly double the industry average.
 
-${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there could be meaningful alignment with our deal flow and LP base.` : `We focus on B2B SaaS, Enterprise AI, and Fintech — sectors where we've built deep pattern recognition over nearly a decade.`}${enrichment?.headline ? ` Your background in ${enrichment.headline.toLowerCase()} also suggests you'd have a strong read on the types of companies we're backing.` : ''}
+${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there could be meaningful alignment with our deal flow and LP base.` : `We focus on B2B SaaS, Enterprise AI, and Fintech, sectors where we have built deep pattern recognition over nearly a decade.`}${enrichment?.headline ? ` Your background in ${enrichment.headline.toLowerCase()} also suggests you would have a strong read on the types of companies we back.` : ''}
 
-Fund III is capped at $60M and we're selectively engaging LPs. Would you be open to a 20-minute call? Happy to share our deck in advance.
+Fund III is capped at $60M and we are selectively engaging LPs. Would you be open to a 20-minute call? Happy to share our deck in advance.
 
 Best,
 ${senderName}
