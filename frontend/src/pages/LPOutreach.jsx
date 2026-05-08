@@ -250,13 +250,13 @@ ${senderEmail}`;
       subject = `Studio VC Fund III, late-stage seed, $3B+ portfolio`;
       body = `Hi ${firstName},
 
-I'm ${senderName}, Senior Associate at Studio VC. We are a New York-based venture fund currently raising Fund III ($50M target) and we wanted to reach out to ${company} directly.
+I'm ${senderName}, Senior Associate at Studio VC, a New York-based venture fund currently raising Fund III ($50M target). We wanted to reach out to ${company} directly, as we believe there may be meaningful thesis alignment worth exploring.
 
-Studio VC invests exclusively at the late-stage seed: post-product companies with early revenue and a clear path to Series A. It is a de-risked entry point that carries some of the strongest risk-adjusted returns in venture. Our track record reflects that with 38 portfolio companies across Funds I and II, collectively valued at over $3B, Fund II at 2.3x Net TVPI, and 50% of our seed investments reaching Series A within two years, roughly double the industry average.
+Studio VC invests exclusively at the late-stage seed: post-product companies with early revenue and a clear path to Series A. It is a de-risked entry point with some of the strongest risk-adjusted returns in venture. Our track record reflects that: 38 portfolio companies across Funds I and II, collectively valued at over $3B, Fund II at 2.3x Net TVPI, and 50% of our seed investments reaching Series A within two years, roughly double the industry average.
 
-${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there could be meaningful alignment with our deal flow and LP base.` : `We focus on B2B SaaS, Enterprise AI, and Fintech, sectors where we have built deep pattern recognition over nearly a decade.`}${enrichment?.headline ? ` Your background in ${enrichment.headline.toLowerCase()} also suggests you would have a strong read on the types of companies we back.` : ''}
+${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, we think there is a genuine case for a conversation around fit with our current pipeline and LP base.` : `We focus on B2B SaaS, Enterprise AI, and Fintech, sectors where we have built deep pattern recognition over nearly a decade.`}${enrichment?.headline ? ` Your background in ${enrichment.headline.toLowerCase()} also suggests you would have a strong read on the companies we back.` : ''}
 
-Fund III is capped at $60M and we are selectively engaging LPs. Would you be open to a 20-minute call? Happy to share our deck in advance.
+Fund III is capped at $60M and we are being selective with LP conversations. Would you be open to a 20-minute call? Happy to share our deck in advance.
 
 Best,
 ${senderName}
