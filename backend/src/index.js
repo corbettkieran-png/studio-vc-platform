@@ -336,6 +336,31 @@ async function autoSeedLPTargets() {
 }
 autoSeedLPTargets();
 
+// Repair LP full_name values that were garbled by the original CSV parse.
+// Runs on every deploy: matches records by company name and overwrites full_name
+// only when it differs from the canonical seed value. Fully idempotent.
+async function repairLPNames() {
+  try {
+    const lpData = require('./data/lp_seed.json');
+    let fixed = 0;
+    for (const r of lpData) {
+      if (!r.full_name || !r.company) continue;
+      const result = await db.query(
+        `UPDATE lp_targets
+         SET full_name = $1
+         WHERE LOWER(TRIM(company)) = LOWER(TRIM($2))
+           AND full_name IS DISTINCT FROM $1`,
+        [r.full_name, r.company]
+      );
+      fixed += result.rowCount;
+    }
+    if (fixed > 0) console.log(`LP name repair: updated ${fixed} records.`);
+  } catch (err) {
+    console.error('LP name repair error:', err.message);
+  }
+}
+repairLPNames();
+
 // Auto-seed Joseph Coyne's LinkedIn connections (7,776 contacts from his CSV export)
 // Runs once: skips if his team_member already has connections loaded.
 async function autoSeedJoeConnections() {
