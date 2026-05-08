@@ -154,6 +154,9 @@ export const apolloBulkEnrich = (limit = 50) =>
     body: JSON.stringify({ only_missing: true, limit }),
   });
 
+export const enrichMissingSurnames = (limit = 50) =>
+  request(`/lp/admin/enrich-missing-surnames?limit=${limit}`, { method: 'POST' });
+
 // Known contacts (warm intro flags)
 export const flagKnownContact = (contactId, note) =>
   request(`/lp/apollo/contacts/${contactId}/know`, { method: 'POST', body: JSON.stringify({ relationship_note: note }) });

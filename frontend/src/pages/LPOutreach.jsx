@@ -4,7 +4,7 @@ import {
   getLPTeam, addLPTeamMember, removeLPTeamMember, uploadLinkedInCSV,
   importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
   runLPMatching, getLPStats, getApolloStatus, getApolloContacts,
-  getApolloKeyStatus, apolloLiveSearch, apolloBulkEnrich,
+  getApolloKeyStatus, apolloLiveSearch, apolloBulkEnrich, enrichMissingSurnames,
   flagKnownContact, unflagKnownContact, enrichLPTarget,
   enrichApolloContact, enrichApolloContactsBatch,
   getClaySettings, saveClaySettings, exportToClay, importClayCSV, getClayWebhookUrl,
@@ -396,18 +396,12 @@ ${senderEmail}`;
     if (!confirm('Search Apollo for missing LP surnames? Runs in batches of 50 (free search — no credit cost). May take ~30 seconds per batch.')) return;
     setSurnameEnrichRunning(true);
     try {
-      const token = localStorage.getItem('svc_token');
       let totalUpdated = 0;
       // Process up to 200 records per click (4 batches of 50)
       for (let i = 0; i < 4; i++) {
-        const res = await fetch('/api/lp/admin/enrich-missing-surnames?limit=50', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Enrichment failed');
+        const data = await enrichMissingSurnames(50);
         totalUpdated += data.updated || 0;
-        if (data.processed < 50) break; // no more records
+        if ((data.processed || 0) < 50) break; // no more records
       }
       alert(`Surname enrichment complete: ${totalUpdated} LP names updated.`);
       await loadTargets();
