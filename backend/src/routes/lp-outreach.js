@@ -1929,22 +1929,42 @@ router.post('/admin/import-surnames', authenticate, upload.single('file'), async
   try {
     if (!req.file) return res.status(400).json({ error: 'CSV file required' });
 
-    // Strip UTF-8 BOM (added by Excel on save-as-CSV) before parsing
+    // Strip UTF-8 BOM (added by Excel/Sheets on save-as-CSV) before parsing
     const text = req.file.buffer.toString('utf8').replace(/^﻿/, '');
-    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    const allLines = text.split(/\r?\n/);
+    const lines = allLines.filter(l => l.trim());
     if (lines.length < 2) return res.status(400).json({ error: 'CSV appears empty' });
 
-    // Parse header row — strip BOM, quotes, whitespace, normalise case
-    const headerRow = lines[0]
-      .split(',')
-      .map(h => h.replace(/^﻿/, '').replace(/"/g, '').trim().toLowerCase());
-    const idIdx = headerRow.indexOf('id');
-    const nameIdx = headerRow.indexOf('full_name');
-    if (idIdx === -1 || nameIdx === -1) {
+    // Find the header row — scan first 10 lines for one containing both 'id' and 'full_name'
+    // This tolerates metadata/comment rows added by Excel, Google Sheets, or Notes apps
+    const parseColumns = line =>
+      line.split(',').map(h => h.replace(/^﻿/, '').replace(/"/g, '').trim().toLowerCase());
+
+    let headerLineIdx = -1;
+    let idIdx = -1;
+    let nameIdx = -1;
+    for (let i = 0; i < Math.min(10, lines.length); i++) {
+      const cols = parseColumns(lines[i]);
+      const ii = cols.indexOf('id');
+      const ni = cols.indexOf('full_name');
+      if (ii !== -1 && ni !== -1) {
+        headerLineIdx = i;
+        idIdx = ii;
+        nameIdx = ni;
+        break;
+      }
+    }
+
+    if (headerLineIdx === -1) {
+      // Show what we actually found in the first line to help debug
+      const firstCols = parseColumns(lines[0]);
       return res.status(400).json({
-        error: `CSV must have "id" and "full_name" columns. Found: ${headerRow.join(', ')}`,
+        error: `Could not find header row with "id" and "full_name" columns in the first 10 lines. First line contained: ${firstCols.join(', ')}`,
       });
     }
+
+    // Data rows start after the header
+    const dataLines = lines.slice(headerLineIdx + 1);
 
     // Simple CSV row parser (handles quoted fields)
     function parseRow(line) {
@@ -1963,8 +1983,8 @@ router.post('/admin/import-surnames', authenticate, upload.single('file'), async
     let updated = 0, skipped = 0;
     const errors = [];
 
-    for (let i = 1; i < lines.length; i++) {
-      const fields = parseRow(lines[i]);
+    for (let i = 0; i < dataLines.length; i++) {
+      const fields = parseRow(dataLines[i]);
       const id = (fields[idIdx] || '').replace(/"/g, '').trim();
       const fullName = (fields[nameIdx] || '').replace(/"/g, '').trim();
 
@@ -1979,7 +1999,7 @@ router.post('/admin/import-surnames', authenticate, upload.single('file'), async
         );
         if (result.rowCount > 0) updated++; else skipped++;
       } catch (err) {
-        errors.push(`Row ${i + 1}: ${err.message}`);
+        errors.push(`Row ${headerLineIdx + i + 2}: ${err.message}`);
       }
     }
 
