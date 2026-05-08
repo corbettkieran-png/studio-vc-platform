@@ -757,10 +757,33 @@ autoSeedKieranConnections();
 // Gated by migration_flags so it only runs once per database.
 async function matchLPSurnamesFromConnections() {
   try {
-    const { rows: flagRows } = await db.query(
+    // v2 uses word-set containment instead of substring — revert the 3 false
+    // positives written by v1 (Aaron Habriga × 2, Steve Ehrlich × 1) before re-running.
+    const { rows: v1Flag } = await db.query(
       `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_surname_match_v1'`
     );
-    if (flagRows.length) return; // already ran
+    const { rows: v2Flag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_surname_match_v2'`
+    );
+    if (v2Flag.length) return; // already ran v2
+
+    if (v1Flag.length) {
+      // Revert false positives from v1
+      await db.query(`
+        UPDATE lp_targets SET full_name = 'Aaron'
+        WHERE full_name = 'Aaron Habriga'
+          AND LOWER(TRIM(company)) IN (
+            LOWER('Highvista Private Capital Management Llc'),
+            LOWER('SPDGSingle Family Office, Venture Capital FirmBrussels, BelgiumBelgiumInfrastructure, Mobility & Automotive, Cleantech & Sustainability, General Technology, Utilities, Hardware & Electronics, Digital Health (HealthTech)Philippe Mauchardphilippe.mauchard@spdg.be SPE – Serruya Private Equity')
+          )
+      `);
+      await db.query(`
+        UPDATE lp_targets SET full_name = 'Steve'
+        WHERE full_name = 'Steve Ehrlich'
+          AND LOWER(TRIM(company)) = LOWER('Mirasol Capital')
+      `);
+      console.log('[surname-match] Reverted v1 false positives.');
+    }
 
     // Fetch single-name LP targets (full_name has no space)
     const { rows: lpTargets } = await db.query(`
@@ -815,10 +838,15 @@ async function matchLPSurnamesFromConnections() {
       const nb = normalizeCompany(b);
       if (!na || !nb) return false;
       if (na === nb) return true;
-      // One must contain the other AND the shorter must have ≥1 word remaining
-      const shorter = na.length <= nb.length ? na : nb;
-      const longer  = na.length <= nb.length ? nb : na;
-      return shorter.length >= 2 && longer.includes(shorter);
+      // Word-set containment: all words in the shorter name must appear
+      // as whole words in the longer name (not as substrings — that caused
+      // "STA" to match "highvista" in the v1 run).
+      const wordsA = new Set(na.split(/\s+/).filter(w => w.length > 0));
+      const wordsB = new Set(nb.split(/\s+/).filter(w => w.length > 0));
+      const shorter = wordsA.size <= wordsB.size ? wordsA : wordsB;
+      const longer  = wordsA.size <= wordsB.size ? wordsB : wordsA;
+      if (shorter.size === 0) return false;
+      return [...shorter].every(w => longer.has(w));
     }
 
     let updated = 0;
@@ -853,7 +881,7 @@ async function matchLPSurnamesFromConnections() {
       }
     }
 
-    await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_surname_match_v1')`);
+    await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_surname_match_v2') ON CONFLICT DO NOTHING`);
     console.log(`[surname-match] Complete: ${updated} updated, ${ambiguous} ambiguous, ${lpTargets.length - updated - ambiguous} unmatched.`);
   } catch (err) {
     console.error('[surname-match] Error:', err.message);
