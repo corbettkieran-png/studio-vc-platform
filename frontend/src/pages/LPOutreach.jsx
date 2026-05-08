@@ -663,6 +663,7 @@ ${senderEmail}`;
       { key: 'next_followup', label: 'Follow-up', width: 110 },
       { key: 'fund_type', label: 'Fund Type', width: 130 },
       { key: 'geo', label: 'Geography', width: 130 },
+      { key: 'warm_intro', label: 'Intro Path', width: 160 },
       { key: 'your_connections', label: 'Your Connections', width: 200 },
       { key: 'connections', label: '2nd-Degree (Manual)', width: 190 },
       { key: 'email', label: 'Email', width: 190 },
@@ -944,8 +945,53 @@ ${senderEmail}`;
                       </span>
                     </td>
 
-                    {/* Your Connections — from uploaded LinkedIn CSV */}
+                    {/* Warm Intro Path — algorithmic same_company matches */}
                     <td style={cellStyle(COLS[6], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
+                      onClick={() => setSelectedTarget(t.id)}>
+                      {(() => {
+                        const allMatches = t.connection_matches || [];
+                        const directMatches = allMatches.filter(m => m.match_type && m.match_type.startsWith('direct_'));
+                        const warmMatches = allMatches.filter(m => m.match_type === 'same_company');
+                        if (directMatches.length > 0) {
+                          return (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
+                                background: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0',
+                              }}>
+                                ✓ Direct
+                              </span>
+                            </div>
+                          );
+                        }
+                        if (warmMatches.length > 0) {
+                          return (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
+                              {warmMatches.slice(0, 2).map((m, i) => (
+                                <span key={i}
+                                  title={`${m.connection_name || 'Connection'}${m.connection_company ? ` @ ${m.connection_company}` : ''}\nvia ${m.team_member_name}`}
+                                  style={{
+                                    display: 'inline-block', padding: '2px 7px', borderRadius: 10,
+                                    fontSize: 10, fontWeight: 500, cursor: 'default',
+                                    background: '#FFF7ED', color: '#92400E', border: '1px solid #FDE68A',
+                                    maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                  }}>
+                                  🤝 {m.connection_name ? m.connection_name.split(' ')[0] : 'via ' + m.team_member_name}
+                                </span>
+                              ))}
+                              {warmMatches.length > 2 && (
+                                <span style={{ fontSize: 10, color: '#6B7280' }}>+{warmMatches.length - 2}</span>
+                              )}
+                            </div>
+                          );
+                        }
+                        return <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>;
+                      })()}
+                    </td>
+
+                    {/* Your Connections — from uploaded LinkedIn CSV */}
+                    <td style={cellStyle(COLS[7], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
                       onClick={() => setSelectedTarget(t.id)}>
                       {(() => {
                         const matches = t.linkedin_matches || [];
@@ -971,7 +1017,7 @@ ${senderEmail}`;
                     </td>
 
                     {/* 2nd-Degree Connections (manual / Navigator-sourced) */}
-                    <td style={cellStyle(COLS[7], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
+                    <td style={cellStyle(COLS[8], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
                       onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', minHeight: 28 }}>
                         {manualConns.slice(0, 3).map(conn => (
@@ -1011,14 +1057,14 @@ ${senderEmail}`;
                     </td>
 
                     {/* Email */}
-                    <td style={cellStyle(COLS[8])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[9])} onClick={() => setSelectedTarget(t.id)}>
                       {t.email
                         ? <span style={{ fontSize: 11, color: '#059669' }}>{t.email}</span>
                         : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
                     </td>
 
                     {/* Navigator search */}
-                    <td style={cellStyle(COLS[9])} onClick={e => e.stopPropagation()}>
+                    <td style={cellStyle(COLS[10])} onClick={e => e.stopPropagation()}>
                       {(() => {
                         const personName = (t.full_name || t.name || '').replace(/,/g, '').trim();
                         const companyName = (t.company || '').trim();
@@ -1045,7 +1091,7 @@ ${senderEmail}`;
                     </td>
 
                     {/* Delete record */}
-                    <td style={{ ...cellStyle(COLS[10]), textAlign: 'center', padding: '0 4px' }} onClick={e => e.stopPropagation()}>
+                    <td style={{ ...cellStyle(COLS[11]), textAlign: 'center', padding: '0 4px' }} onClick={e => e.stopPropagation()}>
                       <button
                         title="Delete this LP record"
                         onClick={async () => {

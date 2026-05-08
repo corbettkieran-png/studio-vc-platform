@@ -1004,7 +1004,23 @@ router.get('/targets', authenticate, async (req, res) => {
                OR LOWER(TRIM(lc.company)) LIKE '%' || LOWER(TRIM(t.company)) || '%')
           ),
           '[]'::json
-        ) as linkedin_matches
+        ) as linkedin_matches,
+        COALESCE(
+          (SELECT json_agg(json_build_object(
+              'match_type', lcm.match_type,
+              'match_confidence', lcm.match_confidence,
+              'team_member_name', tm.full_name,
+              'connection_name', lc.full_name,
+              'connection_company', lc.company,
+              'connection_position', lc.position
+           ) ORDER BY lcm.match_confidence DESC)
+           FROM lp_connection_matches lcm
+           JOIN team_members tm ON tm.id = lcm.team_member_id
+           LEFT JOIN linkedin_connections lc ON lc.id = lcm.linkedin_connection_id
+           WHERE lcm.lp_target_id = t.id AND tm.user_id = $1
+          ),
+          '[]'::json
+        ) as connection_matches
       FROM lp_targets t WHERE 1=1`;
     const params = [req.user.id];
 
