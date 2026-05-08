@@ -762,10 +762,10 @@ async function matchLPSurnamesFromConnections() {
     const { rows: v1Flag } = await db.query(
       `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_surname_match_v1'`
     );
-    const { rows: v3Flag } = await db.query(
-      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_surname_match_v3'`
+    const { rows: v4Flag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_surname_match_v4'`
     );
-    if (v3Flag.length) return; // already ran v3
+    if (v4Flag.length) return; // already ran v4
 
     if (v1Flag.length) {
       // Revert false positives from v1 (substring bug: "sta" matched "highvista", "sol" matched "mirasol")
@@ -789,6 +789,12 @@ async function matchLPSurnamesFromConnections() {
       UPDATE lp_targets SET full_name = 'Jeffrey'
       WHERE full_name = 'Jeffrey Pierce'
         AND LOWER(TRIM(company)) = LOWER('US Capital')
+    `);
+    // Revert v3 false positive ("morgan" from "J.P. Morgan" matched "Morgan Creek Capital")
+    await db.query(`
+      UPDATE lp_targets SET full_name = 'Dan'
+      WHERE full_name = 'Dan Akivis, CFA'
+        AND LOWER(TRIM(company)) = LOWER('Morgan Creek Capital Management, LLC')
     `);
 
     // Fetch single-name LP targets (full_name has no space)
@@ -847,13 +853,15 @@ async function matchLPSurnamesFromConnections() {
       if (!na || !nb) return false;
       if (na === nb) return true;
       // Word-set containment: all words in the shorter name must appear
-      // as whole words in the longer name (not as substrings — that caused
-      // "STA" to match "highvista" in the v1 run).
+      // as whole words in the longer name.
+      // Require shorter.size >= 2: single-word names are too generic for
+      // partial matching (e.g. "morgan" from "J.P. Morgan" must not match
+      // "Morgan Creek Capital Management").
       const wordsA = new Set(na.split(/\s+/).filter(w => w.length > 0));
       const wordsB = new Set(nb.split(/\s+/).filter(w => w.length > 0));
       const shorter = wordsA.size <= wordsB.size ? wordsA : wordsB;
       const longer  = wordsA.size <= wordsB.size ? wordsB : wordsA;
-      if (shorter.size === 0) return false;
+      if (shorter.size < 2) return false;
       return [...shorter].every(w => longer.has(w));
     }
 
@@ -876,7 +884,9 @@ async function matchLPSurnamesFromConnections() {
 
       if (companyMatches.length === 1) {
         const match = companyMatches[0];
-        const newName = `${lp.full_name.trim()} ${match.last_name.trim()}`;
+        // Strip professional credentials appended to last names (e.g. "Akivis, CFA")
+        const cleanLastName = match.last_name.trim().replace(/[,\s]+(CFA|MBA|CPA|CFP|JD|MD|PhD|CIO|ESQ|PE|PMP|CAIA|CIMA|CPWA|CFA®|FRM)\b.*/i, '').trim();
+        const newName = `${lp.full_name.trim()} ${cleanLastName}`;
         await db.query(
           `UPDATE lp_targets SET full_name = $1 WHERE id = $2`,
           [newName, lp.id]
@@ -889,7 +899,7 @@ async function matchLPSurnamesFromConnections() {
       }
     }
 
-    await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_surname_match_v3') ON CONFLICT DO NOTHING`);
+    await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_surname_match_v4') ON CONFLICT DO NOTHING`);
     console.log(`[surname-match] Complete: ${updated} updated, ${ambiguous} ambiguous, ${lpTargets.length - updated - ambiguous} unmatched.`);
   } catch (err) {
     console.error('[surname-match] Error:', err.message);
