@@ -288,6 +288,19 @@ async function runMatching() {
         // Direct name match
         const nameScore = fuzzyMatchName(lp.full_name, conn.full_name);
         if (nameScore >= 70) {
+          // Company disambiguation: if both sides have a company and they clearly differ,
+          // this is a name collision (same name, different person) — not a real match.
+          if (lp.company && conn.company) {
+            const _sfx = /\b(inc|llc|llp|lp|ltd|corp|co|group|partners|capital|management|mgmt|advisors|advisory|fund|funds|ventures|investments|holdings|foundation|assoc|association)\b/g;
+            const normLP   = lp.company.toLowerCase().replace(/[,.\-()&]/g, ' ').replace(_sfx, '').trim().replace(/\s+/g, ' ');
+            const normConn = conn.company.toLowerCase().replace(/[,.\-()&]/g, ' ').replace(_sfx, '').trim().replace(/\s+/g, ' ');
+            // Only reject when both normalised names are meaningful AND neither contains the other
+            if (normLP.length >= 3 && normConn.length >= 3 &&
+                normLP !== normConn &&
+                !normLP.includes(normConn) && !normConn.includes(normLP)) {
+              continue;
+            }
+          }
           addMatch(conn.team_member_id, 'direct_name', nameScore, conn.id);
         }
       }
