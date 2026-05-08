@@ -233,6 +233,14 @@ async function autoMigrate() {
       ON CONFLICT (email) DO NOTHING
     `);
 
+    // Promote known team Google accounts to admin (handles accounts already created
+    // before the OAuth role fix was deployed)
+    await db.query(`
+      UPDATE users SET role = 'admin'
+      WHERE email IN ('corbett.kieran@gmail.com')
+        AND role <> 'admin'
+    `);
+
     // Add work_email to team_members — allows a separate display email in signatures
     // distinct from the Google OAuth login email
     await db.query(`

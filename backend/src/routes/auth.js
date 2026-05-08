@@ -158,12 +158,18 @@ router.post('/google', async (req, res) => {
         await db.query('UPDATE users SET google_id = $1, updated_at = NOW() WHERE id = $2', [googleId, user.id]);
       }
     } else {
-      // First-time Google sign-in — create the user as analyst
+      // First-time Google sign-in — studio.vc addresses and known team emails
+      // get admin role; all others default to analyst
+      const ADMIN_EMAILS = ['corbett.kieran@gmail.com'];
+      const isStudioDomain = email.toLowerCase().endsWith('@studio.vc');
+      const isKnownAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
+      const newRole = (isStudioDomain || isKnownAdmin) ? 'admin' : 'analyst';
+
       const { rows: created } = await db.query(
         `INSERT INTO users (email, full_name, google_id, role)
-         VALUES ($1, $2, $3, 'analyst')
+         VALUES ($1, $2, $3, $4)
          RETURNING id, email, full_name, role`,
-        [email.toLowerCase(), name, googleId]
+        [email.toLowerCase(), name, googleId, newRole]
       );
       user = created[0];
     }

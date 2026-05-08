@@ -1893,7 +1893,6 @@ router.get('/stats', authenticate, async (req, res) => {
 //   limit  – max records to process in this run (default 50, max 200)
 //   dry_run – if "true", returns what would change without writing
 router.post('/admin/enrich-missing-surnames', authenticate, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
   if (!apollo.hasKey()) return res.status(500).json({ error: 'APOLLO_API_KEY not set' });
 
   const limit = Math.min(parseInt(req.query.limit) || 50, 200);
