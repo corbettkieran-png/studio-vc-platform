@@ -188,6 +188,7 @@ export default function LPOutreach() {
     const enrichment = detail.linkedin_enrichment;
     const senderName = myTeamMember?.full_name || 'Kieran Corbett';
     const senderTitle = 'Senior Associate, Studio VC';
+    const senderEmail = myTeamMember?.work_email || 'kcorbett@studio.vc';
 
     const sectorText = sectors.length > 0
       ? sectors.slice(0, 3).map(s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ')
@@ -211,7 +212,8 @@ Would you have 20 minutes for a brief intro call? Happy to share our deck in adv
 
 Best,
 ${senderName}
-${senderTitle}`;
+${senderTitle}
+${senderEmail}`;
     } else if (type === 'warm_intro_path' && warmPaths.length > 0) {
       const path = warmPaths[0];
       subject = `Studio VC Fund III — Introduction via ${path.contact_name}`;
@@ -227,7 +229,8 @@ Would you be open to a 20-minute call? Happy to send our deck ahead of time.
 
 Best,
 ${senderName}
-${senderTitle}`;
+${senderTitle}
+${senderEmail}`;
     } else if (type === 'follow_up') {
       subject = `Following up — Studio VC Fund III`;
       body = `Hi ${firstName},
@@ -242,7 +245,8 @@ If the timing makes sense, I'd welcome a 20-minute call to walk through our thes
 
 Best,
 ${senderName}
-${senderTitle}`;
+${senderTitle}
+${senderEmail}`;
     } else {
       // Cold outreach
       subject = `Studio VC Fund III — Late-Stage Seed, $3B+ Portfolio`;
@@ -258,7 +262,8 @@ Fund III is capped at $60M and we're selectively engaging LPs. Would you be open
 
 Best,
 ${senderName}
-${senderTitle}`;
+${senderTitle}
+${senderEmail}`;
     }
 
     setEmailDraft({ subject, body, to: detail.email || '', type });

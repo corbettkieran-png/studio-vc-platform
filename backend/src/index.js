@@ -233,6 +233,21 @@ async function autoMigrate() {
       ON CONFLICT (email) DO NOTHING
     `);
 
+    // Add work_email to team_members — allows a separate display email in signatures
+    // distinct from the Google OAuth login email
+    await db.query(`
+      ALTER TABLE team_members ADD COLUMN IF NOT EXISTS work_email VARCHAR(255);
+    `);
+
+    // Seed work emails for known team members
+    await db.query(`
+      UPDATE team_members SET work_email = 'kcorbett@studio.vc'
+      WHERE full_name ILIKE '%kieran%' AND (work_email IS NULL OR work_email = '');
+      UPDATE team_members SET work_email = 'jcoyne@studio.vc'
+      WHERE full_name ILIKE '%joseph%' OR full_name ILIKE '%joe%coyne%'
+      AND (work_email IS NULL OR work_email = '');
+    `);
+
     console.log('Auto-migrate: contacts schema applied.');
   } catch (err) {
     console.error('Auto-migrate error:', err.message);

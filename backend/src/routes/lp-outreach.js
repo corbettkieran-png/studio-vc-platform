@@ -430,7 +430,7 @@ router.get('/me/team-member', authenticate, async (req, res) => {
   try {
     // 1. Already linked to this user?
     const { rows: existing } = await db.query(
-      'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE user_id = $1',
+      'SELECT id, full_name, linkedin_url, connections_count, last_upload_at, work_email FROM team_members WHERE user_id = $1',
       [req.user.id]
     );
     if (existing.length > 0) return res.json({ team_member: existing[0] });
@@ -1379,11 +1379,18 @@ router.post('/targets/:id/draft-intro', authenticate, async (req, res) => {
     if (!lpRows.length) return res.status(404).json({ error: 'LP not found' });
     const lp = lpRows[0];
 
-    // Load the logged-in user's full profile
+    // Load the logged-in user's full profile + work_email from team_members
     const { rows: userRows } = await db.query(
       'SELECT full_name, email, role FROM users WHERE id = $1', [req.user.id]
     );
-    const sender = userRows[0] || { full_name: 'The Studio VC Team', email: '' };
+    const user = userRows[0] || { full_name: 'The Studio VC Team', email: '' };
+    const { rows: tmRows } = await db.query(
+      'SELECT work_email FROM team_members WHERE user_id = $1 LIMIT 1', [req.user.id]
+    );
+    const sender = {
+      ...user,
+      email: tmRows[0]?.work_email || user.email,
+    };
 
     // Build a personalised email using what we know
     const fundType = lp.fund_type || 'investment firm';
