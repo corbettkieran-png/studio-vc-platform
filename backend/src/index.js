@@ -762,13 +762,13 @@ async function matchLPSurnamesFromConnections() {
     const { rows: v1Flag } = await db.query(
       `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_surname_match_v1'`
     );
-    const { rows: v2Flag } = await db.query(
-      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_surname_match_v2'`
+    const { rows: v3Flag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_surname_match_v3'`
     );
-    if (v2Flag.length) return; // already ran v2
+    if (v3Flag.length) return; // already ran v3
 
     if (v1Flag.length) {
-      // Revert false positives from v1
+      // Revert false positives from v1 (substring bug: "sta" matched "highvista", "sol" matched "mirasol")
       await db.query(`
         UPDATE lp_targets SET full_name = 'Aaron'
         WHERE full_name = 'Aaron Habriga'
@@ -784,6 +784,12 @@ async function matchLPSurnamesFromConnections() {
       `);
       console.log('[surname-match] Reverted v1 false positives.');
     }
+    // Revert v2 false positive ("us" from "US Capital" matched "Baker Tilly US")
+    await db.query(`
+      UPDATE lp_targets SET full_name = 'Jeffrey'
+      WHERE full_name = 'Jeffrey Pierce'
+        AND LOWER(TRIM(company)) = LOWER('US Capital')
+    `);
 
     // Fetch single-name LP targets (full_name has no space)
     const { rows: lpTargets } = await db.query(`
@@ -828,7 +834,9 @@ async function matchLPSurnamesFromConnections() {
         // remove punctuation except spaces
         .replace(/[^a-z0-9\s]/g, ' ')
         .split(/\s+/)
-        .filter(w => w.length > 0 && !STRIP_WORDS.has(w))
+        // Require ≥3 chars so ultra-short tokens like "us", "uk", "ny" can't
+        // drive a spurious match (e.g. "US Capital" → "us" matching "Baker Tilly US")
+        .filter(w => w.length >= 3 && !STRIP_WORDS.has(w))
         .join(' ')
         .trim();
     }
@@ -881,7 +889,7 @@ async function matchLPSurnamesFromConnections() {
       }
     }
 
-    await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_surname_match_v2') ON CONFLICT DO NOTHING`);
+    await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_surname_match_v3') ON CONFLICT DO NOTHING`);
     console.log(`[surname-match] Complete: ${updated} updated, ${ambiguous} ambiguous, ${lpTargets.length - updated - ambiguous} unmatched.`);
   } catch (err) {
     console.error('[surname-match] Error:', err.message);
