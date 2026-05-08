@@ -1880,6 +1880,116 @@ router.get('/stats', authenticate, async (req, res) => {
 });
 
 // ============================================================
+// ADMIN: SURNAME CSV EXPORT / IMPORT
+// ============================================================
+
+// GET /api/lp/admin/export-incomplete-names
+// Downloads a CSV of all LP records that have only a first name (no surname).
+// Columns: id, first_name, company, fund_type, email
+// The user fills in a full_name column and re-uploads via the import endpoint.
+router.get('/admin/export-incomplete-names', authenticate, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, full_name AS first_name, company, fund_type, email
+       FROM lp_targets
+       WHERE full_name IS NOT NULL
+         AND TRIM(full_name) <> ''
+         AND full_name NOT LIKE '% %'
+       ORDER BY company, full_name`
+    );
+
+    const headers = ['id', 'first_name', 'full_name', 'company', 'fund_type', 'email'];
+    const escape = v => {
+      if (v == null) return '';
+      const s = String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [
+      headers.join(','),
+      ...rows.map(r =>
+        [r.id, r.first_name, '', r.company, r.fund_type, r.email].map(escape).join(',')
+      ),
+    ];
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="lp_missing_surnames.csv"');
+    res.send(lines.join('\n'));
+  } catch (err) {
+    console.error('Export incomplete names error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/lp/admin/import-surnames
+// Accepts a CSV with at minimum columns: id, full_name
+// Updates lp_targets.full_name for each row where full_name has a surname
+// (i.e. contains a space). Skips blank or single-token full_name values.
+router.post('/admin/import-surnames', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'CSV file required' });
+
+    const text = req.file.buffer.toString('utf8');
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return res.status(400).json({ error: 'CSV appears empty' });
+
+    // Parse header row (case-insensitive)
+    const headerRow = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+    const idIdx = headerRow.indexOf('id');
+    const nameIdx = headerRow.indexOf('full_name');
+    if (idIdx === -1 || nameIdx === -1) {
+      return res.status(400).json({ error: 'CSV must have "id" and "full_name" columns' });
+    }
+
+    // Simple CSV row parser (handles quoted fields)
+    function parseRow(line) {
+      const fields = [];
+      let cur = '', inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { inQuote = !inQuote; }
+        else if (ch === ',' && !inQuote) { fields.push(cur.trim()); cur = ''; }
+        else cur += ch;
+      }
+      fields.push(cur.trim());
+      return fields;
+    }
+
+    let updated = 0, skipped = 0;
+    const errors = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const fields = parseRow(lines[i]);
+      const id = (fields[idIdx] || '').replace(/"/g, '').trim();
+      const fullName = (fields[nameIdx] || '').replace(/"/g, '').trim();
+
+      if (!id) { skipped++; continue; }
+      // Only update if the supplied full_name has at least a first + last name
+      if (!fullName || !fullName.includes(' ')) { skipped++; continue; }
+
+      try {
+        const result = await db.query(
+          `UPDATE lp_targets SET full_name = $1 WHERE id = $2`,
+          [fullName, id]
+        );
+        if (result.rowCount > 0) updated++; else skipped++;
+      } catch (err) {
+        errors.push(`Row ${i + 1}: ${err.message}`);
+      }
+    }
+
+    res.json({
+      updated,
+      skipped,
+      errors: errors.slice(0, 10),
+      message: `Updated ${updated} LP records.`,
+    });
+  } catch (err) {
+    console.error('Import surnames error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ADMIN: SURNAME ENRICHMENT
 // ============================================================
 

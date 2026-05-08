@@ -5,6 +5,7 @@ import {
   importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
   runLPMatching, getLPStats, getApolloStatus, getApolloContacts,
   getApolloKeyStatus, apolloLiveSearch, apolloBulkEnrich, enrichMissingSurnames,
+  exportIncompleteLPNames, importLPSurnames,
   flagKnownContact, unflagKnownContact, enrichLPTarget,
   enrichApolloContact, enrichApolloContactsBatch,
   getClaySettings, saveClaySettings, exportToClay, importClayCSV, getClayWebhookUrl,
@@ -412,6 +413,31 @@ ${senderEmail}`;
     }
   };
 
+  const handleExportMissingNames = async () => {
+    try {
+      await exportIncompleteLPNames();
+    } catch (err) {
+      alert('Export failed: ' + err.message);
+    }
+  };
+
+  const [surnameImporting, setSurnameImporting] = useState(false);
+  const handleImportSurnames = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ''; // reset so same file can be re-uploaded
+    setSurnameImporting(true);
+    try {
+      const result = await importLPSurnames(file);
+      alert(`Import complete: ${result.updated} LP names updated, ${result.skipped} skipped.${result.errors?.length ? '\n\nErrors:\n' + result.errors.join('\n') : ''}`);
+      await loadTargets();
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+    } finally {
+      setSurnameImporting(false);
+    }
+  };
+
   useEffect(() => {
     loadTargets();
   }, [loadTargets]);
@@ -576,12 +602,26 @@ ${senderEmail}`;
               </button>
               <button
                 className="btn btn-secondary btn-sm"
-                disabled={!apolloKeyStatus?.has_key || surnameEnrichRunning}
-                onClick={runSurnameEnrich}
+                onClick={handleExportMissingNames}
                 style={{ marginLeft: 8 }}
+                title="Download a CSV of all LPs missing a surname. Fill in the full_name column and re-upload."
               >
-                {surnameEnrichRunning ? 'Looking up surnames…' : 'Fix Missing Surnames'}
+                Export Missing Surnames
               </button>
+              <label
+                className="btn btn-secondary btn-sm"
+                style={{ marginLeft: 8, cursor: surnameImporting ? 'not-allowed' : 'pointer', opacity: surnameImporting ? 0.6 : 1 }}
+                title="Upload your completed CSV to bulk-update LP surnames"
+              >
+                {surnameImporting ? 'Importing…' : 'Import Corrected Surnames'}
+                <input
+                  type="file"
+                  accept=".csv"
+                  style={{ display: 'none' }}
+                  disabled={surnameImporting}
+                  onChange={handleImportSurnames}
+                />
+              </label>
             </div>
           </div>
         )}

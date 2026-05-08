@@ -157,6 +157,28 @@ export const apolloBulkEnrich = (limit = 50) =>
 export const enrichMissingSurnames = (limit = 50) =>
   request(`/lp/admin/enrich-missing-surnames?limit=${limit}`, { method: 'POST' });
 
+export const exportIncompleteLPNames = async () => {
+  const token = localStorage.getItem('svc_token');
+  const base = import.meta.env.VITE_API_URL || '/api';
+  const res = await fetch(`${base}/lp/admin/export-incomplete-names`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Export failed');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'lp_missing_surnames.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+export const importLPSurnames = (file) => {
+  const form = new FormData();
+  form.append('file', file);
+  return request('/lp/admin/import-surnames', { method: 'POST', body: form });
+};
+
 // Known contacts (warm intro flags)
 export const flagKnownContact = (contactId, note) =>
   request(`/lp/apollo/contacts/${contactId}/know`, { method: 'POST', body: JSON.stringify({ relationship_note: note }) });
