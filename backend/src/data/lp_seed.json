@@ -12462,5 +12462,1800 @@
     "email": "karla.rethmann@zweipunkt7.com",
     "outreach_status": "not_started",
     "source": "main"
+  },
+  {
+    "company": "3Sisters Sustainable Management/Scarab Funds",
+    "fund_type": null,
+    "geographic_focus": "Manager",
+    "sector_interest": null,
+    "full_name": "Benjamin Bingham",
+    "email": "bingham@3sistersinvest.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "57 Stars",
+    "fund_type": null,
+    "geographic_focus": "Arlington, US",
+    "sector_interest": null,
+    "full_name": "Carl Balit",
+    "email": "cbalit@57stars.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "5X Capital",
+    "fund_type": "Multi-Family Office, Private Equity Firm",
+    "geographic_focus": "Kuala Lumpur, Malaysia",
+    "sector_interest": [
+      "retail & fashion",
+      "education & edtech",
+      "manufacturing & production",
+      "consumer services",
+      "other"
+    ],
+    "full_name": "Lim Jet Liang",
+    "email": "jet@5xcapital.my",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "AAA+ Wealth Management",
+    "fund_type": null,
+    "geographic_focus": "Partner",
+    "sector_interest": null,
+    "full_name": "Alfredo Sobalvarro",
+    "email": "asobalvarro@tripleaaaplus.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Abernathy Group II",
+    "fund_type": null,
+    "geographic_focus": "Assistant",
+    "sector_interest": null,
+    "full_name": "Debra Lemoine",
+    "email": "dlemoine@abbygroup.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Align Impact",
+    "fund_type": "Institutional Wealth Manager, Investment Consultant / OCIO",
+    "geographic_focus": "Santa Monica, Ca, United States",
+    "sector_interest": [
+      "cleantech & sustainability",
+      "education & edtech",
+      "pharmaceuticals & biotech",
+      "farming & production",
+      "general financial services"
+    ],
+    "full_name": "Brent Kessel",
+    "email": "bkessel@alignimpact.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "AllianceBernstein",
+    "fund_type": "Traditional Asset Manager (as LP)",
+    "geographic_focus": "Hong Kong",
+    "sector_interest": [
+      "Mobility & Automotive",
+      "Investment Strategies",
+      "Infrastructure",
+      "Utilities"
+    ],
+    "full_name": "Heinrich",
+    "email": "yheinrich.ey@allianzgi.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Allianz Global Investors",
+    "fund_type": "Traditional Asset Manager (as LP)",
+    "geographic_focus": "Hong Kong, Hong Kong",
+    "sector_interest": [
+      "mobility & automotive",
+      "infrastructure",
+      "utilities",
+      "investment strategies"
+    ],
+    "full_name": "Heinrich Ey",
+    "email": "heinrich.ey@allianzgi.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Antelope Company",
+    "fund_type": null,
+    "geographic_focus": "Denver, US",
+    "sector_interest": null,
+    "full_name": "Montgomery Cleworth",
+    "email": "mcleworth@monticelloassociates.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Arts et Biens",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Adrien Levy",
+    "email": "alevy@artsetbiens.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Azuro Capital",
+    "fund_type": null,
+    "geographic_focus": "Founder/GP",
+    "sector_interest": null,
+    "full_name": "Yuly Djaparidze",
+    "email": "yuly@azurocapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "B1 Capital Partners",
+    "fund_type": null,
+    "geographic_focus": "Lake Forest, US",
+    "sector_interest": null,
+    "full_name": "Ryan Brown",
+    "email": "rbrown@b1cap.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Baltisse",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "United States",
+    "sector_interest": [
+      "Manufacturing & Production",
+      "Pharmaceuticals & Biotech",
+      "Leisure & Entertainment",
+      "Real Estate (PropTech)",
+      "Industrial Services",
+      "General Technology",
+      "IT Services & Data",
+      "Consumer Services",
+      "Retail & Fashion",
+      "Other"
+    ],
+    "full_name": "Bruce",
+    "email": "bbarshop@barshopventures.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Barshop Ventures, LLC",
+    "fund_type": "Single Family Office, Real Estate Investment Firm, Venture Capital Firm, Private Equity Firm",
+    "geographic_focus": "San Antonio, Texas, USA",
+    "sector_interest": [
+      "it services & data",
+      "manufacturing & production",
+      "general technology",
+      "retail & fashion",
+      "leisure & entertainment",
+      "pharmaceuticals & biotech",
+      "real estate (proptech)",
+      "industrial services",
+      "other",
+      "consumer services"
+    ],
+    "full_name": "Bruce Barshop",
+    "email": "bbarshop@barshopventures.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Bergendahls",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "United States",
+    "sector_interest": [
+      "Logistics & Supply Chain",
+      "Mobility & Automotive",
+      "Investment Strategies",
+      "Deep Tech & Emerging",
+      "General Technology",
+      "IT Services & Data",
+      "Consumer Services",
+      "Renewable Energy",
+      "Software & SaaS"
+    ],
+    "full_name": "Mehmet",
+    "email": "mk@berggruenholdings.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Berggruen Holdings",
+    "fund_type": "Single Family Office, Private Equity Firm",
+    "geographic_focus": "Los Angeles, US",
+    "sector_interest": [
+      "mobility & automotive",
+      "it services & data",
+      "deep tech & emerging",
+      "renewable energy",
+      "education & edtech",
+      "consumer services",
+      "software & saas",
+      "investment strategies",
+      "logistics & supply chain",
+      "general technology"
+    ],
+    "full_name": "Mehmet Kosematoglu",
+    "email": "mk@berggruenholdings.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Berkana Partimonio",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "George Karam",
+    "email": "george@bknp.com.br",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Big Sur Partners",
+    "fund_type": null,
+    "geographic_focus": "Miami, US",
+    "sector_interest": null,
+    "full_name": "Eduardo Barco",
+    "email": "eduardo.barco@bigsurpartners.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "BLD Holdings",
+    "fund_type": null,
+    "geographic_focus": "Boca Raton, US",
+    "sector_interest": null,
+    "full_name": "Jane Bell",
+    "email": "jane@bldholdings.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Brainvest Wealth Management",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Rodrigo Faro",
+    "email": "rodrigo.faro@brainvest.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Casimir Holdings",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Miami, FL, USA",
+    "sector_interest": [
+      "software & saas",
+      "general technology",
+      "other",
+      "real estate (proptech)",
+      "logistics & supply chain"
+    ],
+    "full_name": "Geoff Swerdlin",
+    "email": "geoffswerdlin@yahoo.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Cheltenham Enterprises",
+    "fund_type": null,
+    "geographic_focus": "Managing Director",
+    "sector_interest": null,
+    "full_name": "Sasha Bernier",
+    "email": "sasha@creativo.miami",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Cherry Creek",
+    "fund_type": null,
+    "geographic_focus": "CIO",
+    "sector_interest": null,
+    "full_name": "Corey Mc Kiernan",
+    "email": "corey@cherrycreekfamilyoffices.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Cintrifuse Capital",
+    "fund_type": null,
+    "geographic_focus": "Principal",
+    "sector_interest": null,
+    "full_name": "Ilana Habib",
+    "email": "ilana@cintrifuse.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Claridge Israel",
+    "fund_type": "Single Family Office, Venture Capital Firm",
+    "geographic_focus": "Herzliya Pituach, Israel",
+    "sector_interest": [
+      "software & saas",
+      "mobility & automotive",
+      "general technology",
+      "it services & data",
+      "agritech",
+      "pharmaceuticals & biotech",
+      "b2b operations & outsourcing",
+      "hardware & electronics"
+    ],
+    "full_name": "Dov Rozenberg",
+    "email": "dov@claridgeil.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Colter Lewis Investment Partners",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Perry Hoffmeister",
+    "email": "perry@colterlewis.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Community Development Venture Capital Alliance",
+    "fund_type": null,
+    "geographic_focus": "President",
+    "sector_interest": null,
+    "full_name": "Kerwin Tesdell",
+    "email": "ketl@nyu.edu",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Cook Pine Capital",
+    "fund_type": null,
+    "geographic_focus": "Founding Principal",
+    "sector_interest": null,
+    "full_name": "Yumi Kuwana",
+    "email": "ykuwana@cookpinecapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Corundum Partners",
+    "fund_type": "Multi-Family Office",
+    "geographic_focus": "Colorado Springs, Co, United States",
+    "sector_interest": [
+      "deep tech & emerging",
+      "real estate (proptech)",
+      "investment strategies"
+    ],
+    "full_name": "Ron Johnson",
+    "email": "Ron.Johnson@CorundumGroup.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Cottonwood Acquisitions, LLC",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Lake Worth, FL, United States",
+    "sector_interest": [
+      "b2b operations & outsourcing",
+      "education & edtech",
+      "logistics & supply chain",
+      "consulting & advisory",
+      "pharmaceuticals & biotech",
+      "manufacturing & production"
+    ],
+    "full_name": "Garrett Feinauer",
+    "email": "gfeinauer@cottonwoodacquisitions.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Coulton Creek Capital",
+    "fund_type": "Single Family Office, Private Credit Firm, Real Estate Investment Firm",
+    "geographic_focus": "Greenwood Village, CO, United States",
+    "sector_interest": [
+      "leisure & entertainment",
+      "retail & fashion",
+      "real estate (proptech)"
+    ],
+    "full_name": "Chris Hanks",
+    "email": "chanks@ccrcapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "de Anda Capital, LLC",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "San Mateo, CA, USA",
+    "sector_interest": [
+      "general technology",
+      "pharmaceuticals & biotech",
+      "real estate (proptech)",
+      "fintech & payments",
+      "banking & lending",
+      "manufacturing & production",
+      "cleantech & sustainability",
+      "consumer services"
+    ],
+    "full_name": "Michael De Anda",
+    "email": "michael@deandacapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Dorado Peak Capital",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Orange County, California, US",
+    "sector_interest": [
+      "general technology",
+      "mining & metals",
+      "investment strategies",
+      "cleantech & sustainability",
+      "other",
+      "pharmaceuticals & biotech",
+      "real estate (proptech)",
+      "oil & gas",
+      "farming & production"
+    ],
+    "full_name": "John O'NEILL",
+    "email": "joneil@doradopeak.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "DRA Family Office",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "San Diego, California, USA",
+    "sector_interest": [
+      "general technology",
+      "retail & fashion",
+      "b2b operations & outsourcing",
+      "real estate (prop tech)",
+      "investment strategies",
+      "general financial services"
+    ],
+    "full_name": "Rose W. Vitale",
+    "email": "rvitale@drafamilyoffice.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Eideard Group",
+    "fund_type": null,
+    "geographic_focus": "CIO",
+    "sector_interest": null,
+    "full_name": "JP Aubin",
+    "email": "jp@eideardgroup.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "EMAlternatives",
+    "fund_type": null,
+    "geographic_focus": "Managing Partner",
+    "sector_interest": null,
+    "full_name": "Ernest Lambers",
+    "email": "elambers@emalternatives.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Esko",
+    "fund_type": null,
+    "geographic_focus": "Portfolio Manager",
+    "sector_interest": null,
+    "full_name": "Carlos E. Herrero",
+    "email": "carlos@eskohl.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Exigent",
+    "fund_type": "Multi-Family Office",
+    "geographic_focus": "France",
+    "sector_interest": [
+      "Asset & Wealth Management",
+      "Real Estate (PropTech)",
+      "Investment Strategies"
+    ],
+    "full_name": "Mylene",
+    "email": "m.rolle@family-partners.fr",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "FAMILY PARTNERS",
+    "fund_type": "Multi-Family Office",
+    "geographic_focus": "Paris, France",
+    "sector_interest": [
+      "real estate (proptech)",
+      "asset & wealth management",
+      "investment strategies"
+    ],
+    "full_name": "Mylene Rolle",
+    "email": "m.rolle@family-partners.fr",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "FII Institute",
+    "fund_type": "Foundation (Non-University)",
+    "geographic_focus": "Riyadh, Saudi Arabia",
+    "sector_interest": [
+      "pharmaceuticals & biotech",
+      "hardware & electronics",
+      "cleantech & sustainability",
+      "education & edtech"
+    ],
+    "full_name": "Rania Nashar",
+    "email": "rnashar@pif.gov.sa",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "FS Investors",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "La Jolla, US",
+    "sector_interest": [
+      "general technology",
+      "manufacturing & production",
+      "utilities",
+      "b2b operations & outsourcing",
+      "education & edtech",
+      "other",
+      "food & beverage",
+      "pharmaceuticals & biotech",
+      "real estate (proptech)",
+      "consumer services"
+    ],
+    "full_name": "Nick Stone",
+    "email": "nick@fsinvestors.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "FTT Wealth Management",
+    "fund_type": null,
+    "geographic_focus": "Chief Investment Officer",
+    "sector_interest": null,
+    "full_name": "Andrew Mehalko",
+    "email": "andrew@amglobalfio.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Gates Capital Partners",
+    "fund_type": null,
+    "geographic_focus": "Denver, US",
+    "sector_interest": null,
+    "full_name": "Joan Akiyama",
+    "email": "jakiyama@gatescapital.net",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Genus Capital Managment",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Wayne Wachell",
+    "email": "wwachell@genuscap.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Ghobash Group",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Afreen Naz",
+    "email": "afreen.naz@ghobash.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Good Family",
+    "fund_type": null,
+    "geographic_focus": "Advisor",
+    "sector_interest": null,
+    "full_name": "John Messervey",
+    "email": "john@privatefamilyadvisor.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Granite Hall Partners",
+    "fund_type": null,
+    "geographic_focus": "Chicago, US",
+    "sector_interest": null,
+    "full_name": "John Wagner",
+    "email": "jwagner@granitehall.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "GreenBear Group",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Joe Khirallah",
+    "email": "joe@greenbeargroup.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Hamilton Lane",
+    "fund_type": "Fund of Funds, Investment Consultant / OCIO",
+    "geographic_focus": "Conshohocken, Pa, United States",
+    "sector_interest": [
+      "infrastructure",
+      "general technology",
+      "utilities",
+      "other",
+      "renewable energy",
+      "mobility & automotive",
+      "investment strategies"
+    ],
+    "full_name": "Anthony Donofrio",
+    "email": "adonofrio@hamiltonlane.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Hatteras Investment Partners",
+    "fund_type": null,
+    "geographic_focus": "CEO",
+    "sector_interest": null,
+    "full_name": "David Perkins",
+    "email": "david.perkins@hatterasip.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Health Evolution Partners",
+    "fund_type": null,
+    "geographic_focus": "Denver, US",
+    "sector_interest": null,
+    "full_name": "Betsy Kominski",
+    "email": "betsyk@healthevolution.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "HELMSMANglobal",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Sweden",
+    "sector_interest": [
+      "Leisure & Entertainment",
+      "Real Estate (PropTech)",
+      "Investment Strategies",
+      "General Technology",
+      "Consumer Services"
+    ],
+    "full_name": "Ulrik",
+    "email": "ollmanulrik@hsgroup.se",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "HS Group AB",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Norrköping, Sweden",
+    "sector_interest": [
+      "general technology",
+      "leisure & entertainment",
+      "investment strategies",
+      "consumer services",
+      "real estate (proptech)"
+    ],
+    "full_name": "Ulrik Hollman",
+    "email": "ulrik@hsgroup.se",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "IFC Asset Management",
+    "fund_type": null,
+    "geographic_focus": "Washington, US",
+    "sector_interest": null,
+    "full_name": "Lovely Akomoize",
+    "email": "lakomoize@ifc.org",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "ImpactAssets",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "United States",
+    "sector_interest": [
+      "Real Estate (PropTech)",
+      "Industrial Services",
+      "General Technology",
+      "Software & SaaS",
+      "Infrastructure",
+      "Other"
+    ],
+    "full_name": "Christian",
+    "email": "christian.coquoz@inlightcapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "InLight Capital",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Sugar Land, TX, USA",
+    "sector_interest": [
+      "infrastructure",
+      "software & saas",
+      "general technology",
+      "other",
+      "industrial services",
+      "real estate (proptech)"
+    ],
+    "full_name": "Christian Coquoz",
+    "email": "christian.coquoz@inlightcapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Key Capital",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Anas Laghrari",
+    "email": "anas.laghrari@keycapital.es",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "KMP Group",
+    "fund_type": "Single Family Office, Real Estate Investment Firm",
+    "geographic_focus": "Stanmore, United Kingdom",
+    "sector_interest": [
+      "other",
+      "real estate (proptech)",
+      "retail & fashion",
+      "pharmaceuticals & biotech",
+      "software & saas"
+    ],
+    "full_name": "Mukesh K. Patel",
+    "email": "mukesh@kmpgroup.co.uk",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Krilogy",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Mark Lewis",
+    "email": "mlewis@krilogy.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Laidlaw Wealth Management",
+    "fund_type": null,
+    "geographic_focus": "New York, US",
+    "sector_interest": null,
+    "full_name": "Lina Angelo",
+    "email": "langelo@laidlawltd.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "LBJ Family Wealth Advisors, Ltd.",
+    "fund_type": "Multi-Family Office",
+    "geographic_focus": "Austin, Tx, United States",
+    "sector_interest": [
+      "utilities",
+      "real estate (proptech)",
+      "investment strategies"
+    ],
+    "full_name": "Ian Turpin",
+    "email": "iturpin@lbjadvisors.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "LCM Global Partners, LLC",
+    "fund_type": "Fund of Funds, Traditional Asset Manager (as LP)",
+    "geographic_focus": "Tampa, Florida, United States",
+    "sector_interest": [
+      "real estate (proptech)",
+      "other",
+      "asset & wealth management",
+      "investment strategies"
+    ],
+    "full_name": "Scott Luttrell",
+    "email": "sluttrell@lcmgroup.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Lead Capital Partners",
+    "fund_type": "Multi-Family Office, Private Equity Firm",
+    "geographic_focus": "Nashville, Tn, United States",
+    "sector_interest": [
+      "pharmaceuticals & biotech",
+      "health services & facilities",
+      "digital health (healthtech)"
+    ],
+    "full_name": "Erick Clifford",
+    "email": "eclifford@leadcp.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "LeFrak",
+    "fund_type": "Multi-Family Office",
+    "geographic_focus": "United States",
+    "sector_interest": [
+      "Health Services & Facilities",
+      "Digital Health (HealthTech)",
+      "Pharmaceuticals & Biotech"
+    ],
+    "full_name": "Erick",
+    "email": "eclifford@leadcp.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Legacy Advisors",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Tom Haidinger",
+    "email": "thaidinger@legacyadvice.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Legatum",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Hong Kong",
+    "sector_interest": [
+      "B2B Operations & Outsourcing",
+      "Leisure & Entertainment",
+      "Real Estate (PropTech)",
+      "Investment Strategies",
+      "Consulting & Advisory",
+      "Industrial Services",
+      "General Technology",
+      "Consumer Services"
+    ],
+    "full_name": "Edward",
+    "email": "eedwardlee@leitmotiv.hk",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Leitmotiv Group",
+    "fund_type": "Single Family Office, Private Equity Firm",
+    "geographic_focus": "Hong Kong, HK",
+    "sector_interest": [
+      "leisure & entertainment",
+      "b2b operations & outsourcing",
+      "general technology",
+      "consulting & advisory",
+      "real estate (proptech)",
+      "investment strategies",
+      "industrial services",
+      "consumer services"
+    ],
+    "full_name": "Edward Lee",
+    "email": "edwardlee@leitmotiv.hk",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "LINKOLN",
+    "fund_type": "Fund of Funds, Technology Platform Provider",
+    "geographic_focus": null,
+    "sector_interest": [
+      "real estate (proptech)"
+    ],
+    "full_name": "Bertrand Talabart",
+    "email": "bertrand.talabart@linkoln.fr",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "LUMA Capital",
+    "fund_type": null,
+    "geographic_focus": "President",
+    "sector_interest": null,
+    "full_name": "Daniel Keller",
+    "email": "dkeller@lumacapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Madison Global Partners",
+    "fund_type": null,
+    "geographic_focus": "Wealth Manager",
+    "sector_interest": null,
+    "full_name": "Erik Nelkin",
+    "email": "ericnelkin@madisonglobalpartners.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Mantucket Capital",
+    "fund_type": "Single Family Office, Private Equity Firm",
+    "geographic_focus": "Denver, Colorado, USA",
+    "sector_interest": [
+      "other",
+      "general technology",
+      "b2b operations & outsourcing",
+      "industrial services",
+      "pharmaceuticals & biotech",
+      "real estate (proptech)",
+      "manufacturing & production",
+      "consumer services",
+      "general financial services",
+      "software & saas"
+    ],
+    "full_name": "Wendy Kane",
+    "email": "wendyk@mantucket.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Matzen Ventures",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Henning Lubbe",
+    "email": "henning@matzen-stiftung.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Monitor Capital Investments",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Hanneke Traas",
+    "email": "traas@monitorci.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Mount Yale",
+    "fund_type": null,
+    "geographic_focus": "Minneapolis, US",
+    "sector_interest": null,
+    "full_name": "Greg Anderson",
+    "email": "greg.anderson@mtyale.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Muller & Monroe Asset Management",
+    "fund_type": null,
+    "geographic_focus": "Chicago, US",
+    "sector_interest": null,
+    "full_name": "Lauren Drach",
+    "email": "lauren.drach@m2am.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Murray Capital",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Edinburgh, Scotland",
+    "sector_interest": [
+      "real estate (proptech)",
+      "general technology",
+      "other",
+      "manufacturing & production",
+      "investment strategies",
+      "insurance (insurtech)"
+    ],
+    "full_name": "David Durie",
+    "email": "david@murraycapital.co.uk",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "NB Private Equity Partners",
+    "fund_type": null,
+    "geographic_focus": "London, UK",
+    "sector_interest": null,
+    "full_name": "John Amoasi",
+    "email": "john.amoasi@nb.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "NDURE Global",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Antonio Mayer",
+    "email": "amayer@ndureglobal.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "NewAlpha Asset Management",
+    "fund_type": "Traditional Asset Manager (as LP), Venture Capital Firm",
+    "geographic_focus": "Paris, Île-de-France, France",
+    "sector_interest": [
+      "banking & lending",
+      "general technology",
+      "insurance (insurtech)",
+      "general financial services",
+      "other",
+      "asset & wealth management",
+      "mobility & automotive",
+      "investment strategies"
+    ],
+    "full_name": "Rayyan Aoun",
+    "email": "raoun@newalpha.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Noctua Partners",
+    "fund_type": "Multi-Family Office, Hedge Fund",
+    "geographic_focus": "Miami, Fl, United States",
+    "sector_interest": [
+      "other",
+      "real estate (proptech)",
+      "deep tech & emerging"
+    ],
+    "full_name": "Martin Guyot",
+    "email": "mguyot@noctuapartners.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "North Sky Capital",
+    "fund_type": null,
+    "geographic_focus": "Vice President",
+    "sector_interest": null,
+    "full_name": "Brad Fox",
+    "email": "bfox@northskycapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Novum Partners SA",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Gabriele Gallotti",
+    "email": "gabriele.gallotti@novumcapitalpartners.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Oak Tree Financial Services",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Ron Moody",
+    "email": "ron.moody@lpl.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Okabena Investment Services",
+    "fund_type": null,
+    "geographic_focus": "Minneapolis, US",
+    "sector_interest": null,
+    "full_name": "Thomas Doran",
+    "email": "tdoran@okabena.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Partners Wealth Group",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Graeme Bibby",
+    "email": "gbibby@pwg.com.au",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Pearl Street Equity",
+    "fund_type": null,
+    "geographic_focus": "New York, US",
+    "sector_interest": null,
+    "full_name": "Erik Kreutzer",
+    "email": "ekreutzer@pearlstreetequity.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "PGIM",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "United States",
+    "sector_interest": [
+      "Digital Health (HealthTech)",
+      "Pharmaceuticals & Biotech",
+      "General Technology",
+      "Consumer Services",
+      "Software & SaaS"
+    ],
+    "full_name": "Diego",
+    "email": "lcainodiego@pirque.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "PIRQUE",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "., California, US",
+    "sector_interest": [
+      "digital health (healthtech)",
+      "general technology",
+      "pharmaceuticals & biotech",
+      "software & saas",
+      "consumer services"
+    ],
+    "full_name": "Diego Alcaino",
+    "email": "diego@pirque.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Pitalia",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "United States",
+    "sector_interest": [
+      "General Financial Services",
+      "Pharmaceuticals & Biotech",
+      "Leisure & Entertainment",
+      "Real Estate (PropTech)",
+      "Investment Strategies",
+      "Industrial Services",
+      "General Technology",
+      "Consumer Services"
+    ],
+    "full_name": "Henry",
+    "email": "hguy@pittcomanagement.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Pittco Management, LLC",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Memphis, TN, United States",
+    "sector_interest": [
+      "real estate (proptech)",
+      "general technology",
+      "leisure & entertainment",
+      "industrial services",
+      "pharmaceuticals & biotech",
+      "investment strategies",
+      "consumer services",
+      "general financial services"
+    ],
+    "full_name": "Henry Guy",
+    "email": "hguy@pittcomanagement.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Post Road Capital Management, LLC",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Fairfield, CT, USA",
+    "sector_interest": [
+      "general technology",
+      "retail & fashion",
+      "pharmaceuticals & biotech",
+      "real estate (proptech)",
+      "consumer services",
+      "insurance (insurtech)"
+    ],
+    "full_name": "David Eigen",
+    "email": "dle@postroadcap.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Principal Asset Management",
+    "fund_type": "Traditional Asset Manager (as LP), Real Estate Investment Firm",
+    "geographic_focus": "Des Moines, IA, United States",
+    "sector_interest": [
+      "leisure & entertainment",
+      "banking & lending",
+      "retail & fashion",
+      "real estate (proptech)",
+      "industrial services",
+      "asset & wealth management",
+      "infrastructure",
+      "other"
+    ],
+    "full_name": "Anthony Rizza",
+    "email": "rizza.anthony@principalam.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Qatar Investment Authority (QIA)",
+    "fund_type": "Sovereign Wealth Fund",
+    "geographic_focus": "Doha, Qatar",
+    "sector_interest": [
+      "leisure & entertainment",
+      "other",
+      "pharmaceuticals & biotech",
+      "it services & data",
+      "general financial services",
+      "general technology",
+      "retail & fashion",
+      "real estate (proptech)",
+      "consumer services",
+      "infrastructure",
+      "mobility & automotive",
+      "renewable energy",
+      "asset & wealth management",
+      "hardware & electronics",
+      "industrial services",
+      "investment strategies"
+    ],
+    "full_name": "Bandar bin Mohammed bin Saoud Al-Thani",
+    "email": "bandar.binmohammedbinsaoudalthani@qia.qa",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "QIC",
+    "fund_type": "Sovereign Wealth Fund",
+    "geographic_focus": "Qatar",
+    "sector_interest": [
+      "General Financial Services",
+      "Pharmaceuticals & Biotech",
+      "Asset & Wealth Management",
+      "Leisure & Entertainment",
+      "Real Estate (PropTech)",
+      "Hardware & Electronics",
+      "Mobility & Automotive",
+      "Investment Strategies",
+      "Industrial Services",
+      "General Technology",
+      "IT Services & Data",
+      "Consumer Services",
+      "Renewable Energy",
+      "Retail & Fashion",
+      "Infrastructure",
+      "Other"
+    ],
+    "full_name": "Mohammed bin Saoud",
+    "email": "bandar.binmohammedbinsaoudalthani@qia.qa",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Renaissance Venture Capital",
+    "fund_type": null,
+    "geographic_focus": "Partner",
+    "sector_interest": null,
+    "full_name": "Jeff Rinvelt",
+    "email": "info@renvcf.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "ROCK",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Detroit, MI, USA",
+    "sector_interest": [
+      "software & saas",
+      "leisure & entertainment",
+      "real estate (proptech)",
+      "retail & fashion",
+      "general technology",
+      "consulting & advisory",
+      "other",
+      "e-commerce & marketplaces",
+      "general financial services"
+    ],
+    "full_name": "Dan Gilbert",
+    "email": "dan.gilbert@rock.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "RWN Management",
+    "fund_type": null,
+    "geographic_focus": "New York, US",
+    "sector_interest": null,
+    "full_name": "Adam Borod",
+    "email": "aborod@rwnmgmt.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Sawmill Private Management",
+    "fund_type": null,
+    "geographic_focus": "Minneapolis, US",
+    "sector_interest": null,
+    "full_name": "Diego Borgert",
+    "email": "diego.borgert@sawmilltrust.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "SBP Management",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "New York, NY, USA",
+    "sector_interest": [
+      "asset & wealth management",
+      "general technology",
+      "retail & fashion",
+      "pharmaceuticals & biotech",
+      "industrial services",
+      "cleantech & sustainability",
+      "real estate (proptech)"
+    ],
+    "full_name": "Jay Nicholas",
+    "email": "nicholasj@sbpmgmt.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Sella Venture Partners",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Giusy Anibaldi",
+    "email": "giusy.anibaldi@sella.it",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Seronera Capital Partners Ltd",
+    "fund_type": "Single Family Office, Private Equity Firm",
+    "geographic_focus": "London, UK",
+    "sector_interest": [
+      "software & saas",
+      "digital health (healthtech)",
+      "construction & engineering",
+      "pharmaceuticals & biotech",
+      "b2b operations & outsourcing",
+      "general technology",
+      "medtech & devices",
+      "manufacturing & production",
+      "investment strategies",
+      "health services & facilities"
+    ],
+    "full_name": "Sarita Sood",
+    "email": "sarita.sood@seroneracapitalpartners.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "SOFIOUEST",
+    "fund_type": "Fund of Funds",
+    "geographic_focus": "Germany",
+    "sector_interest": [
+      "Leisure & Entertainment",
+      "Real Estate (PropTech)",
+      "Mobility & Automotive",
+      "Infrastructure",
+      "Utilities",
+      "Other"
+    ],
+    "full_name": "Sandra",
+    "email": "sandra.burkhart@solutio.ag",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "SOLUTIO AG Anlagekonzepte für Institutionen",
+    "fund_type": "Fund of Funds, Traditional Asset Manager (as LP)",
+    "geographic_focus": "Grünwald, Germany",
+    "sector_interest": [
+      "real estate (proptech)",
+      "utilities",
+      "other",
+      "leisure & entertainment",
+      "infrastructure",
+      "mobility & automotive"
+    ],
+    "full_name": "Sandra Burkhart",
+    "email": "sandra.burkhart@solutio.ag",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "SPDG",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Canada",
+    "sector_interest": [
+      "Pharmaceuticals & Biotech",
+      "Real Estate (PropTech)",
+      "Consumer Services",
+      "Retail & Fashion",
+      "Food & Beverage",
+      "Other"
+    ],
+    "full_name": "Aaron",
+    "email": "erruyaaaron@serruyaequity.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "SPE - Serruya Private Equity",
+    "fund_type": "Single Family Office, Private Equity Firm",
+    "geographic_focus": "Markham, ON, Canada",
+    "sector_interest": [
+      "pharmaceuticals & biotech",
+      "retail & fashion",
+      "food & beverage",
+      "other",
+      "real estate (proptech)",
+      "consumer services"
+    ],
+    "full_name": "Aaron Serruya",
+    "email": "aaron@serruyaequity.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Stonetree Capital Advisors",
+    "fund_type": null,
+    "geographic_focus": "Managing Member",
+    "sector_interest": null,
+    "full_name": "Pat Casey",
+    "email": "pat@stonetreemgt.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Strenta Investment Partners",
+    "fund_type": null,
+    "geographic_focus": "Miami, US",
+    "sector_interest": null,
+    "full_name": "Dimitris Kavalekas",
+    "email": "dimitris.kavalekas@strenta-im.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "tB Capital",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Stef Brinke",
+    "email": "stb@tbinvestments.nl",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Temasek",
+    "fund_type": "Traditional Asset Manager (as LP)",
+    "geographic_focus": "United Kingdom",
+    "sector_interest": [
+      "Asset & Wealth Management",
+      "Insurance (InsurTech)",
+      "Investment Strategies",
+      "General Technology",
+      "FinTech & Payments"
+    ],
+    "full_name": "Massimo",
+    "email": "mfigna@tenaxcapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Tenax Capital Ltd",
+    "fund_type": "Traditional Asset Manager (as LP)",
+    "geographic_focus": "London, EC4V 6DE, England",
+    "sector_interest": [
+      "fintech & payments",
+      "general technology",
+      "asset & wealth management",
+      "insurance (insurtech)",
+      "investment strategies"
+    ],
+    "full_name": "Massimo Figna",
+    "email": "mfigna@tenaxcapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "The Portopiccolo Group",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "Englewood Cliffs, New Jersey, United States",
+    "sector_interest": [
+      "real estate (proptech)",
+      "health services & facilities"
+    ],
+    "full_name": "Batya Gorelick",
+    "email": "batya@theportopiccologroup.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "The Scott Family Office Intl. (TSFO Intl.)",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "New York, NY, USA",
+    "sector_interest": [
+      "general technology",
+      "utilities",
+      "general financial services",
+      "deep tech & emerging",
+      "real estate (proptech)",
+      "e-commerce & marketplaces"
+    ],
+    "full_name": "Fredrick D Scott",
+    "email": "fscott@sfointl.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "THI Investments",
+    "fund_type": "Single Family Office, Private Equity Firm",
+    "geographic_focus": "Stuttgart, Baden-Württemberg, Germany",
+    "sector_interest": [
+      "education & edtech",
+      "pharmaceuticals & biotech",
+      "b2b operations & outsourcing",
+      "industrial services"
+    ],
+    "full_name": "Marek Stess",
+    "email": "marek.stess@metanoy.tech",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Troon Capital",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Joao Ortiz",
+    "email": "joao@trooncapital.com.br",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Tsunami Capital Group, Inc",
+    "fund_type": "Fund of Funds, Private Equity Firm, Real Estate Investment Firm",
+    "geographic_focus": null,
+    "sector_interest": [
+      "leisure & entertainment",
+      "real estate (proptech)",
+      "consulting & advisory"
+    ],
+    "full_name": "John Crumpacker",
+    "email": "john.c@tsunami.finance",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Turim Family Office",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Rodrigo Rocha",
+    "email": "rrocha@turimbr.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "TwinFocus",
+    "fund_type": "Traditional Asset Manager (as LP)",
+    "geographic_focus": "Australia",
+    "sector_interest": [
+      "Leisure & Entertainment",
+      "Real Estate (PropTech)",
+      "Investment Strategies"
+    ],
+    "full_name": "Sally",
+    "email": "sally.shi@tycheam.com.au",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Tyche Asset Management",
+    "fund_type": "Traditional Asset Manager (as LP), Real Estate Investment Firm",
+    "geographic_focus": "Sydney, NSW, Australia",
+    "sector_interest": [
+      "leisure & entertainment",
+      "real estate (proptech)",
+      "investment strategies"
+    ],
+    "full_name": "Sally Shi",
+    "email": "sally.shi@tycheam.com.au",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Vencap International",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Tim Cruttenden",
+    "email": "tim.cruttenden@vencap.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Venture Investment Associates",
+    "fund_type": null,
+    "geographic_focus": "Peapack, US",
+    "sector_interest": null,
+    "full_name": "Stathis Andris",
+    "email": "sandris@viafunds.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Vivaldi Capital Management",
+    "fund_type": null,
+    "geographic_focus": "Brandon Intrater",
+    "sector_interest": null,
+    "full_name": "Brandon Intrater",
+    "email": "bintrater@vivaldicap.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Vogel Consulting",
+    "fund_type": null,
+    "geographic_focus": "Brookfield, US",
+    "sector_interest": null,
+    "full_name": "Debora Dziadosz",
+    "email": "deborad@vogelcg.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Waldron",
+    "fund_type": null,
+    "geographic_focus": "Bridgeville, US",
+    "sector_interest": null,
+    "full_name": "Chris Brown",
+    "email": "cbrown@waldronpw.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Wealth Strategist Partners",
+    "fund_type": null,
+    "geographic_focus": "Chicago, US",
+    "sector_interest": null,
+    "full_name": "Susan Lucas",
+    "email": "susan@wspcio.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Western World Insurance Group",
+    "fund_type": null,
+    "geographic_focus": "Vice President Finance",
+    "sector_interest": null,
+    "full_name": "Chul Lee",
+    "email": "c.lee@westernworld.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Whitney Capital Partners",
+    "fund_type": "Single Family Office, Private Equity Firm, Venture Capital Firm, Private Credit Firm",
+    "geographic_focus": "New York, NY, USA",
+    "sector_interest": [
+      "leisure & entertainment",
+      "retail & fashion",
+      "general technology",
+      "oil & gas",
+      "industrial services",
+      "real estate (proptech)",
+      "investment strategies"
+    ],
+    "full_name": "Jason Kringstein",
+    "email": "jason@whitneycapitalpartners.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Wildcat Capital Managemet",
+    "fund_type": null,
+    "geographic_focus": "New York, US",
+    "sector_interest": null,
+    "full_name": "Kara Adams",
+    "email": "kadams@wildcatcap.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Wishland Capital",
+    "fund_type": null,
+    "geographic_focus": null,
+    "sector_interest": null,
+    "full_name": "Yanchuan Cai",
+    "email": "yanchuan@wishlandcapital.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Wyllie",
+    "fund_type": "Multi-Family Office",
+    "geographic_focus": "United Kingdom",
+    "sector_interest": [
+      "Leisure & Entertainment",
+      "Real Estate (PropTech)",
+      "Industrial Equipment",
+      "General Technology",
+      "Food & Beverage",
+      "AgriTech",
+      "Other"
+    ],
+    "full_name": "Andres",
+    "email": "andres@ybcap.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Yellow Brick Capital (UK) Limited",
+    "fund_type": "Multi-Family Office, Real Estate Investment Firm",
+    "geographic_focus": "London, GB",
+    "sector_interest": [
+      "agritech",
+      "real estate (proptech)",
+      "industrial equipment",
+      "general technology",
+      "food & beverage",
+      "other",
+      "leisure & entertainment"
+    ],
+    "full_name": "Andres Hammer",
+    "email": "andres@ybcap.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "Zain Ventures",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "San Francisco, US",
+    "sector_interest": [
+      "leisure & entertainment",
+      "construction & engineering",
+      "general technology",
+      "cleantech & sustainability",
+      "real estate (proptech)",
+      "software & saas",
+      "investment strategies",
+      "consumer services",
+      "it services & data",
+      "health services & facilities"
+    ],
+    "full_name": "Sara Taghizadeh",
+    "email": "sara@zain-ventures.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
+  },
+  {
+    "company": "ZOMALAB",
+    "fund_type": "Single Family Office",
+    "geographic_focus": "United States",
+    "sector_interest": [
+      "Health Services & Facilities",
+      "Cleantech & Sustainability",
+      "Construction & Engineering",
+      "Leisure & Entertainment",
+      "Real Estate (PropTech)",
+      "Investment Strategies",
+      "General Technology",
+      "IT Services & Data",
+      "Consumer Services",
+      "Software & SaaS"
+    ],
+    "full_name": "Sara",
+    "email": "ghizadehsara@zain-ventures.com",
+    "outreach_status": "not_started",
+    "source": "csv_import"
   }
 ]
