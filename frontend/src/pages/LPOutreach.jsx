@@ -664,7 +664,6 @@ ${senderEmail}`;
       { key: 'fund_type', label: 'Fund Type', width: 130 },
       { key: 'geo', label: 'Geography', width: 130 },
       { key: 'warm_intro', label: 'Intro Path', width: 160 },
-      { key: 'your_connections', label: 'Your Connections', width: 200 },
       { key: 'connections', label: '2nd-Degree (Manual)', width: 190 },
       { key: 'email', label: 'Email', width: 190 },
       { key: 'navigator', label: 'Navigator', width: 90 },
@@ -990,34 +989,8 @@ ${senderEmail}`;
                       })()}
                     </td>
 
-                    {/* Your Connections — from uploaded LinkedIn CSV */}
-                    <td style={cellStyle(COLS[7], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
-                      onClick={() => setSelectedTarget(t.id)}>
-                      {(() => {
-                        const matches = t.linkedin_matches || [];
-                        if (!matches.length) return <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>;
-                        return (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                            {matches.slice(0, 3).map((m, i) => (
-                              <span key={i} title={`${m.connection_name}${m.connection_position ? ` — ${m.connection_position}` : ''}\nvia ${m.team_member_name}`}
-                                style={{
-                                  display: 'inline-block', padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 500,
-                                  background: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0',
-                                  maxWidth: 85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'default',
-                                }}>
-                                {m.connection_name.split(' ')[0]}
-                              </span>
-                            ))}
-                            {matches.length > 3 && (
-                              <span style={{ fontSize: 10, color: '#6B7280' }}>+{matches.length - 3}</span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </td>
-
                     {/* 2nd-Degree Connections (manual / Navigator-sourced) */}
-                    <td style={cellStyle(COLS[8], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
+                    <td style={cellStyle(COLS[7], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
                       onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', minHeight: 28 }}>
                         {manualConns.slice(0, 3).map(conn => (
@@ -1057,14 +1030,14 @@ ${senderEmail}`;
                     </td>
 
                     {/* Email */}
-                    <td style={cellStyle(COLS[9])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[8])} onClick={() => setSelectedTarget(t.id)}>
                       {t.email
                         ? <span style={{ fontSize: 11, color: '#059669' }}>{t.email}</span>
                         : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
                     </td>
 
                     {/* Navigator search */}
-                    <td style={cellStyle(COLS[10])} onClick={e => e.stopPropagation()}>
+                    <td style={cellStyle(COLS[9])} onClick={e => e.stopPropagation()}>
                       {(() => {
                         const personName = (t.full_name || t.name || '').replace(/,/g, '').trim();
                         const companyName = (t.company || '').trim();
@@ -1091,7 +1064,7 @@ ${senderEmail}`;
                     </td>
 
                     {/* Delete record */}
-                    <td style={{ ...cellStyle(COLS[11]), textAlign: 'center', padding: '0 4px' }} onClick={e => e.stopPropagation()}>
+                    <td style={{ ...cellStyle(COLS[10]), textAlign: 'center', padding: '0 4px' }} onClick={e => e.stopPropagation()}>
                       <button
                         title="Delete this LP record"
                         onClick={async () => {
