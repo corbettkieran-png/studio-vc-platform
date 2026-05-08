@@ -1931,54 +1931,65 @@ router.post('/admin/import-surnames', authenticate, upload.single('file'), async
 
     // Strip UTF-8 BOM (added by Excel/Sheets on save-as-CSV) before parsing
     const text = req.file.buffer.toString('utf8').replace(/^﻿/, '');
-    const allLines = text.split(/\r?\n/);
-    const lines = allLines.filter(l => l.trim());
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return res.status(400).json({ error: 'CSV appears empty' });
 
-    // Find the header row — scan first 10 lines for one containing both 'id' and 'full_name'
-    // This tolerates metadata/comment rows added by Excel, Google Sheets, or Notes apps
-    const parseColumns = line =>
-      line.split(',').map(h => h.replace(/^﻿/, '').replace(/"/g, '').trim().toLowerCase());
+    // Auto-detect delimiter — pick whichever of comma/tab/semicolon
+    // appears most on the first non-empty line
+    const sample = lines.find(l => l.includes(',') || l.includes('\t') || l.includes(';')) || lines[0];
+    const commas    = (sample.match(/,/g)   || []).length;
+    const tabs      = (sample.match(/\t/g)  || []).length;
+    const semis     = (sample.match(/;/g)   || []).length;
+    const delim = tabs > commas && tabs > semis ? '\t'
+                : semis > commas                ? ';'
+                : ',';
 
-    let headerLineIdx = -1;
-    let idIdx = -1;
-    let nameIdx = -1;
-    for (let i = 0; i < Math.min(10, lines.length); i++) {
-      const cols = parseColumns(lines[i]);
-      const ii = cols.indexOf('id');
-      const ni = cols.indexOf('full_name');
-      if (ii !== -1 && ni !== -1) {
-        headerLineIdx = i;
-        idIdx = ii;
-        nameIdx = ni;
-        break;
-      }
-    }
-
-    if (headerLineIdx === -1) {
-      // Show what we actually found in the first line to help debug
-      const firstCols = parseColumns(lines[0]);
-      return res.status(400).json({
-        error: `Could not find header row with "id" and "full_name" columns in the first 10 lines. First line contained: ${firstCols.join(', ')}`,
-      });
-    }
-
-    // Data rows start after the header
-    const dataLines = lines.slice(headerLineIdx + 1);
-
-    // Simple CSV row parser (handles quoted fields)
+    // Parse a single row using the detected delimiter, respecting quoted fields
     function parseRow(line) {
       const fields = [];
       let cur = '', inQuote = false;
       for (let i = 0; i < line.length; i++) {
         const ch = line[i];
         if (ch === '"') { inQuote = !inQuote; }
-        else if (ch === ',' && !inQuote) { fields.push(cur.trim()); cur = ''; }
+        else if (ch === delim && !inQuote) { fields.push(cur.trim()); cur = ''; }
         else cur += ch;
       }
       fields.push(cur.trim());
       return fields;
     }
+
+    const cleanHeader = h => h.replace(/^﻿/, '').replace(/"/g, '').trim().toLowerCase();
+
+    // Scan first 20 lines for the header row — tolerates metadata rows from
+    // Excel, Google Sheets, Apple Numbers, etc.
+    // Accepts flexible column names:
+    //   id column  : 'id', 'uuid', 'target_id', 'lp_id'
+    //   name column: 'full_name', 'name', 'contact_name', 'fullname'
+    const ID_NAMES   = new Set(['id', 'uuid', 'target_id', 'lp_id']);
+    const NAME_NAMES = new Set(['full_name', 'name', 'contact_name', 'fullname', 'full name']);
+
+    let headerLineIdx = -1, idIdx = -1, nameIdx = -1;
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
+      const cols = parseRow(lines[i]).map(cleanHeader);
+      const ii = cols.findIndex(c => ID_NAMES.has(c));
+      const ni = cols.findIndex(c => NAME_NAMES.has(c));
+      if (ii !== -1 && ni !== -1) {
+        headerLineIdx = i; idIdx = ii; nameIdx = ni;
+        break;
+      }
+    }
+
+    if (headerLineIdx === -1) {
+      const firstCols = parseRow(lines[0]).map(cleanHeader);
+      return res.status(400).json({
+        error: `Could not find header row in the first 20 lines. ` +
+               `Detected delimiter: "${delim === '\t' ? 'tab' : delim}". ` +
+               `First row columns: [${firstCols.join(' | ')}]. ` +
+               `The file needs columns named "id" and "full_name" (or "name").`,
+      });
+    }
+
+    const dataLines = lines.slice(headerLineIdx + 1);
 
     let updated = 0, skipped = 0;
     const errors = [];
