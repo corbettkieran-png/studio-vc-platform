@@ -239,6 +239,12 @@ async function autoMigrate() {
       ALTER TABLE team_members ADD COLUMN IF NOT EXISTS work_email VARCHAR(255);
     `);
 
+    // Add title to team_members — used in email signatures so each colleague's
+    // emails show their actual role rather than a hardcoded fallback
+    await db.query(`
+      ALTER TABLE team_members ADD COLUMN IF NOT EXISTS title VARCHAR(255);
+    `);
+
     // Seed work emails for known team members
     await db.query(`
       UPDATE team_members SET work_email = 'kcorbett@studio.vc'
@@ -246,6 +252,15 @@ async function autoMigrate() {
       UPDATE team_members SET work_email = 'jcoyne@studio.vc'
       WHERE full_name ILIKE '%joseph%' OR full_name ILIKE '%joe%coyne%'
       AND (work_email IS NULL OR work_email = '');
+    `);
+
+    // Seed default titles for known team members (only sets when null/empty)
+    await db.query(`
+      UPDATE team_members SET title = 'Senior Associate, Studio VC'
+      WHERE full_name ILIKE '%kieran%' AND (title IS NULL OR title = '');
+      UPDATE team_members SET title = 'Partner, Studio VC'
+      WHERE (full_name ILIKE '%joseph%' OR full_name ILIKE '%joe%coyne%')
+      AND (title IS NULL OR title = '');
     `);
 
     console.log('Auto-migrate: contacts schema applied.');

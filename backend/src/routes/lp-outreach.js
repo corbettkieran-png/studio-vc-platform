@@ -454,7 +454,7 @@ router.get('/me/team-member', authenticate, async (req, res) => {
   try {
     // 1. Already linked to this user?
     const { rows: existing } = await db.query(
-      'SELECT id, full_name, linkedin_url, connections_count, last_upload_at, work_email FROM team_members WHERE user_id = $1',
+      'SELECT id, full_name, linkedin_url, connections_count, last_upload_at, work_email, title FROM team_members WHERE user_id = $1',
       [req.user.id]
     );
     if (existing.length > 0) return res.json({ team_member: existing[0] });
@@ -476,7 +476,7 @@ router.get('/me/team-member', authenticate, async (req, res) => {
     if (orphan.length > 0) {
       await db.query('UPDATE team_members SET user_id = $1 WHERE id = $2', [req.user.id, orphan[0].id]);
       const { rows } = await db.query(
-        'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE id = $1',
+        'SELECT id, full_name, linkedin_url, connections_count, last_upload_at, work_email, title FROM team_members WHERE id = $1',
         [orphan[0].id]
       );
       return res.json({ team_member: rows[0] });
@@ -498,7 +498,7 @@ router.get('/me/team-member', authenticate, async (req, res) => {
       if (domainOrphan.length > 0) {
         await db.query('UPDATE team_members SET user_id = $1 WHERE id = $2', [req.user.id, domainOrphan[0].id]);
         const { rows } = await db.query(
-          'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE id = $1',
+          'SELECT id, full_name, linkedin_url, connections_count, last_upload_at, work_email, title FROM team_members WHERE id = $1',
           [domainOrphan[0].id]
         );
         return res.json({ team_member: rows[0] });
@@ -512,13 +512,47 @@ router.get('/me/team-member', authenticate, async (req, res) => {
       [tmId, req.user.id, fullName]
     );
     const { rows } = await db.query(
-      'SELECT id, full_name, linkedin_url, connections_count, last_upload_at FROM team_members WHERE id = $1',
+      'SELECT id, full_name, linkedin_url, connections_count, last_upload_at, work_email, title FROM team_members WHERE id = $1',
       [tmId]
     );
     res.status(201).json({ team_member: rows[0] });
   } catch (err) {
     console.error('Error fetching/creating user team member:', err);
     res.status(500).json({ error: 'Failed to get team member' });
+  }
+});
+
+// PATCH /api/lp/me/team-member - Update the logged-in user's team member profile
+// Accepts: { title, work_email } — both optional, only supplied fields are updated
+router.patch('/me/team-member', authenticate, async (req, res) => {
+  try {
+    const { title, work_email } = req.body;
+    const updates = [];
+    const params = [];
+
+    if (title !== undefined) {
+      params.push(title);
+      updates.push(`title = $${params.length}`);
+    }
+    if (work_email !== undefined) {
+      params.push(work_email);
+      updates.push(`work_email = $${params.length}`);
+    }
+    if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+    params.push(req.user.id);
+    const { rows } = await db.query(
+      `UPDATE team_members
+       SET ${updates.join(', ')}
+       WHERE user_id = $${params.length}
+       RETURNING id, full_name, linkedin_url, connections_count, last_upload_at, work_email, title`,
+      params
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Team member not found' });
+    res.json({ team_member: rows[0] });
+  } catch (err) {
+    console.error('Error updating team member profile:', err);
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
