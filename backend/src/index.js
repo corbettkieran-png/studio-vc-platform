@@ -749,6 +749,118 @@ async function autoSeedKieranConnections() {
 }
 autoSeedKieranConnections();
 
+// Match surnames for single-name LP targets using the team's LinkedIn connections.
+// Strategy: normalise company names (strip fund/LLC/LP/etc suffixes), then require
+// that the LP's first name matches a connection's first name AND the normalised
+// company names are identical (or one is fully contained in the other).
+// Only applies the match when exactly 1 connection qualifies — avoids false positives.
+// Gated by migration_flags so it only runs once per database.
+async function matchLPSurnamesFromConnections() {
+  try {
+    const { rows: flagRows } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_surname_match_v1'`
+    );
+    if (flagRows.length) return; // already ran
+
+    // Fetch single-name LP targets (full_name has no space)
+    const { rows: lpTargets } = await db.query(`
+      SELECT id, full_name, company
+      FROM lp_targets
+      WHERE full_name NOT LIKE '% %'
+        AND TRIM(full_name) <> ''
+        AND company IS NOT NULL AND TRIM(company) <> ''
+    `);
+
+    if (lpTargets.length === 0) {
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_surname_match_v1')`);
+      return;
+    }
+
+    // Fetch all team connections that have a non-empty last name
+    const { rows: connections } = await db.query(`
+      SELECT first_name, last_name, company
+      FROM linkedin_connections
+      WHERE first_name IS NOT NULL AND TRIM(first_name) <> ''
+        AND last_name  IS NOT NULL AND TRIM(last_name)  <> ''
+        AND company    IS NOT NULL AND TRIM(company)    <> ''
+    `);
+
+    console.log(`[surname-match] ${lpTargets.length} single-name LPs, ${connections.length} connections with surnames`);
+
+    // Common fund/entity suffixes to strip before comparing
+    const STRIP_WORDS = new Set([
+      'llc','lp','inc','corp','ltd','gp','llp','co','pllc','plc',
+      'fund','funds','capital','management','investments','investment',
+      'advisors','advisor','partners','partner','group','associates',
+      'associate','family','office','offices','wealth','financial',
+      'asset','assets','ventures','venture','holdings','holding',
+      'equity','properties','property','trust','services','solutions',
+      'consulting','consultants','strategies','strategy','markets','market',
+    ]);
+
+    function normalizeCompany(raw) {
+      if (!raw) return '';
+      return raw
+        .toLowerCase()
+        // remove punctuation except spaces
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 0 && !STRIP_WORDS.has(w))
+        .join(' ')
+        .trim();
+    }
+
+    function companiesMatch(a, b) {
+      const na = normalizeCompany(a);
+      const nb = normalizeCompany(b);
+      if (!na || !nb) return false;
+      if (na === nb) return true;
+      // One must contain the other AND the shorter must have ≥1 word remaining
+      const shorter = na.length <= nb.length ? na : nb;
+      const longer  = na.length <= nb.length ? nb : na;
+      return shorter.length >= 2 && longer.includes(shorter);
+    }
+
+    let updated = 0;
+    let ambiguous = 0;
+
+    for (const lp of lpTargets) {
+      const lpFirst = lp.full_name.trim().toLowerCase();
+
+      // First-name matches
+      const firstNameMatches = connections.filter(c =>
+        c.first_name.trim().toLowerCase() === lpFirst
+      );
+      if (firstNameMatches.length === 0) continue;
+
+      // Then filter by company similarity
+      const companyMatches = firstNameMatches.filter(c =>
+        companiesMatch(lp.company, c.company)
+      );
+
+      if (companyMatches.length === 1) {
+        const match = companyMatches[0];
+        const newName = `${lp.full_name.trim()} ${match.last_name.trim()}`;
+        await db.query(
+          `UPDATE lp_targets SET full_name = $1 WHERE id = $2`,
+          [newName, lp.id]
+        );
+        console.log(`[surname-match] ✓ ${lp.full_name} @ "${lp.company}" → "${newName}" (matched via connection @ "${match.company}")`);
+        updated++;
+      } else if (companyMatches.length > 1) {
+        console.log(`[surname-match] ambiguous: ${lp.full_name} @ "${lp.company}" — ${companyMatches.length} candidates`);
+        ambiguous++;
+      }
+    }
+
+    await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_surname_match_v1')`);
+    console.log(`[surname-match] Complete: ${updated} updated, ${ambiguous} ambiguous, ${lpTargets.length - updated - ambiguous} unmatched.`);
+  } catch (err) {
+    console.error('[surname-match] Error:', err.message);
+  }
+}
+matchLPSurnamesFromConnections();
+
 // Process email queue every 30 seconds
 setInterval(processEmailQueue, 30000);
 
