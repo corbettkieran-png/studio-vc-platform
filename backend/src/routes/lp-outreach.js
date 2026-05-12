@@ -3684,14 +3684,39 @@ router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
 
     for (const lp of pass2Candidates) {
       try {
-        const result = await apollo.searchPeopleAtCompany(lp.company.trim(), {
-          perPage: 25, titles: [], seniorities: [],
+        // Try senior-only first (fewer results → better unique first-name match)
+        let result = await apollo.searchPeopleAtCompany(lp.company.trim(), {
+          perPage: 25,
+          titles: [],
+          seniorities: ['c_suite', 'vp', 'director', 'manager', 'partner'],
         });
+
         const firstName = lp.full_name.trim().toLowerCase();
-        const nameMatches = result.people.filter(
+        let nameMatches = result.people.filter(
           p => (p.first_name || '').toLowerCase() === firstName
         );
-        if (nameMatches.length === 1) {
+
+        // If no senior match, retry without seniority filter
+        if (nameMatches.length === 0) {
+          await delay(1100);
+          result = await apollo.searchPeopleAtCompany(lp.company.trim(), {
+            perPage: 25, titles: [], seniorities: [],
+          });
+          nameMatches = result.people.filter(
+            p => (p.first_name || '').toLowerCase() === firstName
+          );
+        }
+
+        // If still multiple matches, pick the most senior one
+        const SENIORITY_RANK = { owner: 0, founder: 1, c_suite: 2, partner: 3, vp: 4, director: 5, manager: 6, senior: 7 };
+        if (nameMatches.length > 1) {
+          nameMatches.sort((a, b) =>
+            (SENIORITY_RANK[a.seniority] ?? 99) - (SENIORITY_RANK[b.seniority] ?? 99)
+          );
+          nameMatches = [nameMatches[0]];
+        }
+
+        if (nameMatches.length === 1{
           const newName = nameMatches[0].full_name;
           if (!isDry) {
             await db.query(
