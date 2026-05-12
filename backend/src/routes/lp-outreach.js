@@ -3716,7 +3716,7 @@ router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
           nameMatches = [nameMatches[0]];
         }
 
-        if (nameMatches.length === 1{
+        if (nameMatches.length === 1) {
           const newName = nameMatches[0].full_name;
           if (!isDry) {
             await db.query(
