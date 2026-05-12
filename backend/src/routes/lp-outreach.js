@@ -409,7 +409,9 @@ async function runMatching() {
       } else {
         await client.query(
           `UPDATE lp_targets
-           SET best_connector_id = NULL, best_connector_name = NULL, connection_strength = 'none', total_connectors = 0, updated_at = NOW()
+           SET best_connector_id = NULL, best_connector_name = NULL,
+           connection_strength = CASE WHEN connection_strength = 'apollo_match' THEN 'apollo_match' ELSE 'none' END,
+           total_connectors = 0, updated_at = NOW()
            WHERE id = $1`,
           [lp.id]
         );
