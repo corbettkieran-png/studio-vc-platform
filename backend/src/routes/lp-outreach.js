@@ -3638,7 +3638,7 @@ router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
     }
 
     const { rows: allLPs } = await db.query(
-      `SELECT id, full_name, first_name, company FROM lp_targets ORDER BY company, full_name`
+      `SELECT id, full_name, company FROM lp_targets ORDER BY company, full_name`
     );
 
     const needWork = allLPs
@@ -3734,7 +3734,7 @@ router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
 
     // Residual: reload and compute what's still broken
     const { rows: finalState } = await db.query(
-      `SELECT id, full_name, first_name, company, fund_type FROM lp_targets ORDER BY company`
+      `SELECT id, full_name, company, fund_type FROM lp_targets ORDER BY company`
     );
     const residual = finalState
       .filter(lp => needsEnrichment(lp.full_name) !== null)
