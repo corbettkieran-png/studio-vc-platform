@@ -3615,5 +3615,148 @@ router.delete('/targets/:id/connections/:connId', authenticate, async (req, res)
   }
 });
 
+
+// ============================================================
+// SURNAME ENRICHMENT
+// ============================================================
+
+// POST /api/lp/admin/enrich-surnames
+// Pass 1: cross-reference existing apollo_company_contacts by first_name
+// Pass 2: Apollo People Search for remaining single-name LPs (rate-limited)
+// Returns a summary + residual list (blank / ambiguous / garbage) for manual review
+router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
+  try {
+    const { dry_run = false } = req.query;
+    const isDry = dry_run === 'true' || dry_run === true;
+
+    function needsEnrichment(fullName) {
+      const n = (fullName || '').trim();
+      if (!n || n === 'Unnamed' || n.toLowerCase() === 'unnamed') return 'empty';
+      if (!n.includes(' ')) return 'single_word';
+      if (n.length > 80 || (n.match(/,/g) || []).length > 2) return 'garbage';
+      return null;
+    }
+
+    const { rows: allLPs } = await db.query(
+      `SELECT id, full_name, first_name, company FROM lp_targets ORDER BY company, full_name`
+    );
+
+    const needWork = allLPs
+      .map(lp => ({ ...lp, issue: needsEnrichment(lp.full_name) }))
+      .filter(lp => lp.issue !== null);
+
+    const singleWord = needWork.filter(lp => lp.issue === 'single_word');
+
+    let pass1Updated = 0;
+    let pass1Ambiguous = 0;
+    const pass2Queue = [];
+
+    // Pass 1: cross-reference apollo_company_contacts
+    for (const lp of singleWord) {
+      const firstName = lp.full_name.trim();
+      const { rows: apolloMatches } = await db.query(
+        `SELECT full_name FROM apollo_company_contacts
+         WHERE lp_target_id = $1 AND LOWER(first_name) = LOWER($2)`,
+        [lp.id, firstName]
+      );
+      if (apolloMatches.length === 1) {
+        const newName = apolloMatches[0].full_name;
+        if (!isDry) {
+          await db.query(
+            `UPDATE lp_targets SET full_name = $1, updated_at = NOW() WHERE id = $2`,
+            [newName, lp.id]
+          );
+        }
+        pass1Updated++;
+      } else if (apolloMatches.length > 1) {
+        pass1Ambiguous++;
+        pass2Queue.push(lp);
+      } else {
+        pass2Queue.push(lp);
+      }
+    }
+
+    // Pass 2: Apollo People Search (rate-limited)
+    const pass2Candidates = pass2Queue.filter(lp => lp.company && lp.company.trim().length > 2);
+    let pass2Updated = 0;
+    let pass2Skipped = 0;
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+
+    for (const lp of pass2Candidates) {
+      try {
+        const result = await apollo.searchPeopleAtCompany(lp.company.trim(), {
+          perPage: 25, titles: [], seniorities: [],
+        });
+        const firstName = lp.full_name.trim().toLowerCase();
+        const nameMatches = result.people.filter(
+          p => (p.first_name || '').toLowerCase() === firstName
+        );
+        if (nameMatches.length === 1) {
+          const newName = nameMatches[0].full_name;
+          if (!isDry) {
+            await db.query(
+              `UPDATE lp_targets SET full_name = $1, updated_at = NOW() WHERE id = $2`,
+              [newName, lp.id]
+            );
+            for (const person of result.people) {
+              try {
+                await db.query(
+                  `INSERT INTO apollo_company_contacts
+                   (id, lp_target_id, company_name, apollo_person_id, first_name, last_name,
+                    full_name, title, seniority, linkedin_url, email, city, state, country, match_type)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                   ON CONFLICT (lp_target_id, apollo_person_id) DO NOTHING`,
+                  [
+                    require('uuid').v4(), lp.id, lp.company,
+                    person.apollo_person_id, person.first_name, person.last_name,
+                    person.full_name, person.title, person.seniority,
+                    person.linkedin_url, person.email,
+                    person.city, person.state, person.country, 'apollo_search',
+                  ]
+                );
+              } catch (_) {}
+            }
+          }
+          pass2Updated++;
+        } else {
+          pass2Skipped++;
+        }
+        await delay(1100);
+      } catch (err) {
+        if (err.code === 'NO_API_KEY') {
+          pass2Skipped = pass2Candidates.length - pass2Updated;
+          break;
+        }
+        pass2Skipped++;
+        await delay(500);
+      }
+    }
+
+    // Residual: reload and compute what's still broken
+    const { rows: finalState } = await db.query(
+      `SELECT id, full_name, first_name, company, fund_type FROM lp_targets ORDER BY company`
+    );
+    const residual = finalState
+      .filter(lp => needsEnrichment(lp.full_name) !== null)
+      .map(lp => ({
+        id: lp.id,
+        full_name: lp.full_name,
+        company: lp.company,
+        fund_type: lp.fund_type,
+        issue: needsEnrichment(lp.full_name),
+      }));
+
+    res.json({
+      dry_run: isDry,
+      pass1: { updated: pass1Updated, ambiguous: pass1Ambiguous },
+      pass2: { candidates: pass2Candidates.length, updated: pass2Updated, skipped: pass2Skipped },
+      residual: { count: residual.length, records: residual },
+    });
+  } catch (err) {
+    console.error('Error in enrich-surnames:', err);
+    res.status(500).json({ error: 'Enrichment failed', detail: err.message });
+  }
+});
+
 module.exports = router;
 module.exports.computeFitScoreForMigration = computeFitScore;
