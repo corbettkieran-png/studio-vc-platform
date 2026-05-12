@@ -410,7 +410,7 @@ async function runMatching() {
         await client.query(
           `UPDATE lp_targets
            SET best_connector_id = NULL, best_connector_name = NULL,
-           connection_strength = CASE WHEN connection_strength = 'apollo_match' THEN 'apollo_match' ELSE 'none' END,
+           connection_strength = 'none',
            total_connectors = 0, updated_at = NOW()
            WHERE id = $1`,
           [lp.id]
@@ -420,28 +420,12 @@ async function runMatching() {
 
     await client.query('COMMIT');
 
-    // Post-matching pass: restore apollo_match for LPs with Apollo contacts but no LinkedIn connection
-    await client.query(`
-      UPDATE lp_targets t
-      SET connection_strength = 'apollo_match',
-          total_connectors = sub.cnt,
-          updated_at = NOW()
-      FROM (
-        SELECT lp_target_id, COUNT(*) as cnt
-        FROM apollo_company_contacts
-        GROUP BY lp_target_id
-      ) sub
-      WHERE t.id = sub.lp_target_id
-        AND t.connection_strength = 'none'
-    `);
-
-    // Return stats
+    // Return stats — LinkedIn connections only (direct + company_match)
     const statsResult = await client.query(
       `SELECT COUNT(*) as total,
-              COUNT(CASE WHEN best_connector_id IS NOT NULL OR connection_strength IN ('apollo_match') THEN 1 END) as with_matches,
+              COUNT(CASE WHEN best_connector_id IS NOT NULL THEN 1 END) as with_matches,
               COUNT(CASE WHEN connection_strength = 'direct' THEN 1 END) as direct_matches,
-              COUNT(CASE WHEN connection_strength = 'company_match' THEN 1 END) as company_matches,
-              COUNT(CASE WHEN connection_strength = 'apollo_match' THEN 1 END) as apollo_matches
+              COUNT(CASE WHEN connection_strength = 'company_match' THEN 1 END) as company_matches
        FROM lp_targets`
     );
     const s = statsResult.rows[0];
@@ -450,7 +434,6 @@ async function runMatching() {
       matches_found: parseInt(s.with_matches) || 0,
       direct_matches: parseInt(s.direct_matches) || 0,
       company_matches: parseInt(s.company_matches) || 0,
-      apollo_matches: parseInt(s.apollo_matches) || 0,
     };
   } catch (err) {
     await client.query('ROLLBACK');
