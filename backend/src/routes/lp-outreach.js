@@ -3659,8 +3659,11 @@ router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
          WHERE lp_target_id = $1 AND LOWER(first_name) = LOWER($2)`,
         [lp.id, firstName]
       );
-      if (apolloMatches.length === 1) {
-        const newName = apolloMatches[0].full_name;
+      // Only use the match if the Apollo full_name is actually a full name (has a space)
+      const validMatches = apolloMatches.filter(m => m.full_name && m.full_name.includes(' '));
+
+      if (validMatches.length === 1) {
+        const newName = validMatches[0].full_name;
         if (!isDry) {
           await db.query(
             `UPDATE lp_targets SET full_name = $1, updated_at = NOW() WHERE id = $2`,
@@ -3668,7 +3671,7 @@ router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
           );
         }
         pass1Updated++;
-      } else if (apolloMatches.length > 1) {
+      } else if (validMatches.length > 1) {
         pass1Ambiguous++;
         pass2Queue.push(lp);
       } else {
@@ -3716,7 +3719,7 @@ router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
           nameMatches = [nameMatches[0]];
         }
 
-        if (nameMatches.length === 1) {
+        if (nameMatches.length === 1 && nameMatches[0].full_name && nameMatches[0].full_name.includes(' ')) {
           const newName = nameMatches[0].full_name;
           if (!isDry) {
             await db.query(
