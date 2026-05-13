@@ -271,6 +271,52 @@ async function autoMigrate() {
       AND (title IS NULL OR title = '');
     `);
 
+    // ── Performance indexes ────────────────────────────────────
+    // These are all CREATE INDEX IF NOT EXISTS so safe to run every boot.
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_lp_targets_fit_score
+        ON lp_targets (fit_score DESC NULLS LAST);
+      CREATE INDEX IF NOT EXISTS idx_lp_targets_outreach_status
+        ON lp_targets (outreach_status);
+      CREATE INDEX IF NOT EXISTS idx_lp_targets_company_lower
+        ON lp_targets (lower(trim(company)));
+      CREATE INDEX IF NOT EXISTS idx_lp_conn_matches_target
+        ON lp_connection_matches (lp_target_id);
+      CREATE INDEX IF NOT EXISTS idx_lp_conn_matches_team
+        ON lp_connection_matches (team_member_id);
+      CREATE INDEX IF NOT EXISTS idx_linkedin_conn_team
+        ON linkedin_connections (team_member_id);
+      CREATE INDEX IF NOT EXISTS idx_linkedin_conn_company_lower
+        ON linkedin_connections (lower(trim(company)));
+    `);
+
+    // ── Dedup v2: by full_name + company (v1 only deduped by company alone) ──
+    const { rows: dedupV2Flag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_targets_dedup_v2'`
+    );
+    if (!dedupV2Flag.length) {
+      const { rowCount } = await db.query(`
+        DELETE FROM lp_targets
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id,
+              ROW_NUMBER() OVER (
+                PARTITION BY lower(trim(full_name)), lower(trim(company))
+                ORDER BY
+                  (CASE WHEN email IS NOT NULL THEN 0 ELSE 1 END),
+                  (CASE WHEN linkedin_url IS NOT NULL THEN 0 ELSE 1 END),
+                  created_at ASC NULLS LAST,
+                  id ASC
+              ) AS rn
+            FROM lp_targets
+          ) ranked
+          WHERE rn > 1
+        )
+      `);
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_targets_dedup_v2')`);
+      if (rowCount > 0) console.log(`LP dedup v2: removed ${rowCount} duplicate rows.`);
+    }
+
     console.log('Auto-migrate: contacts schema applied.');
   } catch (err) {
     console.error('Auto-migrate error:', err.message);

@@ -1036,29 +1036,21 @@ router.get('/targets', authenticate, async (req, res) => {
       limit = 2000,
     } = req.query;
 
+    // NOTE: linkedin_matches (the expensive ILIKE subquery) is intentionally omitted
+    // from the list view — it is not rendered in the LP table and was the primary
+    // cause of slow list loads. It remains available on the detail endpoint (/targets/:id).
     let query = `
       SELECT t.*,
         COALESCE(
-          (SELECT json_agg(json_build_object('id', mc.id, 'name', mc.name, 'relationship', mc.relationship, 'linkedin_url', mc.linkedin_url) ORDER BY mc.created_at DESC)
-           FROM lp_manual_connections mc WHERE mc.lp_target_id = t.id),
+          (SELECT json_agg(json_build_object(
+              'id', mc.id, 'name', mc.name,
+              'relationship', mc.relationship,
+              'linkedin_url', mc.linkedin_url
+           ) ORDER BY mc.created_at DESC)
+           FROM lp_manual_connections mc
+           WHERE mc.lp_target_id = t.id),
           '[]'::json
         ) as manual_connections,
-        COALESCE(
-          (SELECT json_agg(json_build_object(
-              'connection_id', lc.id,
-              'connection_name', lc.full_name,
-              'connection_position', lc.position,
-              'team_member_id', tm.id,
-              'team_member_name', tm.full_name
-           ) ORDER BY lc.full_name)
-           FROM linkedin_connections lc
-           JOIN team_members tm ON tm.id = lc.team_member_id
-           WHERE tm.user_id = $1
-             AND (LOWER(TRIM(lc.company)) = LOWER(TRIM(t.company))
-               OR LOWER(TRIM(lc.company)) LIKE '%' || LOWER(TRIM(t.company)) || '%')
-          ),
-          '[]'::json
-        ) as linkedin_matches,
         COALESCE(
           (SELECT json_agg(json_build_object(
               'match_type', lcm.match_type,
@@ -1071,12 +1063,11 @@ router.get('/targets', authenticate, async (req, res) => {
            FROM lp_connection_matches lcm
            JOIN team_members tm ON tm.id = lcm.team_member_id
            LEFT JOIN linkedin_connections lc ON lc.id = lcm.linkedin_connection_id
-           WHERE lcm.lp_target_id = t.id
-          ),
+           WHERE lcm.lp_target_id = t.id),
           '[]'::json
         ) as connection_matches
       FROM lp_targets t WHERE 1=1`;
-    const params = [req.user.id];
+    const params = [];
 
     // Filters
     if (status) {
@@ -1101,16 +1092,18 @@ router.get('/targets', authenticate, async (req, res) => {
       params.push(searchTerm);
     }
 
-    // Sorting
+    // Sorting — done client-side too, but keep server sort for initial load order
     const validSortFields = ['fit_score', 'connection_strength', 'last_outreach_at', 'created_at', 'company', 'last_contacted_at', 'next_followup_at', 'priority'];
     const sortField = validSortFields.includes(sort_by) ? sort_by : 'company';
     const sortDir = (req.query.sort_dir || 'asc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     query += ` ORDER BY t.${sortField} ${sortDir} NULLS LAST`;
 
-    // Pagination
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(parseInt(limit), offset);
+    // Fetch all records (no server-side pagination — filtering/sorting is client-side)
+    if (parseInt(limit) > 0) {
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+      query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(parseInt(limit), offset);
+    }
 
     const { rows } = await db.query(query, params);
 

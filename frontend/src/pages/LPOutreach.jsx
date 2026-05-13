@@ -281,23 +281,18 @@ ${senderEmail}`;
     }
   }, []);
 
-  // Load LP targets
+  // Load LP targets — fetch all once; all filtering/sorting/search is done client-side.
+  // Do NOT include search/sortBy/sortDir as deps — that would re-fetch on every keystroke.
   const loadTargets = useCallback(async () => {
     try {
-      const params = {
-        sort_by: sortBy,
-        sort_dir: sortDir,
-        limit: 2000,
-      };
-      if (search.trim()) params.search = search.trim();
-      const data = await getLPTargets(params);
+      const data = await getLPTargets({ limit: 2000, sort_by: 'company', sort_dir: 'asc' });
       setTargets(data.lp_targets || data.targets || []);
     } catch (err) {
       console.error('Load targets error:', err);
     } finally {
       setLoading(false);
     }
-  }, [search, sortBy, sortDir]);
+  }, []); // stable — only runs once on mount
 
   // Load current user's own team_member record (auto-created on first call)
   const loadMyTeamMember = useCallback(async () => {
@@ -358,15 +353,19 @@ ${senderEmail}`;
     }
   }, []);
 
-  // Initial loads
+  // Initial loads — all fired in parallel via Promise.all so nothing blocks the LP list
   useEffect(() => {
-    loadStats();
-    loadMyTeamMember();
-    loadTeamMembers();
-    loadApolloStats();
-    loadApolloKey();
-    loadClaySettings();
-  }, [loadStats, loadMyTeamMember, loadTeamMembers, loadApolloStats, loadApolloKey, loadClaySettings]);
+    Promise.all([
+      loadTargets(),
+      loadStats(),
+      loadMyTeamMember(),
+      loadTeamMembers(),
+      loadApolloStats(),
+      loadApolloKey(),
+      loadClaySettings(),
+    ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // stable refs — intentionally run once on mount
 
   const runApolloBulkEnrich = async () => {
     if (apolloBulkRunning) return;
@@ -438,10 +437,6 @@ ${senderEmail}`;
       setSurnameImporting(false);
     }
   };
-
-  useEffect(() => {
-    loadTargets();
-  }, [loadTargets]);
 
   // Load detail when target selected
   useEffect(() => {
@@ -727,7 +722,11 @@ ${senderEmail}`;
       return 0;
     });
 
-    const paginated = filtered; // show all — no pagination
+    // Paginate — render 75 rows at a time to keep the DOM lean
+    const PAGE_SIZE = 75;
+    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    const safePage = Math.min(page, Math.max(0, totalPages - 1));
+    const paginated = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
     const COLS = [
       { key: 'name', label: 'Name / Company', width: 220, sticky: true },
@@ -1181,9 +1180,26 @@ ${senderEmail}`;
           </table>
         </div>
 
-        {/* Row count */}
-        <div style={{ padding: '8px 4px', fontSize: 11, color: 'var(--muted)' }}>
-          {filtered.length} LP{filtered.length !== 1 ? 's' : ''}
+        {/* Row count + pagination controls */}
+        <div style={{ padding: '8px 4px', fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span>{filtered.length} LP{filtered.length !== 1 ? 's' : ''}</span>
+          {totalPages > 1 && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                style={{ padding: '2px 8px', fontSize: 11, cursor: safePage === 0 ? 'default' : 'pointer', border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', opacity: safePage === 0 ? 0.4 : 1 }}>
+                ‹ Prev
+              </button>
+              <span>{safePage + 1} / {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                style={{ padding: '2px 8px', fontSize: 11, cursor: safePage >= totalPages - 1 ? 'default' : 'pointer', border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', opacity: safePage >= totalPages - 1 ? 0.4 : 1 }}>
+                Next ›
+              </button>
+            </span>
+          )}
         </div>
       </>
     );
