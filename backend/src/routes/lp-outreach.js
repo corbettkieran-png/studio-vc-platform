@@ -1,11 +1,16 @@
 const express = require('express');
 const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 const { v4: uuid } = require('uuid');
 const db = require('../config/db');
 const { authenticate } = require('../middleware/auth');
 const apollo = require('../services/apollo');
 const lpResearch = require('../services/lpResearch');
 const { notifyIntroRequest } = require('../services/email');
+
+const DECK_PATH = path.join(__dirname, '../static/StudioVC_Fund_III_April_2026.pdf');
+const DECK_FILENAME = 'StudioVC_Fund_III_April_2026.pdf';
 
 const router = express.Router();
 
@@ -1519,7 +1524,7 @@ ${sender.email}`;
 router.post('/targets/:id/send-intro', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { subject, body, to_email } = req.body;
+    const { subject, body, to_email, attach_deck } = req.body;
     if (!subject || !body || !to_email) {
       return res.status(400).json({ error: 'subject, body, and to_email are required' });
     }
@@ -1534,17 +1539,28 @@ router.post('/targets/:id/send-intro', authenticate, async (req, res) => {
     const sender = userRows[0];
     const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
-    // Send via Resend — request open/click tracking
+    // Build Resend payload — attach deck PDF if requested
+    const resendPayload = {
+      from: sender?.email ? `${sender.full_name} <${fromEmail}>` : fromEmail,
+      to: [to_email],
+      subject,
+      text: body,
+      // Resend tracking is enabled per-domain in dashboard; no extra params needed
+    };
+
+    if (attach_deck && fs.existsSync(DECK_PATH)) {
+      const pdfContent = fs.readFileSync(DECK_PATH);
+      resendPayload.attachments = [{
+        filename: DECK_FILENAME,
+        content: pdfContent.toString('base64'),
+      }];
+    }
+
+    // Send via Resend
     const resendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: sender?.email ? `${sender.full_name} <${fromEmail}>` : fromEmail,
-        to: [to_email],
-        subject,
-        text: body,
-        // Resend tracking is enabled per-domain in dashboard; no extra params needed
-      }),
+      body: JSON.stringify(resendPayload),
     });
     const resendData = await resendRes.json();
     if (!resendRes.ok) {
@@ -1564,7 +1580,7 @@ router.post('/targets/:id/send-intro', authenticate, async (req, res) => {
     await db.query(
       `INSERT INTO lp_activity_log (lp_target_id, user_id, action, details)
        VALUES ($1, $2, 'email_sent', $3)`,
-      [id, req.user.id, JSON.stringify({ to: to_email, subject, resend_id: resendEmailId })]
+      [id, req.user.id, JSON.stringify({ to: to_email, subject, resend_id: resendEmailId, deck_attached: !!attach_deck })]
     );
 
     // Mark as outreach started if still not_started

@@ -192,10 +192,10 @@ export const enrichApolloContact = (contactId, { linkedin_url, override_name } =
     body: JSON.stringify({ linkedin_url, override_name }),
   });
 
-export const sendIntro = (lpId, { subject, body, to_email }) =>
+export const sendIntro = (lpId, { subject, body, to_email, attach_deck }) =>
   request(`/lp/targets/${lpId}/send-intro`, {
     method: 'POST',
-    body: JSON.stringify({ subject, body, to_email }),
+    body: JSON.stringify({ subject, body, to_email, attach_deck }),
   });
 export const enrichApolloContactsBatch = (lpId) =>
   request(`/lp/apollo/contacts/enrich-batch/${lpId}`, { method: 'POST' });

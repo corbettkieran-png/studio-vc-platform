@@ -145,6 +145,7 @@ export default function LPOutreach() {
   const [emailCopied, setEmailCopied] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
   const [emailSentMsg, setEmailSentMsg] = useState('');
+  const [attachDeck, setAttachDeck] = useState(false);
   const [contactFilter, setContactFilter] = useState('all'); // all, c_suite, vp, director, has_email, known
   const [statusFilter, setStatusFilter] = useState('all'); // outreach status filter for LP list
   const [pageSize] = useState(50);
@@ -178,7 +179,7 @@ export default function LPOutreach() {
   const [editingLastContact, setEditingLastContact] = useState(null); // lpId being edited
 
   // Generate email draft based on LP target data
-  const generateEmailDraft = (type = 'cold') => {
+  const generateEmailDraft = (type = 'cold', withDeck = attachDeck) => {
     if (!detail) return;
     const firstName = detail.full_name?.split(' ')[0] || 'there';
     const company = detail.company || 'your firm';
@@ -207,7 +208,7 @@ ${connector.name} suggested I reach out. I'm ${senderName} at Studio VC, a New Y
 
 Studio VC invests exclusively at the late-stage seed: post-product companies with early revenue and a clear path to Series A. Our portfolio spans 38 companies across Funds I and II, collectively valued at over $3B, with Fund II at 2.3x Net TVPI. We invest $750K to $1M as a first check and consistently co-invest alongside Insight, General Catalyst, Bain Capital Ventures, Coatue, and DST Global.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I think there is a genuine case for a conversation about fit with our current pipeline and LP base.` : ''}
 
-Would you have 20 minutes for a call? Happy to share our deck in advance.
+Would you have 20 minutes for a call? ${withDeck ? 'I have attached our pitch deck for your review.' : 'Happy to share our deck in advance.'}
 
 Best,
 ${senderName}
@@ -224,7 +225,7 @@ We are currently raising Fund III ($50M target) and selectively engaging LPs who
 
 Our Managing Partners bring backgrounds from Broadway.com (former CEO, $600M+ revenue) and Bain Capital Ventures. We consistently invest ahead of Insight, General Catalyst, Bain Capital Ventures, Coatue, and DST Global.${fundType ? `\n\nGiven ${company}'s focus on ${fundType.replace(/_/g, ' ')}, I believe there is a strong case for a conversation around fit.` : ''}
 
-Would you be open to a 20-minute call? Happy to send our deck ahead of time.
+Would you be open to a 20-minute call? ${withDeck ? 'I have attached our pitch deck for your review.' : 'Happy to send our deck ahead of time.'}
 
 Best,
 ${senderName}
@@ -240,7 +241,7 @@ Since we last connected, we have continued to build strong momentum. Our Fund II
 
 Fund III is a $50M target with 25 core positions at $750K to $1M first checks.
 
-If the timing makes sense, I would welcome a 20-minute call to walk through our thesis and current pipeline. Happy to send the deck if useful.
+If the timing makes sense, I would welcome a 20-minute call to walk through our thesis and current pipeline. ${withDeck ? 'I have attached our pitch deck for your review.' : 'Happy to send the deck if useful.'}
 
 Best,
 ${senderName}
@@ -257,7 +258,7 @@ Studio VC invests exclusively at the late-stage seed: post-product companies wit
 
 ${fundType ? `Given ${company}'s focus on ${fundType.replace(/_/g, ' ')}, we think there is a genuine case for a conversation around fit with our current pipeline and LP base.` : `We focus on B2B SaaS, Enterprise AI, and Fintech, sectors where we have built deep pattern recognition over nearly a decade.`}${enrichment?.headline ? ` Your background in ${enrichment.headline.toLowerCase()} also suggests you would have a strong read on the companies we back.` : ''}
 
-We are being selective with LP conversations at this stage. Would you be open to a 20-minute call? Happy to share our deck in advance.
+We are being selective with LP conversations at this stage. Would you be open to a 20-minute call? ${withDeck ? 'I have attached our pitch deck for your review.' : 'Happy to share our deck in advance.'}
 
 Best,
 ${senderName}
@@ -2183,6 +2184,25 @@ ${senderEmail}`;
                   }}>
                   Follow Up
                 </button>
+                <button
+                  onClick={() => {
+                    const newVal = !attachDeck;
+                    setAttachDeck(newVal);
+                    if (showEmailDraft && emailDraft) {
+                      generateEmailDraft(emailDraftType, newVal);
+                    }
+                  }}
+                  title="Attach Fund III pitch deck to the email"
+                  style={{
+                    padding: '5px 12px', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                    border: `1px solid ${attachDeck ? '#0F766E' : 'var(--border)'}`,
+                    background: attachDeck ? '#0F766E' : 'transparent',
+                    color: attachDeck ? 'white' : 'var(--muted)',
+                    marginLeft: 'auto',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                  📎 {attachDeck ? 'Deck Attached' : 'Attach Deck'}
+                </button>
               </div>
               {showEmailDraft && emailDraft && (
                 <div style={{ background: 'var(--card-bg)', borderRadius: 8, padding: 12, border: '1px solid var(--border-light)' }}>
@@ -2234,7 +2254,7 @@ ${senderEmail}`;
                         setEmailSentMsg('');
                         try {
                           const { sendIntro } = await import('../services/api.js');
-                          await sendIntro(detail.id, { subject: emailDraft.subject, body: emailDraft.body, to_email: emailDraft.to });
+                          await sendIntro(detail.id, { subject: emailDraft.subject, body: emailDraft.body, to_email: emailDraft.to, attach_deck: attachDeck });
                           setEmailSentMsg(`✓ Sent to ${emailDraft.to}`);
                           setTimeout(() => setEmailSentMsg(''), 5000);
                         } catch (err) {
