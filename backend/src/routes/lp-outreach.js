@@ -14,6 +14,21 @@ const DECK_FILENAME = 'StudioVC_Fund_III_April_2026.pdf';
 
 const router = express.Router();
 
+// UUID validation helper — rejects malformed IDs before they reach the DB
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function requireUUID(paramName) {
+  return (req, res, next) => {
+    if (!UUID_RE.test(req.params[paramName])) {
+      return res.status(400).json({ error: `Invalid ${paramName}` });
+    }
+    next();
+  };
+}
+
+// Production-safe logger — suppress verbose debug logs in prod
+const isProd = process.env.NODE_ENV === 'production';
+const dbg = (...args) => { if (!isProd) console.log(...args); };
+
 // Configure multer for CSV uploads — 10 MB max, CSV only
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -67,7 +82,7 @@ function parseCSV(csvContent) {
 
   const headerRow = lines[headerIdx];
   const headers = headerRow.split(',').map(h => h.trim().replace(/^"|"$/g, '').replace(/^\uFEFF/, '').toLowerCase());
-  console.log(`parseCSV: header row index=${headerIdx}, headers=[${headers.join(', ')}]`);
+  dbg(`parseCSV: header row index=${headerIdx}, headers=[${headers.join(', ')}]`);
 
   const rows = [];
   for (let i = headerIdx + 1; i < lines.length; i++) {
@@ -774,7 +789,7 @@ router.post('/team/:id/connections', authenticate, upload.single('file'), async 
     const csvContent = req.file.buffer.toString('utf-8');
     const parsedRows = parseCSV(csvContent);
 
-    console.log(`LinkedIn CSV: ${parsedRows.length} rows parsed. Headers detected: ${parsedRows.length > 0 ? Object.keys(parsedRows[0]).join(', ') : 'none'}`);
+    dbg(`LinkedIn CSV: ${parsedRows.length} rows parsed. Headers detected: ${parsedRows.length > 0 ? Object.keys(parsedRows[0]).join(', ') : 'none'}`);
 
     // Flexible column finder (same as LP import)
     function findConnCol(row, ...candidates) {
@@ -807,7 +822,7 @@ router.post('/team/:id/connections', authenticate, upload.single('file'), async 
     });
 
     const validRows = normalizedRows.filter(r => r.full_name);
-    console.log(`LinkedIn CSV: ${validRows.length} valid rows with names (out of ${normalizedRows.length} total). Sample: ${validRows.length > 0 ? JSON.stringify(validRows[0]) : 'none'}`);
+    dbg(`LinkedIn CSV: ${validRows.length} valid rows with names (out of ${normalizedRows.length} total). Sample: ${validRows.length > 0 ? JSON.stringify(validRows[0]) : 'none'}`);
 
     if (validRows.length === 0) {
       return res.status(400).json({
@@ -862,7 +877,7 @@ router.post('/team/:id/connections', authenticate, upload.single('file'), async 
       );
 
       await client.query('COMMIT');
-      console.log(`LinkedIn CSV: Successfully inserted ${validRows.length} connections for team member ${id}`);
+      dbg(`LinkedIn CSV: Successfully inserted ${validRows.length} connections for team member ${id}`);
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -1151,7 +1166,7 @@ router.get('/targets', authenticate, async (req, res) => {
 });
 
 // GET /api/lp/targets/:id - Single LP detail with all connectors
-router.get('/targets/:id', authenticate, async (req, res) => {
+router.get('/targets/:id', authenticate, requireUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1261,7 +1276,7 @@ router.get('/targets/:id', authenticate, async (req, res) => {
 });
 
 // PATCH /api/lp/targets/:id - Update LP
-router.patch('/targets/:id', authenticate, async (req, res) => {
+router.patch('/targets/:id', authenticate, requireUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -1418,7 +1433,7 @@ router.patch('/targets/:id', authenticate, async (req, res) => {
 
 // ============================================================
 // DELETE /api/lp/targets/:id - Remove an LP target and all related data
-router.delete('/targets/:id', authenticate, async (req, res) => {
+router.delete('/targets/:id', authenticate, requireUUID('id'), async (req, res) => {
   const { id } = req.params;
   const client = await db.pool.connect();
   try {
@@ -1450,7 +1465,7 @@ router.delete('/targets/:id', authenticate, async (req, res) => {
 // ============================================================
 
 // POST /api/lp/targets/:id/draft-intro  — generate personalised intro email
-router.post('/targets/:id/draft-intro', authenticate, async (req, res) => {
+router.post('/targets/:id/draft-intro', authenticate, requireUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1520,7 +1535,7 @@ ${sender.email}`;
 // ============================================================
 
 // POST /api/lp/targets/:id/send-intro — send the intro email via Resend and record the email_id
-router.post('/targets/:id/send-intro', authenticate, async (req, res) => {
+router.post('/targets/:id/send-intro', authenticate, requireUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
     const { subject, body, to_email, attach_deck } = req.body;
@@ -1592,22 +1607,26 @@ router.post('/targets/:id/send-intro', authenticate, async (req, res) => {
     res.json({ sent: true, resend_email_id: resendEmailId });
   } catch (err) {
     console.error('Send intro error:', err);
-    res.status(500).json({ error: 'Failed to send intro email', detail: err.message });
+    res.status(500).json({ error: 'Failed to send intro email' });
   }
 });
 
 // ============================================================
 // RESEND WEBHOOK — email open/click events
-// POST /api/lp/email-events/resend (no auth — Resend posts here, verified via shared secret)
+// POST /api/lp/email-events/resend (no auth — Resend posts here)
+// Verified via ?key= query param — set webhook URL in Resend as:
+// https://studio-vc-backend-production.up.railway.app/api/lp/email-events/resend?key=<RESEND_WEBHOOK_SECRET>
 // ============================================================
 router.post('/email-events/resend', async (req, res) => {
-  // Verify shared secret if configured — fail closed if secret is set but header missing
+  // Verify shared secret passed as URL query param
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    const incoming = req.headers['x-resend-signature'] || req.headers['authorization'];
-    if (!incoming || incoming !== webhookSecret) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+  if (webhookSecret && req.query.key !== webhookSecret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  // Cap payload size to prevent large blob storage
+  const rawBody = JSON.stringify(req.body);
+  if (rawBody.length > 10000) {
+    return res.status(413).json({ error: 'Payload too large' });
   }
   try {
     const event = req.body;
@@ -1665,7 +1684,7 @@ router.post('/email-events/resend', async (req, res) => {
 // ============================================================
 
 // GET /api/lp/targets/:id/research — return cached research brief
-router.get('/targets/:id/research', authenticate, async (req, res) => {
+router.get('/targets/:id/research', authenticate, requireUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
     const { rows } = await db.query(
@@ -1683,7 +1702,7 @@ router.get('/targets/:id/research', authenticate, async (req, res) => {
 });
 
 // POST /api/lp/targets/:id/research — run (or re-run) research for a single LP
-router.post('/targets/:id/research', authenticate, async (req, res) => {
+router.post('/targets/:id/research', authenticate, requireUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
     const brief = await lpResearch.researchLP(id);
@@ -1693,7 +1712,7 @@ router.post('/targets/:id/research', authenticate, async (req, res) => {
     console.error('[research POST] error:', err);
     if (err.message === 'LP not found') return res.status(404).json({ error: err.message });
     if (err.message.includes('ANTHROPIC_API_KEY')) return res.status(503).json({ error: 'AI research not configured' });
-    res.status(500).json({ error: err.message || 'Research failed' });
+    res.status(500).json({ error: 'Research failed' });
   }
 });
 
@@ -1732,7 +1751,7 @@ router.post('/research/bulk', authenticate, async (req, res) => {
 // ============================================================
 
 // POST /api/lp/targets/:id/activity - Log outreach activity
-router.post('/targets/:id/activity', authenticate, async (req, res) => {
+router.post('/targets/:id/activity', authenticate, requireUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
     const { action, details } = req.body;
@@ -3574,7 +3593,7 @@ router.get('/clay/webhook-url', authenticate, async (req, res) => {
 // ── Manual Connections (Navigator-sourced warm paths) ──
 
 // GET /api/lp/targets/:id/connections — list manual connections for an LP
-router.get('/targets/:id/connections', authenticate, async (req, res) => {
+router.get('/targets/:id/connections', authenticate, requireUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
     const { rows } = await db.query(
@@ -3592,7 +3611,7 @@ router.get('/targets/:id/connections', authenticate, async (req, res) => {
 });
 
 // POST /api/lp/targets/:id/connections — add a manual connection
-router.post('/targets/:id/connections', authenticate, async (req, res) => {
+router.post('/targets/:id/connections', authenticate, requireUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, relationship, linkedin_url } = req.body;
@@ -3626,7 +3645,7 @@ router.post('/targets/:id/connections', authenticate, async (req, res) => {
 });
 
 // DELETE /api/lp/targets/:id/connections/:connId — remove a manual connection
-router.delete('/targets/:id/connections/:connId', authenticate, async (req, res) => {
+router.delete('/targets/:id/connections/:connId', authenticate, requireUUID('id'), requireUUID('connId'), async (req, res) => {
   try {
     const { id, connId } = req.params;
     const { rowCount } = await db.query(
