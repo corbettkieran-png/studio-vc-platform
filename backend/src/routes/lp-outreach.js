@@ -707,8 +707,9 @@ router.get('/team', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/lp/team - Add team member
+// POST /api/lp/team - Add team member (admin only)
 router.post('/team', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { full_name, linkedin_url } = req.body;
 
@@ -731,8 +732,9 @@ router.post('/team', authenticate, async (req, res) => {
   }
 });
 
-// DELETE /api/lp/team/:id - Remove team member
+// DELETE /api/lp/team/:id - Remove team member (admin only)
 router.delete('/team/:id', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { id } = req.params;
 
@@ -1284,7 +1286,11 @@ router.patch('/targets/:id', authenticate, async (req, res) => {
     const updates = [];
     const params = [];
 
+    const VALID_OUTREACH_STATUSES = ['not_started', 'identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions', 'passed', 'committed'];
     if (outreach_status !== undefined) {
+      if (!VALID_OUTREACH_STATUSES.includes(outreach_status)) {
+        return res.status(400).json({ error: `Invalid outreach_status. Must be one of: ${VALID_OUTREACH_STATUSES.join(', ')}` });
+      }
       updates.push('outreach_status = $' + (params.length + 1));
       params.push(outreach_status);
       updates.push('last_outreach_at = NOW()');
@@ -1592,9 +1598,17 @@ router.post('/targets/:id/send-intro', authenticate, async (req, res) => {
 
 // ============================================================
 // RESEND WEBHOOK — email open/click events
-// POST /api/lp/email-events/resend (no auth — Resend posts here)
+// POST /api/lp/email-events/resend (no auth — Resend posts here, verified via shared secret)
 // ============================================================
 router.post('/email-events/resend', async (req, res) => {
+  // Verify shared secret if configured — fail closed if secret is set but header missing
+  const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const incoming = req.headers['x-resend-signature'] || req.headers['authorization'];
+    if (!incoming || incoming !== webhookSecret) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  }
   try {
     const event = req.body;
     const resendEmailId = event?.data?.email_id || event?.email_id;
@@ -1899,6 +1913,7 @@ router.get('/stats', authenticate, async (req, res) => {
 // Columns: id, first_name, company, fund_type, email
 // The user fills in a full_name column and re-uploads via the import endpoint.
 router.get('/admin/export-incomplete-names', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { rows } = await db.query(
       `SELECT id, full_name AS first_name, company, fund_type, email
@@ -1937,6 +1952,7 @@ router.get('/admin/export-incomplete-names', authenticate, async (req, res) => {
 // Updates lp_targets.full_name for each row where full_name has a surname
 // (i.e. contains a space). Skips blank or single-token full_name values.
 router.post('/admin/import-surnames', authenticate, upload.single('file'), async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     if (!req.file) return res.status(400).json({ error: 'CSV file required' });
 
@@ -2050,6 +2066,7 @@ router.post('/admin/import-surnames', authenticate, upload.single('file'), async
 //   limit  – max records to process in this run (default 50, max 200)
 //   dry_run – if "true", returns what would change without writing
 router.post('/admin/enrich-missing-surnames', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   if (!apollo.hasKey()) return res.status(500).json({ error: 'APOLLO_API_KEY not set' });
 
   const limit = Math.min(parseInt(req.query.limit) || 50, 200);
@@ -3634,6 +3651,7 @@ router.delete('/targets/:id/connections/:connId', authenticate, async (req, res)
 // Pass 2: Apollo People Search for remaining single-name LPs (rate-limited)
 // Returns a summary + residual list (blank / ambiguous / garbage) for manual review
 router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { dry_run = false } = req.query;
     const isDry = dry_run === 'true' || dry_run === true;

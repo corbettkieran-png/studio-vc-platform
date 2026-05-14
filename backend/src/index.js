@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
@@ -34,13 +36,35 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, Postman in dev)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.some(o => origin === o || origin.startsWith(o))) {
+    if (allowedOrigins.some(o => origin === o)) {
       return callback(null, true);
     }
     callback(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
 }));
+
+// Security headers
+app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled — frontend handles its own
+
+// Rate limiting — public endpoints only
+const submissionLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many submissions. Please try again later.' },
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many auth attempts. Please try again later.' },
+});
+app.use('/api/submissions', submissionLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/google', authLimiter);
 
 // Body size limits — prevent oversized JSON payloads
 app.use(express.json({ limit: '5mb' }));

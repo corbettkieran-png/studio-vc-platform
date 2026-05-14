@@ -159,10 +159,12 @@ router.post('/google', async (req, res) => {
       }
     } else {
       // First-time Google sign-in — studio.vc addresses and known team emails
-      // get admin role; all others default to analyst
-      const ADMIN_EMAILS = ['corbett.kieran@gmail.com'];
+      // get admin role; all others default to analyst.
+      // ADMIN_EMAILS env var: comma-separated list of personal emails that get admin on first login.
+      const adminEmailsEnv = (process.env.ADMIN_EMAILS || 'corbett.kieran@gmail.com')
+        .split(',').map(e => e.trim().toLowerCase());
       const isStudioDomain = email.toLowerCase().endsWith('@studio.vc');
-      const isKnownAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
+      const isKnownAdmin = adminEmailsEnv.includes(email.toLowerCase());
       const newRole = (isStudioDomain || isKnownAdmin) ? 'admin' : 'analyst';
 
       const { rows: created } = await db.query(

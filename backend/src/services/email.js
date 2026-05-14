@@ -1,5 +1,16 @@
 const db = require('../config/db');
 
+// Escape HTML special characters to prevent XSS in notification emails
+function escHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // Send via Resend HTTP API — avoids SMTP port blocks on Railway
 async function sendViaResend(to, subject, html) {
   const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
@@ -69,12 +80,12 @@ async function notifyNewSubmission(submission, screenResult) {
     <div style="font-family: Arial, sans-serif; max-width: 600px;">
       <h2 style="color: #003B76;">New Deal Submission</h2>
       <table style="border-collapse: collapse; width: 100%;">
-        <tr><td style="padding: 6px 12px; font-weight: bold;">Company</td><td style="padding: 6px 12px;">${submission.company_name}</td></tr>
-        <tr><td style="padding: 6px 12px; font-weight: bold;">Founder</td><td style="padding: 6px 12px;">${submission.founder_name}</td></tr>
-        <tr><td style="padding: 6px 12px; font-weight: bold;">Sector</td><td style="padding: 6px 12px;">${submission.sector}</td></tr>
-        <tr><td style="padding: 6px 12px; font-weight: bold;">Stage</td><td style="padding: 6px 12px;">${submission.stage}</td></tr>
-        <tr><td style="padding: 6px 12px; font-weight: bold;">ARR</td><td style="padding: 6px 12px;">${submission.arr || 'N/A'}</td></tr>
-        <tr><td style="padding: 6px 12px; font-weight: bold;">Status</td><td style="padding: 6px 12px; color: ${screenResult.matched ? '#16A34A' : '#DC2626'};">${statusLabel}</td></tr>
+        <tr><td style="padding: 6px 12px; font-weight: bold;">Company</td><td style="padding: 6px 12px;">${escHtml(submission.company_name)}</td></tr>
+        <tr><td style="padding: 6px 12px; font-weight: bold;">Founder</td><td style="padding: 6px 12px;">${escHtml(submission.founder_name)}</td></tr>
+        <tr><td style="padding: 6px 12px; font-weight: bold;">Sector</td><td style="padding: 6px 12px;">${escHtml(submission.sector)}</td></tr>
+        <tr><td style="padding: 6px 12px; font-weight: bold;">Stage</td><td style="padding: 6px 12px;">${escHtml(submission.stage)}</td></tr>
+        <tr><td style="padding: 6px 12px; font-weight: bold;">ARR</td><td style="padding: 6px 12px;">${escHtml(submission.arr) || 'N/A'}</td></tr>
+        <tr><td style="padding: 6px 12px; font-weight: bold;">Status</td><td style="padding: 6px 12px; color: ${screenResult.matched ? '#16A34A' : '#DC2626'};">${escHtml(statusLabel)}</td></tr>
       </table>
       <h3 style="color: #003B76; margin-top: 20px;">Screening Results</h3>
       <ul>${checksHtml}</ul>
