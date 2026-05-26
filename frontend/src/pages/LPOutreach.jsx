@@ -188,9 +188,9 @@ export default function LPOutreach() {
     const sectors = detail.sector_interest || [];
     const fundType = detail.fund_type || '';
     const enrichment = detail.linkedin_enrichment;
-    const senderName = myTeamMember?.full_name || 'Kieran Corbett';
+    const senderName = myTeamMember?.full_name || user?.name || user?.full_name || 'Studio VC';
     const senderTitle = myTeamMember?.title || 'Studio VC';
-    const senderEmail = myTeamMember?.work_email || 'kcorbett@studio.vc';
+    const senderEmail = myTeamMember?.work_email || user?.email || '';
 
     const sectorText = sectors.length > 0
       ? sectors.slice(0, 3).map(s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ')
@@ -440,6 +440,10 @@ ${senderEmail}`;
 
   // Load detail when target selected
   useEffect(() => {
+    // Reset email draft state whenever the selected LP changes
+    setEmailDraft(null);
+    setShowEmailDraft(false);
+
     if (!selectedTarget) {
       setDetail(null);
       setApolloContacts([]);

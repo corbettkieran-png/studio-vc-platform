@@ -223,11 +223,7 @@ export default function CRM() {
               <input placeholder="Search companies, founders..." value={search}
                 onChange={(e) => setSearch(e.target.value)} />
             </div>
-            {tab === 'rejected' && (
-              <button className="btn btn-primary btn-sm" onClick={() => alert('Bulk progress check — coming soon')}>
-                Check All Progress
-              </button>
-            )}
+            {/* Bulk progress check — coming in next sprint */}
           </div>
           <table>
             <thead>

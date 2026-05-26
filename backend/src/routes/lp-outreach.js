@@ -1301,7 +1301,7 @@ router.patch('/targets/:id', authenticate, requireUUID('id'), async (req, res) =
     const updates = [];
     const params = [];
 
-    const VALID_OUTREACH_STATUSES = ['not_started', 'identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions', 'passed', 'committed'];
+    const VALID_OUTREACH_STATUSES = ['not_started', 'identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions', 'passed', 'committed', 'not_now'];
     if (outreach_status !== undefined) {
       if (!VALID_OUTREACH_STATUSES.includes(outreach_status)) {
         return res.status(400).json({ error: `Invalid outreach_status. Must be one of: ${VALID_OUTREACH_STATUSES.join(', ')}` });
@@ -1480,11 +1480,12 @@ router.post('/targets/:id/draft-intro', authenticate, requireUUID('id'), async (
     );
     const user = userRows[0] || { full_name: 'The Studio VC Team', email: '' };
     const { rows: tmRows } = await db.query(
-      'SELECT work_email FROM team_members WHERE user_id = $1 LIMIT 1', [req.user.id]
+      'SELECT work_email, title FROM team_members WHERE user_id = $1 LIMIT 1', [req.user.id]
     );
     const sender = {
       ...user,
       email: tmRows[0]?.work_email || user.email,
+      title: tmRows[0]?.title || null,
     };
 
     // Build a personalised email using what we know
@@ -1504,7 +1505,7 @@ router.post('/targets/:id/draft-intro', authenticate, requireUUID('id'), async (
 
     const body = `${salutation}
 
-${connectors ? connectors + '\n\n' : ''}I'm ${sender.full_name}, Senior Associate at Studio VC. I'm reaching out because we're currently raising Fund III and believe there could be strong alignment with ${lp.company}.
+${connectors ? connectors + '\n\n' : ''}I'm ${sender.full_name}${sender.title ? `, ${sender.title}` : ''} at Studio VC. I'm reaching out because we're currently raising Fund III and believe there could be strong alignment with ${lp.company}.
 
 Studio VC is a New York-based venture fund investing exclusively at the late-stage seed -- post-product companies with early revenue and a clear path to Series A. Our track record across Funds I & II: 38 portfolio companies collectively valued at over $3B, Fund II at 2.3x Net TVPI, and 50% of our seed investments reaching Series A within two years (roughly double the industry average).
 
@@ -1520,7 +1521,7 @@ I'd love to share our deck and schedule a 20-minute call at your convenience.
 
 Best,
 ${sender.full_name}
-Senior Associate, Studio VC
+${sender.title ? sender.title + ', Studio VC' : 'Studio VC'}
 ${sender.email}`;
 
     res.json({ subject, body, lp_name: lp.full_name, lp_company: lp.company, sender: sender.full_name });

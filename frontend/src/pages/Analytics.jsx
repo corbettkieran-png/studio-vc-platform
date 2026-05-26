@@ -30,7 +30,7 @@ export default function Analytics() {
       .then(([analytics, statsData, actData]) => {
         setData(analytics);
         setStats(statsData);
-        setActivity(actData.activity);
+        setActivity(actData?.activity || []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
