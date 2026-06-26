@@ -174,6 +174,9 @@ export default function LPOutreach() {
   const [researchBrief, setResearchBrief] = useState(null);  // { brief, researched_at }
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState(null);
+  const [pressArticles, setPressArticles] = useState([]);
+  const [pressLoading, setPressLoading] = useState(false);
+  const [pressError, setPressError] = useState('');
   // Inline editable fields
   const [editingFollowup, setEditingFollowup] = useState(null); // lpId being edited
   const [editingLastContact, setEditingLastContact] = useState(null); // lpId being edited
@@ -440,9 +443,11 @@ ${senderEmail}`;
 
   // Load detail when target selected
   useEffect(() => {
-    // Reset email draft state whenever the selected LP changes
+    // Reset per-LP state whenever the selected LP changes
     setEmailDraft(null);
     setShowEmailDraft(false);
+    setPressArticles([]);
+    setPressError('');
 
     if (!selectedTarget) {
       setDetail(null);
@@ -1950,6 +1955,115 @@ ${senderEmail}`;
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* ── Recent Press ── */}
+            <div className="detail-section">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ margin: 0 }}>Recent Press</h3>
+                <button
+                  disabled={pressLoading}
+                  onClick={async () => {
+                    setPressLoading(true);
+                    setPressError('');
+                    try {
+                      const data = await request(`/lp/targets/${detail.id}/press`, { method: 'POST', body: JSON.stringify({}) });
+                      if (data?.error) throw new Error(data.error);
+                      setPressArticles(data.articles || []);
+                      if ((data.articles || []).length === 0) setPressError('No recent press found for this firm.');
+                    } catch (e) {
+                      setPressError(e.message || 'Press scan failed.');
+                    } finally {
+                      setPressLoading(false);
+                    }
+                  }}
+                  style={{
+                    padding: '5px 12px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                    cursor: pressLoading ? 'default' : 'pointer',
+                    background: pressArticles.length > 0 ? 'transparent' : '#003B76',
+                    color: pressArticles.length > 0 ? '#003B76' : '#fff',
+                    border: '1px solid #003B76',
+                    opacity: pressLoading ? 0.6 : 1, whiteSpace: 'nowrap',
+                  }}>
+                  {pressLoading ? '📡 Scanning…' : pressArticles.length > 0 ? '↻ Refresh' : '📡 Scan Press'}
+                </button>
+              </div>
+
+              {pressLoading && pressArticles.length === 0 && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', padding: '16px 0', textAlign: 'center' }}>
+                  Scanning news for {detail.company}… ~10 seconds
+                </div>
+              )}
+
+              {pressError && !pressLoading && (
+                <div style={{ fontSize: 12, color: '#6B7280', padding: '8px 12px', background: '#F9FAFB', borderRadius: 4, marginBottom: 6 }}>
+                  {pressError}
+                </div>
+              )}
+
+              {pressArticles.length > 0 && (
+                <div>
+                  {pressArticles.map((article, i) => {
+                    const catColors = {
+                      fundraising: { bg: '#EFF6FF', border: '#93C5FD', text: '#1D4ED8', label: '💰 Fundraising' },
+                      team:        { bg: '#F0FDF4', border: '#86EFAC', text: '#15803D', label: '👤 Team' },
+                      portfolio:   { bg: '#FFF7ED', border: '#FCD34D', text: '#92400E', label: '🏢 Portfolio' },
+                      press:       { bg: '#F5F3FF', border: '#C4B5FD', text: '#5B21B6', label: '📰 Press' },
+                    };
+                    const cat = catColors[article.category] || catColors.press;
+                    return (
+                      <div key={i} style={{
+                        padding: '10px 12px', borderRadius: 6, border: `1px solid ${cat.border}`,
+                        background: cat.bg, marginBottom: 8,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                          <div style={{ fontWeight: 600, fontSize: 12, color: '#1D3557', flex: 1, lineHeight: 1.4 }}>
+                            {article.headline}
+                          </div>
+                          <span style={{
+                            flexShrink: 0, fontSize: 10, fontWeight: 600, padding: '2px 6px',
+                            borderRadius: 10, background: 'rgba(255,255,255,0.7)', color: cat.text,
+                            border: `1px solid ${cat.border}`, whiteSpace: 'nowrap',
+                          }}>
+                            {cat.label}
+                          </span>
+                        </div>
+                        {article.summary && (
+                          <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.5, marginBottom: 4 }}>
+                            {article.summary}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {article.date && (
+                              <span style={{ fontSize: 10, color: '#94A3B8' }}>{article.date}</span>
+                            )}
+                            {article.source_name && (
+                              <span style={{ fontSize: 10, fontWeight: 500, color: '#64748B' }}>{article.source_name}</span>
+                            )}
+                          </div>
+                          {article.url && (
+                            <a href={article.url} target="_blank" rel="noopener noreferrer"
+                              style={{
+                                fontSize: 10, fontWeight: 600, color: cat.text, textDecoration: 'none',
+                                padding: '2px 8px', borderRadius: 4, border: `1px solid ${cat.border}`,
+                                background: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap',
+                              }}>
+                              Read →
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {pressArticles.length === 0 && !pressLoading && !pressError && (
+                <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>
+                  Live internet scan for recent fundraising, new hires, portfolio announcements, and press coverage from the last 3 months.
+                </p>
+              )}
             </div>
 
             {/* ── LP Intelligence Brief ── */}

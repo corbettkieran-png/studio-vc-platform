@@ -290,4 +290,114 @@ function buildLPProfileText(lp, apolloOrg, apolloContacts, enrichment, connectio
   return lines.join('\n');
 }
 
-module.exports = { researchLP };
+// ─── Recent Press Scan ───────────────────────────────────────────────────────
+/**
+ * Runs a targeted Perplexity news search for an LP firm, then uses Claude Haiku
+ * to extract structured article cards (headline, summary, date, category, url).
+ * Lightweight and fast — no DB caching, intended for on-demand use.
+ */
+async function fetchRecentPress(company, personName) {
+  if (!Anthropic) throw new Error('Anthropic SDK not available');
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (!anthropicKey) throw new Error('ANTHROPIC_API_KEY not set');
+
+  const perplexityKey = process.env.PERPLEXITY_API_KEY;
+  if (!perplexityKey) throw new Error('PERPLEXITY_API_KEY not set');
+
+  const currentYear = new Date().getFullYear();
+  const prevYear = currentYear - 1;
+
+  // Step 1: Perplexity — real-time web search with citation URLs
+  const perplexityRes = await fetch('https://api.perplexity.ai/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${perplexityKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'sonar',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a financial research assistant. Return only factual, sourced news items. Be concise.',
+        },
+        {
+          role: 'user',
+          content: `Search for the most recent news and announcements about the investment firm "${company}" (${prevYear}–${currentYear}).
+
+Cover all of the following:
+1. New fund raises, fund closes, or capital commitments
+2. New partners, managing directors, or key hires who joined the firm
+3. Notable portfolio company investments, exits, or announcements they were involved in
+4. Any press coverage, awards, or notable business developments
+${personName ? `5. Any personal news or commentary from ${personName} (interviews, quotes, events)` : ''}
+
+For each news item provide the headline, a brief description, and the approximate date. Cite your sources.`,
+        },
+      ],
+      max_tokens: 1400,
+      temperature: 0.1,
+      return_citations: true,
+    }),
+  });
+
+  if (!perplexityRes.ok) {
+    const errText = await perplexityRes.text();
+    throw new Error(`Perplexity API error ${perplexityRes.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const perplexityData = await perplexityRes.json();
+  const newsContent = perplexityData.choices?.[0]?.message?.content || '';
+  const citations = perplexityData.citations || [];
+
+  if (!newsContent || newsContent.length < 50) return [];
+
+  // Step 2: Claude Haiku — extract structured article cards from the narrative
+  const client = new Anthropic({ apiKey: anthropicKey });
+
+  const structurePrompt = `Extract structured news items from the following research result about "${company}".
+
+RESEARCH RESULT:
+${newsContent}
+
+CITATION URLS (in order as [1], [2], … in the text above):
+${citations.length > 0 ? citations.map((url, i) => `[${i + 1}] ${url}`).join('\n') : 'None available'}
+
+Return a JSON array of up to 6 distinct, factual news items. For each item find the most relevant citation URL.
+
+Required format — return ONLY valid JSON, no markdown:
+[
+  {
+    "headline": "Concise 8-12 word headline",
+    "summary": "One sentence factual summary of the event.",
+    "date": "e.g. 'June 2025' or 'Q1 2026' or null if unknown",
+    "category": "fundraising | team | portfolio | press",
+    "url": "best matching URL from citations or null",
+    "source_name": "Publication name e.g. TechCrunch, Bloomberg, Axios, PR Newswire or null"
+  }
+]
+
+If there are no credible recent news items, return [].`;
+
+  const haikuResponse = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: structurePrompt }],
+  });
+
+  const rawText = haikuResponse.content[0]?.text || '[]';
+
+  try {
+    const cleaned = rawText
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.warn('[fetchRecentPress] Failed to parse Haiku response:', rawText.slice(0, 200));
+    return [];
+  }
+}
+
+module.exports = { researchLP, fetchRecentPress };

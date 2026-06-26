@@ -1717,6 +1717,24 @@ router.post('/targets/:id/research', authenticate, requireUUID('id'), async (req
   }
 });
 
+// POST /api/lp/targets/:id/press — real-time recent press scan (Perplexity + Haiku, no DB cache)
+router.post('/targets/:id/press', authenticate, requireUUID('id'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query('SELECT company, full_name FROM lp_targets WHERE id = $1', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'LP not found' });
+    const { company, full_name } = rows[0];
+    if (!company) return res.status(400).json({ error: 'LP has no company name to search' });
+    const articles = await lpResearch.fetchRecentPress(company, full_name);
+    res.json({ articles, company });
+  } catch (err) {
+    dbg('[press] error:', err.message);
+    if (err.message.includes('PERPLEXITY_API_KEY')) return res.status(503).json({ error: 'Perplexity API key not configured in Railway' });
+    if (err.message.includes('ANTHROPIC_API_KEY')) return res.status(503).json({ error: 'Anthropic API key not configured in Railway' });
+    res.status(500).json({ error: 'Press scan failed — ' + err.message });
+  }
+});
+
 // POST /api/lp/research/bulk — queue research for multiple LPs (async, fire-and-forget per LP)
 router.post('/research/bulk', authenticate, async (req, res) => {
   try {
