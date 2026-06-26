@@ -6,10 +6,11 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "db:migrate": "node src/utils/migrate.js && node src/utils/migrate-lp.js && node src/utils/migrate-research.js && node src/utils/migrate-commitment.js",
+    "db:migrate": "node src/utils/migrate.js && node src/utils/migrate-lp.js && node src/utils/migrate-research.js && node src/utils/migrate-commitment.js && node src/utils/migrate-prior-fund.js",
     "db:migrate-lp": "node src/utils/migrate-lp.js",
     "db:migrate-research": "node src/utils/migrate-research.js",
     "db:migrate-commitment": "node src/utils/migrate-commitment.js",
+    "db:migrate-prior-fund": "node src/utils/migrate-prior-fund.js",
     "db:seed": "node src/utils/seed.js"
   },
   "dependencies": {

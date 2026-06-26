@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getMyTeamMember, uploadMyLinkedInCSV,
   getLPTeam, addLPTeamMember, removeLPTeamMember, uploadLinkedInCSV,
-  importLPTargets, getLPTargets, getLPTarget, updateLPTarget, addLPActivity,
+  importLPTargets, getLPTargets, getLPTarget, createLPTarget, updateLPTarget, addLPActivity,
   runLPMatching, getLPStats, getApolloStatus, getApolloContacts,
   getApolloKeyStatus, apolloLiveSearch, apolloBulkEnrich, enrichMissingSurnames,
   exportIncompleteLPNames, importLPSurnames,
@@ -161,6 +161,18 @@ export default function LPOutreach() {
   const [clayFormApiKey, setClayFormApiKey] = useState('');
   const [clayExporting, setClayExporting] = useState(false);
   const [clayConfigSaved, setClayConfigSaved] = useState(false);
+
+  // Prior fund filter
+  const [priorFundFilter, setPriorFundFilter] = useState('all');
+  // Manual Add LP modal
+  const [showAddLPModal, setShowAddLPModal] = useState(false);
+  const [addingLP, setAddingLP] = useState(false);
+  const [newLP, setNewLP] = useState({
+    full_name: '', company: '', title: '', email: '',
+    linkedin_url: '', fund_type: '', geographic_focus: '',
+    estimated_aum: '', notes: '', prior_fund: '',
+    sector_interest: '',
+  });
 
   // Manual connections state
   const [showAddConnection, setShowAddConnection] = useState(false);
@@ -838,6 +850,14 @@ ${senderEmail}`;
       });
     }
 
+    // Prior fund filter
+    if (priorFundFilter !== 'all') {
+      filtered = filtered.filter(t => {
+        if (priorFundFilter === 'none') return !t.prior_fund;
+        return t.prior_fund === priorFundFilter;
+      });
+    }
+
     // Client-side sort
     filtered = [...filtered].sort((a, b) => {
       let va, vb;
@@ -964,6 +984,13 @@ ${senderEmail}`;
             <span style={{ fontSize: 12, color: '#94A3B8', whiteSpace: 'nowrap', background: '#EEF4FF', padding: '5px 12px', borderRadius: 20, fontWeight: 600, color: '#1D3557' }}>
               {filtered.length} LP{filtered.length !== 1 ? 's' : ''}
             </span>
+            <button onClick={() => setShowAddLPModal(true)} style={{
+              padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              background: '#003B76', color: '#fff', border: 'none',
+              boxShadow: '0 1px 4px rgba(0,59,118,0.25)', whiteSpace: 'nowrap',
+            }}>
+              + Add LP
+            </button>
           </div>
         </div>
 
@@ -1007,14 +1034,43 @@ ${senderEmail}`;
             <option value="deep_tech">Deep Tech</option>
             <option value="climate">Climate / Sustainability</option>
           </select>
-          {(fundTypeFilter !== 'all' || sectorFilter !== 'all') && (
-            <button onClick={() => { setFundTypeFilter('all'); setSectorFilter('all'); }} style={{
+          {(fundTypeFilter !== 'all' || sectorFilter !== 'all' || priorFundFilter !== 'all') && (
+            <button onClick={() => { setFundTypeFilter('all'); setSectorFilter('all'); setPriorFundFilter('all'); }} style={{
               padding: '4px 11px', borderRadius: 20, fontSize: 11, cursor: 'pointer', fontWeight: 600,
               border: 'none', background: '#FEE2E2', color: '#DC2626',
             }}>
               Clear filters ×
             </button>
           )}
+        </div>
+
+        {/* Prior fund history filter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 2 }}>Prior LP</span>
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'fund_i', label: 'Fund I' },
+            { key: 'fund_ii', label: 'Fund II' },
+            { key: 'both', label: 'Fund I + II' },
+            { key: 'none', label: 'New LP' },
+          ].map(f => {
+            const isActive = priorFundFilter === f.key;
+            const count = f.key === 'all' ? targets.length
+              : f.key === 'none' ? targets.filter(t => !t.prior_fund).length
+              : targets.filter(t => t.prior_fund === f.key).length;
+            return (
+              <button key={f.key} onClick={() => { setPriorFundFilter(f.key); setPage(0); }} style={{
+                padding: '4px 11px', borderRadius: 20, fontSize: 12, cursor: 'pointer', fontWeight: 500,
+                border: isActive ? 'none' : '1.5px solid #E2E8F0',
+                background: isActive ? '#003B76' : '#fff',
+                color: isActive ? '#fff' : '#64748B',
+                transition: 'all 0.15s',
+                boxShadow: isActive ? '0 2px 6px rgba(0,59,118,0.2)' : '0 1px 2px rgba(0,0,0,0.04)',
+              }}>
+                {f.label} <span style={{ opacity: 0.7, fontWeight: 400 }}>{count}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Airtable-style grid */}
@@ -1910,6 +1966,35 @@ ${senderEmail}`;
                 <div style={{ padding: 10, background: 'var(--card-bg)', borderRadius: 6 }}>
                   <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>GEO FOCUS</div>
                   <div style={{ fontWeight: 500 }}>{detail.geographic_focus || '—'}</div>
+                </div>
+                <div style={{ padding: 10, background: 'var(--card-bg)', borderRadius: 6, gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>PRIOR LP HISTORY</div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {[
+                      { key: '', label: 'None', color: '#9CA3AF' },
+                      { key: 'fund_i', label: 'Fund I', color: '#003B76' },
+                      { key: 'fund_ii', label: 'Fund II', color: '#0EA5E9' },
+                      { key: 'both', label: 'Fund I + II', color: '#059669' },
+                    ].map(opt => {
+                      const isActive = (detail.prior_fund || '') === opt.key;
+                      return (
+                        <button key={opt.key} onClick={async () => {
+                          const val = opt.key || null;
+                          await updateLPTarget(detail.id, { prior_fund: val });
+                          setDetail(d => ({ ...d, prior_fund: val }));
+                          setTargets(ts => ts.map(t => t.id === detail.id ? { ...t, prior_fund: val } : t));
+                        }} style={{
+                          padding: '4px 10px', borderRadius: 20, fontSize: 12, cursor: 'pointer', fontWeight: 600,
+                          border: isActive ? 'none' : '1.5px solid #E2E8F0',
+                          background: isActive ? opt.color : '#fff',
+                          color: isActive ? '#fff' : '#64748B',
+                          transition: 'all 0.15s',
+                        }}>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               {detail.sector_interest && detail.sector_interest.length > 0 && (
@@ -3285,6 +3370,145 @@ ${senderEmail}`;
 
       {/* Detail Panel */}
       {selectedTarget && renderDetail()}
+
+      {/* Add LP Modal */}
+      {showAddLPModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={(e) => { if (e.target === e.currentTarget) setShowAddLPModal(false); }}>
+          <div style={{
+            background: '#fff', borderRadius: 16, padding: 32, width: 520, maxWidth: '90vw',
+            maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <h2 style={{ margin: 0, fontSize: 18, color: '#1D3557' }}>Add LP Manually</h2>
+              <button onClick={() => setShowAddLPModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#94A3B8' }}>×</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              {/* Name */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Full Name *</label>
+                <input value={newLP.full_name} onChange={e => setNewLP(p => ({ ...p, full_name: e.target.value }))}
+                  placeholder="Jane Smith"
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              {/* Company */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Company</label>
+                <input value={newLP.company} onChange={e => setNewLP(p => ({ ...p, company: e.target.value }))}
+                  placeholder="Acme Capital"
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              {/* Title */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Title</label>
+                <input value={newLP.title} onChange={e => setNewLP(p => ({ ...p, title: e.target.value }))}
+                  placeholder="Managing Partner"
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              {/* Email */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</label>
+                <input value={newLP.email} onChange={e => setNewLP(p => ({ ...p, email: e.target.value }))}
+                  placeholder="jane@acmecapital.com" type="email"
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              {/* LinkedIn */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>LinkedIn URL</label>
+                <input value={newLP.linkedin_url} onChange={e => setNewLP(p => ({ ...p, linkedin_url: e.target.value }))}
+                  placeholder="https://linkedin.com/in/..."
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              {/* Fund Type */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fund Type</label>
+                <select value={newLP.fund_type} onChange={e => setNewLP(p => ({ ...p, fund_type: e.target.value }))}
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box', background: '#fff' }}>
+                  <option value="">Select...</option>
+                  <option value="Family Office">Family Office</option>
+                  <option value="Fund of Funds">Fund of Funds</option>
+                  <option value="Endowment">Endowment</option>
+                  <option value="Foundation">Foundation</option>
+                  <option value="Asset Manager">Asset Manager</option>
+                  <option value="Institutional">Institutional</option>
+                  <option value="Venture Capital">Venture Capital</option>
+                  <option value="Corporate">Corporate</option>
+                  <option value="Individual / HNWI">Individual / HNWI</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              {/* Geographic Focus */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Geographic Focus</label>
+                <input value={newLP.geographic_focus} onChange={e => setNewLP(p => ({ ...p, geographic_focus: e.target.value }))}
+                  placeholder="US, Global..."
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              {/* Est. AUM */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Est. AUM</label>
+                <input value={newLP.estimated_aum} onChange={e => setNewLP(p => ({ ...p, estimated_aum: e.target.value }))}
+                  placeholder="$500M"
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              {/* Prior LP */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Prior LP In</label>
+                <select value={newLP.prior_fund} onChange={e => setNewLP(p => ({ ...p, prior_fund: e.target.value }))}
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box', background: '#fff' }}>
+                  <option value="">New LP</option>
+                  <option value="fund_i">Fund I</option>
+                  <option value="fund_ii">Fund II</option>
+                  <option value="both">Fund I + II</option>
+                </select>
+              </div>
+              {/* Notes */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes</label>
+                <textarea value={newLP.notes} onChange={e => setNewLP(p => ({ ...p, notes: e.target.value }))}
+                  placeholder="Any context or notes..."
+                  rows={3}
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowAddLPModal(false)} style={{
+                padding: '9px 20px', borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#64748B',
+              }}>Cancel</button>
+              <button disabled={addingLP || !newLP.full_name.trim()} onClick={async () => {
+                setAddingLP(true);
+                try {
+                  const res = await createLPTarget({
+                    ...newLP,
+                    prior_fund: newLP.prior_fund || null,
+                    sector_interest: newLP.sector_interest ? newLP.sector_interest.split(',').map(s => s.trim()).filter(Boolean) : [],
+                  });
+                  if (res.target) {
+                    setTargets(prev => [res.target, ...prev]);
+                  }
+                  setShowAddLPModal(false);
+                  setNewLP({ full_name: '', company: '', title: '', email: '', linkedin_url: '', fund_type: '', geographic_focus: '', estimated_aum: '', notes: '', prior_fund: '', sector_interest: '' });
+                } catch (err) {
+                  alert('Failed to add LP: ' + err.message);
+                } finally {
+                  setAddingLP(false);
+                }
+              }} style={{
+                padding: '9px 20px', borderRadius: 8, border: 'none',
+                background: addingLP || !newLP.full_name.trim() ? '#94A3B8' : '#003B76',
+                fontSize: 13, fontWeight: 600, cursor: addingLP || !newLP.full_name.trim() ? 'not-allowed' : 'pointer', color: '#fff',
+              }}>
+                {addingLP ? 'Adding...' : 'Add LP'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

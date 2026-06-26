@@ -124,6 +124,8 @@ export const getLPTargets = (params = {}) => {
   return request(`/lp/targets?${qs}`);
 };
 export const getLPTarget = (id) => request(`/lp/targets/${id}`);
+export const createLPTarget = (data) =>
+  request('/lp/targets', { method: 'POST', body: JSON.stringify(data) });
 export const updateLPTarget = (id, data) =>
   request(`/lp/targets/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 export const deleteLPTarget = (id) =>

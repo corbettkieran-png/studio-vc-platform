@@ -896,6 +896,107 @@ router.post('/team/:id/connections', authenticate, upload.single('file'), async 
 });
 
 // ============================================================
+// MANUAL LP CREATION
+// ============================================================
+
+// POST /api/lp/targets — Manually create a single LP target
+router.post('/targets', authenticate, async (req, res) => {
+  try {
+    const {
+      full_name,
+      company,
+      title,
+      email,
+      linkedin_url,
+      fund_type,
+      estimated_aum,
+      typical_check_size,
+      sector_interest,
+      geographic_focus,
+      notes,
+      prior_fund,
+    } = req.body;
+
+    if (!full_name || !full_name.trim()) {
+      return res.status(400).json({ error: 'full_name is required' });
+    }
+
+    const VALID_PRIOR_FUNDS = ['fund_i', 'fund_ii', 'both'];
+    if (prior_fund && !VALID_PRIOR_FUNDS.includes(prior_fund)) {
+      return res.status(400).json({ error: 'Invalid prior_fund value' });
+    }
+
+    // Compute a basic fit score from the provided data
+    const sectorArr = Array.isArray(sector_interest) ? sector_interest
+      : typeof sector_interest === 'string' && sector_interest.trim()
+        ? sector_interest.split(',').map(s => s.trim())
+        : [];
+
+    const lpData = {
+      fund_type: fund_type || '',
+      sector_interest: sectorArr,
+      geographic_focus: geographic_focus || '',
+      estimated_aum: estimated_aum || '',
+      connection_strength: 'none',
+    };
+    // Inline fit-score (mirrors frontend computeFitScore logic)
+    let score = 0;
+    const ft = (lpData.fund_type || '').toLowerCase();
+    if (/fund.of.funds|fof/.test(ft))                          score += 30;
+    else if (/endowment|university|foundation/.test(ft))       score += 30;
+    else if (/family.office|hnwi/.test(ft))                    score += 25;
+    else if (/pension|sovereign/.test(ft))                     score += 20;
+    else if (/venture|vc fund/.test(ft))                       score += 15;
+    else if (/corporate|strategic/.test(ft))                   score += 10;
+    else if (ft)                                               score += 5;
+    const THESIS = ['fintech','saas','b2b','enterprise','ai','software','analytics','marketplace','technology'];
+    const hits = sectorArr.filter(s => THESIS.some(k => s.toLowerCase().includes(k))).length;
+    if      (hits >= 3) score += 25;
+    else if (hits >= 2) score += 18;
+    else if (hits >= 1) score += 10;
+    const geo = (lpData.geographic_focus || '').toLowerCase();
+    if (/global|worldwide|agnostic/.test(geo))                                             score += 15;
+    else if (/north america|usa|united states|new york/.test(geo))                         score += 15;
+    else if (/europe|uk|canada/.test(geo))                                                 score += 8;
+    else if (geo)                                                                           score += 3;
+    score = Math.min(score, 100);
+
+    const { rows } = await db.query(`
+      INSERT INTO lp_targets (
+        id, full_name, company, title, email, linkedin_url,
+        fund_type, estimated_aum, typical_check_size,
+        sector_interest, geographic_focus, notes, prior_fund,
+        outreach_status, fit_score, source, created_at, updated_at
+      ) VALUES (
+        gen_random_uuid(), $1, $2, $3, $4, $5,
+        $6, $7, $8,
+        $9, $10, $11, $12,
+        'not_started', $13, 'manual', NOW(), NOW()
+      ) RETURNING *
+    `, [
+      full_name.trim(),
+      company?.trim() || null,
+      title?.trim() || null,
+      email?.trim() || null,
+      linkedin_url?.trim() || null,
+      fund_type || null,
+      estimated_aum || null,
+      typical_check_size || null,
+      sectorArr.length ? sectorArr : null,
+      geographic_focus || null,
+      notes || null,
+      prior_fund || null,
+      score,
+    ]);
+
+    res.json({ success: true, target: rows[0] });
+  } catch (err) {
+    console.error('POST /targets error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
 // LP TARGET IMPORT
 // ============================================================
 
@@ -1289,6 +1390,7 @@ router.patch('/targets/:id', authenticate, requireUUID('id'), async (req, res) =
       typical_check_size,
       sector_interest,
       geographic_focus,
+      prior_fund,
     } = req.body;
 
     const { rows } = await db.query('SELECT * FROM lp_targets WHERE id = $1', [id]);
@@ -1352,6 +1454,16 @@ router.patch('/targets/:id', authenticate, requireUUID('id'), async (req, res) =
       updates.push('geographic_focus = $' + (params.length + 1));
       params.push(geographic_focus || null);
       needsRescore = true;
+    }
+
+    if (prior_fund !== undefined) {
+      const VALID_PRIOR_FUNDS = ['fund_i', 'fund_ii', 'both'];
+      const val = prior_fund === null || prior_fund === '' ? null : prior_fund;
+      if (val !== null && !VALID_PRIOR_FUNDS.includes(val)) {
+        return res.status(400).json({ error: 'Invalid prior_fund value' });
+      }
+      updates.push('prior_fund = $' + (params.length + 1));
+      params.push(val);
     }
 
     if (req.body.last_contacted_at !== undefined) {
