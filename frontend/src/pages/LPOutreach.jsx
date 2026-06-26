@@ -733,9 +733,8 @@ ${senderEmail}`;
     const paginated = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
     const COLS = [
-      { key: 'name', label: 'Name / Company', width: 220, sticky: true },
-      { key: 'status', label: 'Status', width: 148 },
-      { key: 'last_contacted', label: 'Last Contact', width: 120 },
+      { key: 'name', label: 'Name / Company', width: 280, sticky: true },
+      { key: 'last_contacted', label: 'Last Contact', width: 130 },
       { key: 'next_followup', label: 'Follow-up', width: 110 },
       { key: 'fund_type', label: 'Fund Type', width: 130 },
       { key: 'geo', label: 'Geography', width: 130 },
@@ -910,10 +909,9 @@ ${senderEmail}`;
                     onClick={() => {
                       if (col.key === 'fit_score') { setSortBy('fit_score'); setSortDir(d => d === 'desc' ? 'asc' : 'desc'); }
                       if (col.key === 'name') { setSortBy('name'); setSortDir(d => d === 'desc' ? 'asc' : 'desc'); }
-                      if (col.key === 'status') { setSortBy('outreach_status'); setSortDir(d => d === 'desc' ? 'asc' : 'desc'); }
                     }}>
                     {col.label}
-                    {(col.key === 'fit_score' && sortBy === 'fit_score') || (col.key === 'name' && sortBy === 'name') || (col.key === 'status' && sortBy === 'outreach_status')
+                    {(col.key === 'fit_score' && sortBy === 'fit_score') || (col.key === 'name' && sortBy === 'name')
                       ? <span style={{ marginLeft: 4 }}>{sortDir === 'desc' ? '↓' : '↑'}</span> : null}
                   </th>
                 ))}
@@ -926,46 +924,48 @@ ${senderEmail}`;
                 return (
                   <tr key={t.id} style={{ cursor: 'pointer' }}
                     onMouseEnter={e => { Array.from(e.currentTarget.cells).forEach(c => c.style.background = '#FAFBFF'); }}
-                    onMouseLeave={e => { Array.from(e.currentTarget.cells).forEach(c => c.style.background = ''); }}>
+                    onMouseLeave={e => { Array.from(e.currentTarget.cells).forEach((c, i) => { c.style.background = i === 0 ? '#fff' : ''; }); }}>
 
-                    {/* Name / Company — sticky */}
+                    {/* Name / Company — sticky, with inline status badge */}
                     <td style={{ ...cellStyle(COLS[0]), background: '#fff', fontWeight: 500 }}
                       onClick={() => setSelectedTarget(t.id)}>
-                      <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#1D3557' }}>
-                        {t.full_name || t.name}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, overflow: 'hidden' }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#1D3557', flex: 1, minWidth: 0 }}>
+                          {t.full_name || t.name}
+                        </div>
+                        {editingStatusId === t.id ? (
+                          <select autoFocus
+                            defaultValue={t.outreach_status}
+                            onChange={(e) => handleInlineStatusChange(t.id, e.target.value)}
+                            onBlur={() => setEditingStatusId(null)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ fontSize: 10, border: '1px solid var(--navy)', borderRadius: 3, padding: '1px 3px', maxWidth: 98, flexShrink: 0, outline: 'none' }}>
+                            {Object.entries(OUTREACH_STATUS_LABELS).map(([v, l]) => (
+                              <option key={v} value={v}>{l}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span
+                            onClick={(e) => { e.stopPropagation(); setEditingStatusId(t.id); }}
+                            style={{
+                              flexShrink: 0, display: 'inline-flex', alignItems: 'center',
+                              padding: '2px 7px', borderRadius: 20, fontSize: 10, fontWeight: 600,
+                              background: (OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF') + '28',
+                              color: OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF',
+                              border: `1px solid ${(OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF')}50`,
+                              whiteSpace: 'nowrap', cursor: 'pointer',
+                            }}>
+                            {OUTREACH_STATUS_LABELS[t.outreach_status] || 'Not Started'}
+                          </span>
+                        )}
                       </div>
-                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {t.title ? <span style={{ fontStyle: 'italic', marginRight: 4 }}>{t.title} ·</span> : null}{t.company}
                       </div>
                     </td>
 
-                    {/* Status — inline editable */}
-                    <td style={cellStyle(COLS[1])} onClick={(e) => { e.stopPropagation(); setEditingStatusId(t.id); }}>
-                      {editingStatusId === t.id ? (
-                        <select autoFocus
-                          defaultValue={t.outreach_status}
-                          onChange={(e) => handleInlineStatusChange(t.id, e.target.value)}
-                          onBlur={() => setEditingStatusId(null)}
-                          style={{ fontSize: 11, border: '1px solid var(--navy)', borderRadius: 3, padding: '2px 4px', width: '100%', outline: 'none' }}>
-                          {Object.entries(OUTREACH_STATUS_LABELS).map(([v, l]) => (
-                            <option key={v} value={v}>{l}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                          background: (OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF') + '28',
-                          color: OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF',
-                          cursor: 'pointer', border: `1px solid ${(OUTREACH_STATUS_COLORS[t.outreach_status] || '#9CA3AF')}50`,
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {OUTREACH_STATUS_LABELS[t.outreach_status] || t.outreach_status || 'Not Started'}
-                        </span>
-                      )}
-                    </td>
-
                     {/* Last Contact — inline editable date */}
-                    <td style={cellStyle(COLS[2])} onClick={(e) => { e.stopPropagation(); setEditingLastContact(t.id); }}>
+                    <td style={cellStyle(COLS[1])} onClick={(e) => { e.stopPropagation(); setEditingLastContact(t.id); }}>
                       {editingLastContact === t.id ? (
                         <input type="date" autoFocus
                           defaultValue={t.last_contacted_at ? t.last_contacted_at.split('T')[0] : ''}
@@ -986,7 +986,7 @@ ${senderEmail}`;
                     </td>
 
                     {/* Follow-up date — inline editable */}
-                    <td style={cellStyle(COLS[3])} onClick={(e) => { e.stopPropagation(); setEditingFollowup(t.id); }}>
+                    <td style={cellStyle(COLS[2])} onClick={(e) => { e.stopPropagation(); setEditingFollowup(t.id); }}>
                       {editingFollowup === t.id ? (
                         <input type="date" autoFocus
                           defaultValue={t.next_followup_at ? t.next_followup_at.split('T')[0] : ''}
@@ -1007,21 +1007,21 @@ ${senderEmail}`;
                     </td>
 
                     {/* Fund Type */}
-                    <td style={cellStyle(COLS[4])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[3])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: '#374151' }}>
                         {t.fund_type ? t.fund_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : <span style={{ color: '#D1D5DB' }}>—</span>}
                       </span>
                     </td>
 
                     {/* Geography */}
-                    <td style={cellStyle(COLS[5])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[4])} onClick={() => setSelectedTarget(t.id)}>
                       <span style={{ fontSize: 11, color: '#374151' }}>
                         {t.geographic_focus || <span style={{ color: '#D1D5DB' }}>—</span>}
                       </span>
                     </td>
 
                     {/* Warm Intro Path — algorithmic same_company matches */}
-                    <td style={cellStyle(COLS[6], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
+                    <td style={cellStyle(COLS[5], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
                       onClick={() => setSelectedTarget(t.id)}>
                       {(() => {
                         const allMatches = t.connection_matches || [];
@@ -1066,7 +1066,7 @@ ${senderEmail}`;
                     </td>
 
                     {/* 2nd-Degree Connections (manual / Navigator-sourced) */}
-                    <td style={cellStyle(COLS[7], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
+                    <td style={cellStyle(COLS[6], { overflow: 'visible', whiteSpace: 'normal', padding: '4px 10px' })}
                       onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', minHeight: 28 }}>
                         {manualConns.slice(0, 3).map(conn => (
@@ -1106,14 +1106,14 @@ ${senderEmail}`;
                     </td>
 
                     {/* Email */}
-                    <td style={cellStyle(COLS[8])} onClick={() => setSelectedTarget(t.id)}>
+                    <td style={cellStyle(COLS[7])} onClick={() => setSelectedTarget(t.id)}>
                       {t.email
                         ? <span style={{ fontSize: 11, color: '#059669' }}>{t.email}</span>
                         : <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>}
                     </td>
 
                     {/* Navigator search */}
-                    <td style={cellStyle(COLS[9])} onClick={e => e.stopPropagation()}>
+                    <td style={cellStyle(COLS[8])} onClick={e => e.stopPropagation()}>
                       {(() => {
                         const personName = (t.full_name || t.name || '').replace(/,/g, '').trim();
                         const companyName = (t.company || '').trim();
@@ -1140,7 +1140,7 @@ ${senderEmail}`;
                     </td>
 
                     {/* Delete record */}
-                    <td style={{ ...cellStyle(COLS[10]), textAlign: 'center', padding: '0 4px' }} onClick={e => e.stopPropagation()}>
+                    <td style={{ ...cellStyle(COLS[9]), textAlign: 'center', padding: '0 4px' }} onClick={e => e.stopPropagation()}>
                       <button
                         title="Delete this LP record"
                         onClick={async () => {

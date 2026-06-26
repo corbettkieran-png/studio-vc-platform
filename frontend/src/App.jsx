@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import Login from './pages/Login';
-import SubmitDeck from './pages/SubmitDeck';
 import CRM from './pages/CRM';
 import Analytics from './pages/Analytics';
 import LPOutreach from './pages/LPOutreach';
@@ -19,7 +18,6 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public routes */}
-      <Route path="/submit" element={<SubmitDeck />} />
       <Route path="/login" element={<Login />} />
 
       {/* Protected routes */}

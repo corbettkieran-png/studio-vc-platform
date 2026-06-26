@@ -51,14 +51,6 @@ export default function Layout({ children }) {
           >
             <span className="icon">◈</span> LP Outreach
           </NavLink>
-          <a
-            href="/submit"
-            target="_blank"
-            rel="noopener"
-            className="sidebar-link"
-          >
-            <span className="icon">⧉</span> Submission Form
-          </a>
         </nav>
 
         <div className="sidebar-user">
