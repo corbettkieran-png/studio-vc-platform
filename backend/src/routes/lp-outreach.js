@@ -1282,6 +1282,7 @@ router.patch('/targets/:id', authenticate, requireUUID('id'), async (req, res) =
     const {
       outreach_status,
       outreach_owner_id,
+      commitment_amount,
       notes,
       fund_type,
       estimated_aum,
@@ -1301,7 +1302,7 @@ router.patch('/targets/:id', authenticate, requireUUID('id'), async (req, res) =
     const updates = [];
     const params = [];
 
-    const VALID_OUTREACH_STATUSES = ['not_started', 'identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions', 'passed', 'committed', 'not_now'];
+    const VALID_OUTREACH_STATUSES = ['not_started', 'identified', 'intro_requested', 'intro_made', 'meeting_scheduled', 'in_discussions', 'soft_circled', 'committed', 'passed', 'not_now'];
     if (outreach_status !== undefined) {
       if (!VALID_OUTREACH_STATUSES.includes(outreach_status)) {
         return res.status(400).json({ error: `Invalid outreach_status. Must be one of: ${VALID_OUTREACH_STATUSES.join(', ')}` });
@@ -1368,6 +1369,14 @@ router.patch('/targets/:id', authenticate, requireUUID('id'), async (req, res) =
       if (['high', 'medium', 'low'].includes(p)) {
         updates.push('priority = $' + (params.length + 1));
         params.push(p);
+      }
+    }
+
+    if (commitment_amount !== undefined) {
+      const amt = commitment_amount === null || commitment_amount === '' ? null : parseInt(commitment_amount, 10);
+      if (amt === null || (!isNaN(amt) && amt >= 0)) {
+        updates.push('commitment_amount = $' + (params.length + 1));
+        params.push(amt);
       }
     }
 
@@ -1931,6 +1940,24 @@ router.get('/stats', authenticate, async (req, res) => {
       connections_count: tm.connections_count,
     }));
 
+    // Commitment pipeline — aggregated $ totals for the fund thermometer
+    const { rows: pipelineRows } = await db.query(`
+      SELECT
+        COALESCE(SUM(CASE WHEN outreach_status = 'committed'    THEN commitment_amount ELSE 0 END), 0)::BIGINT AS committed_total,
+        COALESCE(SUM(CASE WHEN outreach_status = 'soft_circled' THEN commitment_amount ELSE 0 END), 0)::BIGINT AS soft_circle_total,
+        COUNT(CASE WHEN outreach_status = 'committed'    THEN 1 END)::INTEGER AS committed_count,
+        COUNT(CASE WHEN outreach_status = 'soft_circled' THEN 1 END)::INTEGER AS soft_circled_count,
+        COUNT(CASE WHEN outreach_status IN ('meeting_scheduled','in_discussions') THEN 1 END)::INTEGER AS active_discussions_count
+      FROM lp_targets
+    `);
+    const pipeline = {
+      committed_total:         parseInt(pipelineRows[0].committed_total)         || 0,
+      soft_circle_total:       parseInt(pipelineRows[0].soft_circle_total)       || 0,
+      committed_count:         parseInt(pipelineRows[0].committed_count)         || 0,
+      soft_circled_count:      parseInt(pipelineRows[0].soft_circled_count)      || 0,
+      active_discussions_count:parseInt(pipelineRows[0].active_discussions_count)|| 0,
+    };
+
     res.json({
       stats: {
         total_lps: totalLps,
@@ -1940,6 +1967,7 @@ router.get('/stats', authenticate, async (req, res) => {
         by_connection_strength: byConnectionStrength,
         avg_fit_score: avgFitScore,
         team_member_connection_counts: teamMemberConnectionCounts,
+        pipeline,
       },
     });
   } catch (err) {

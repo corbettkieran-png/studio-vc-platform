@@ -39,6 +39,7 @@ const OUTREACH_STATUS_LABELS = {
   intro_made: 'Intro Made',
   meeting_scheduled: 'Meeting Scheduled',
   in_discussions: 'In Discussions',
+  soft_circled: 'Soft Circled',
   committed: 'Committed',
   passed: 'Passed',
   not_now: 'Not Now',
@@ -51,6 +52,7 @@ const OUTREACH_STATUS_COLORS = {
   intro_made: '#10B981',
   meeting_scheduled: '#003B76',
   in_discussions: '#8B5CF6',
+  soft_circled: '#0EA5E9',
   committed: '#059669',
   passed: '#D1D5DB',
   not_now: '#FECACA',
@@ -515,6 +517,111 @@ ${senderEmail}`;
             </div>
           </div>
         )}
+
+        {/* ── Fund III Commitment Pipeline Thermometer ── */}
+        {(() => {
+          const FUND_TARGET   = 50_000_000;
+          const FUND_HARD_CAP = 60_000_000;
+          const committed  = stats.pipeline?.committed_total    || 0;
+          const softCircle = stats.pipeline?.soft_circle_total  || 0;
+          const combined   = committed + softCircle;
+          const committedPct  = Math.min((committed  / FUND_HARD_CAP) * 100, 100);
+          const softPct       = Math.min((softCircle / FUND_HARD_CAP) * 100, Math.max(0, 100 - committedPct));
+          const targetLinePct = (FUND_TARGET / FUND_HARD_CAP) * 100; // 83.3%
+          const pctOfTarget   = FUND_TARGET > 0 ? Math.round((combined / FUND_TARGET) * 100) : 0;
+          const fmt = n => n >= 1_000_000 ? `$${(n/1_000_000).toFixed(1)}M`
+                          : n >= 1_000    ? `$${(n/1_000).toFixed(0)}K`
+                          : `$${n.toLocaleString()}`;
+          return (
+            <div style={{
+              background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8,
+              padding: '20px 24px', marginBottom: 20,
+              borderLeft: '4px solid #003B76',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#003B76', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                  Fund III — Raise Progress
+                </div>
+                <div style={{ fontSize: 13, color: '#6B7280' }}>
+                  <span style={{ fontWeight: 700, color: pctOfTarget >= 80 ? '#059669' : pctOfTarget >= 40 ? '#F59E0B' : '#1D3557' }}>
+                    {pctOfTarget}%
+                  </span>
+                  {' '}of ${(FUND_TARGET/1_000_000).toFixed(0)}M target
+                </div>
+              </div>
+
+              {/* Stacked progress bar */}
+              <div style={{ position: 'relative', height: 28, background: '#F3F4F6', borderRadius: 6, overflow: 'visible', marginBottom: 6 }}>
+                {/* Committed segment */}
+                <div style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0,
+                  width: `${committedPct}%`, minWidth: committed > 0 ? 4 : 0,
+                  background: '#059669', borderRadius: softCircle > 0 ? '6px 0 0 6px' : 6,
+                  transition: 'width 0.5s ease',
+                }} />
+                {/* Soft-circled segment */}
+                <div style={{
+                  position: 'absolute', left: `${committedPct}%`, top: 0, bottom: 0,
+                  width: `${softPct}%`, minWidth: softCircle > 0 ? 4 : 0,
+                  background: '#34D399', borderRadius: committedPct > 0 ? '0 6px 6px 0' : 6,
+                  transition: 'width 0.5s ease',
+                }} />
+                {/* $50M target marker */}
+                <div style={{
+                  position: 'absolute', top: -4, bottom: -4,
+                  left: `${targetLinePct}%`, width: 2,
+                  background: '#003B76', borderRadius: 1, zIndex: 2,
+                }} />
+                <div style={{
+                  position: 'absolute', top: -18, fontSize: 10, fontWeight: 700,
+                  color: '#003B76', transform: 'translateX(-50%)',
+                  left: `${targetLinePct}%`, whiteSpace: 'nowrap',
+                }}>
+                  $50M
+                </div>
+                {/* Hard cap label */}
+                <div style={{ position: 'absolute', right: 0, top: -18, fontSize: 10, color: '#9CA3AF' }}>
+                  $60M
+                </div>
+              </div>
+
+              {/* Legend row */}
+              <div style={{ display: 'flex', gap: 24, marginTop: 14, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: 2, background: '#059669', flexShrink: 0 }} />
+                  <div>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#059669' }}>{fmt(committed)}</span>
+                    <span style={{ fontSize: 11, color: '#6B7280', marginLeft: 5 }}>
+                      committed · {stats.pipeline?.committed_count || 0} LPs
+                    </span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: 2, background: '#34D399', flexShrink: 0 }} />
+                  <div>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#0EA5E9' }}>{fmt(softCircle)}</span>
+                    <span style={{ fontSize: 11, color: '#6B7280', marginLeft: 5 }}>
+                      soft-circled · {stats.pipeline?.soft_circled_count || 0} LPs
+                    </span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: 2, background: '#8B5CF6', flexShrink: 0 }} />
+                  <div>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#8B5CF6' }}>{stats.pipeline?.active_discussions_count || 0}</span>
+                    <span style={{ fontSize: 11, color: '#6B7280', marginLeft: 5 }}>in active discussions</span>
+                  </div>
+                </div>
+                {combined > 0 && (
+                  <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#1D3557' }}>{fmt(combined)}</span>
+                    <span style={{ fontSize: 11, color: '#6B7280', marginLeft: 5 }}>combined pipeline</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="stats-row">
           <div className="stat-card hl">
@@ -1970,6 +2077,70 @@ ${senderEmail}`;
                 ))}
               </div>
             </div>
+
+            {/* ── Commitment Amount — visible only for soft_circled / committed ── */}
+            {(detail.outreach_status === 'soft_circled' || detail.outreach_status === 'committed') && (
+              <div className="detail-section">
+                <h3 style={{ marginBottom: 10 }}>
+                  {detail.outreach_status === 'committed' ? 'Committed Amount' : 'Soft Circle Amount'}
+                </h3>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <span style={{
+                      position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                      color: '#6B7280', fontSize: 14, fontWeight: 500, pointerEvents: 'none',
+                    }}>$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="250000"
+                      placeholder="e.g. 500000"
+                      key={`${detail.id}-commitment`}
+                      defaultValue={detail.commitment_amount || ''}
+                      onBlur={async (e) => {
+                        const raw = e.target.value.trim();
+                        const val = raw === '' ? null : parseInt(raw, 10);
+                        if (raw !== '' && (isNaN(val) || val < 0)) return;
+                        try {
+                          await updateLPTarget(detail.id, { commitment_amount: val });
+                          const updated = await getLPTarget(detail.id);
+                          setDetail({
+                            ...(updated.lp_target || updated.target),
+                            connectors: updated.connectors,
+                            warm_intro_paths: updated.warm_intro_paths || [],
+                            linkedin_enrichment: updated.linkedin_enrichment || null,
+                            activity: updated.activity_log,
+                            manual_connections: updated.manual_connections || [],
+                          });
+                          loadStats();
+                        } catch (err) {
+                          alert('Failed to save commitment amount');
+                        }
+                      }}
+                      style={{
+                        width: '100%', padding: '8px 12px 8px 22px',
+                        border: `1.5px solid ${detail.outreach_status === 'committed' ? '#059669' : '#0EA5E9'}`,
+                        borderRadius: 5, fontSize: 14, outline: 'none',
+                        background: detail.outreach_status === 'committed' ? '#f0fdf4' : '#f0f9ff',
+                      }}
+                    />
+                  </div>
+                  {(detail.commitment_amount > 0) && (
+                    <div style={{
+                      fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap',
+                      color: detail.outreach_status === 'committed' ? '#059669' : '#0EA5E9',
+                    }}>
+                      ${(detail.commitment_amount / 1_000_000).toFixed(detail.commitment_amount >= 1_000_000 ? 1 : 2)}M
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 5 }}>
+                  {detail.outreach_status === 'soft_circled'
+                    ? 'Verbal commitment — not yet signed. Updates the fund thermometer.'
+                    : 'Signed subscription amount. Updates the fund thermometer.'}
+                </div>
+              </div>
+            )}
 
             {/* ── Recent Press ── */}
             <div className="detail-section">
