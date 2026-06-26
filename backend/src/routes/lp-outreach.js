@@ -1552,15 +1552,21 @@ router.post('/targets/:id/send-intro', authenticate, requireUUID('id'), async (r
 
     const { rows: userRows } = await db.query('SELECT full_name, email FROM users WHERE id = $1', [req.user.id]);
     const sender = userRows[0];
+    // Prefer the user's verified work_email (from team_members) as reply-to so LP replies
+    // land in the correct inbox, not the shared sending alias.
+    const { rows: tmRows } = await db.query(
+      'SELECT work_email FROM team_members WHERE user_id = $1 LIMIT 1', [req.user.id]
+    );
+    const replyTo = tmRows[0]?.work_email || sender?.email || null;
     const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
     // Build Resend payload — attach deck PDF if requested
     const resendPayload = {
-      from: sender?.email ? `${sender.full_name} <${fromEmail}>` : fromEmail,
+      from: sender?.full_name ? `${sender.full_name} <${fromEmail}>` : fromEmail,
+      ...(replyTo ? { reply_to: replyTo } : {}),
       to: [to_email],
       subject,
       text: body,
-      // Resend tracking is enabled per-domain in dashboard; no extra params needed
     };
 
     if (attach_deck && fs.existsSync(DECK_PATH)) {
