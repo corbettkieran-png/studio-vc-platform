@@ -171,7 +171,7 @@ export default function LPOutreach() {
     full_name: '', company: '', title: '', email: '',
     linkedin_url: '', fund_type: '', geographic_focus: '',
     estimated_aum: '', notes: '', prior_fund: '',
-    sector_interest: '',
+    sector_interest: '', commitment_amount: '',
   });
 
   // Manual connections state
@@ -3454,6 +3454,13 @@ ${senderEmail}`;
                   placeholder="$500M"
                   style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
               </div>
+              {/* Commitment Amount */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Commitment ($)</label>
+                <input value={newLP.commitment_amount} onChange={e => setNewLP(p => ({ ...p, commitment_amount: e.target.value }))}
+                  placeholder="e.g. 500000" type="number" min="0"
+                  style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
               {/* Prior LP */}
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Prior LP In</label>
@@ -3486,13 +3493,14 @@ ${senderEmail}`;
                   const res = await createLPTarget({
                     ...newLP,
                     prior_fund: newLP.prior_fund || null,
+                    commitment_amount: newLP.commitment_amount !== '' ? parseInt(newLP.commitment_amount, 10) : null,
                     sector_interest: newLP.sector_interest ? newLP.sector_interest.split(',').map(s => s.trim()).filter(Boolean) : [],
                   });
                   if (res.target) {
                     setTargets(prev => [res.target, ...prev]);
                   }
                   setShowAddLPModal(false);
-                  setNewLP({ full_name: '', company: '', title: '', email: '', linkedin_url: '', fund_type: '', geographic_focus: '', estimated_aum: '', notes: '', prior_fund: '', sector_interest: '' });
+                  setNewLP({ full_name: '', company: '', title: '', email: '', linkedin_url: '', fund_type: '', geographic_focus: '', estimated_aum: '', notes: '', prior_fund: '', sector_interest: '', commitment_amount: '' });
                 } catch (err) {
                   alert('Failed to add LP: ' + err.message);
                 } finally {

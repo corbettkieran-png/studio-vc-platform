@@ -915,6 +915,7 @@ router.post('/targets', authenticate, async (req, res) => {
       geographic_focus,
       notes,
       prior_fund,
+      commitment_amount,
     } = req.body;
 
     if (!full_name || !full_name.trim()) {
@@ -961,17 +962,22 @@ router.post('/targets', authenticate, async (req, res) => {
     else if (geo)                                                                           score += 3;
     score = Math.min(score, 100);
 
+    const commitAmt = commitment_amount !== undefined && commitment_amount !== '' && commitment_amount !== null
+      ? parseInt(commitment_amount, 10) : null;
+
     const { rows } = await db.query(`
       INSERT INTO lp_targets (
         id, full_name, company, title, email, linkedin_url,
         fund_type, estimated_aum, typical_check_size,
         sector_interest, geographic_focus, notes, prior_fund,
+        commitment_amount,
         outreach_status, fit_score, source, created_at, updated_at
       ) VALUES (
         gen_random_uuid(), $1, $2, $3, $4, $5,
         $6, $7, $8,
         $9, $10, $11, $12,
-        'not_started', $13, 'manual', NOW(), NOW()
+        $13,
+        'not_started', $14, 'manual', NOW(), NOW()
       ) RETURNING *
     `, [
       full_name.trim(),
@@ -986,6 +992,7 @@ router.post('/targets', authenticate, async (req, res) => {
       geographic_focus || null,
       notes || null,
       prior_fund || null,
+      (!isNaN(commitAmt) && commitAmt !== null) ? commitAmt : null,
       score,
     ]);
 
