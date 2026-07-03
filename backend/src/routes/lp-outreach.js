@@ -4427,6 +4427,17 @@ router.get('/apollo/network-map/team-direct', authenticate, async (req, res) => 
          LOWER(TRIM(lc.full_name)) = LOWER(TRIM(acc.full_name))
        JOIN lp_targets lt ON acc.lp_target_id = lt.id
        WHERE lt.prior_fund IS NULL  -- only target LPs, not Fund I/II LPs
+         -- Company guard: prevent false name matches across different people.
+         -- Require lc.company to appear in (or contain) the Apollo/target company name.
+         -- Skip check if lc.company is null/empty (some LinkedIn exports omit it).
+         AND (
+           lc.company IS NULL
+           OR TRIM(lc.company) = ''
+           OR LOWER(TRIM(acc.company_name)) LIKE '%' || LOWER(TRIM(lc.company)) || '%'
+           OR LOWER(TRIM(lc.company)) LIKE '%' || LOWER(TRIM(acc.company_name)) || '%'
+           OR LOWER(TRIM(lt.company)) LIKE '%' || LOWER(TRIM(lc.company)) || '%'
+           OR LOWER(TRIM(lc.company)) LIKE '%' || LOWER(TRIM(lt.company)) || '%'
+         )
        ORDER BY tm.full_name, lt.company, acc.seniority`
     );
 

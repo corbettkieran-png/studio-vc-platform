@@ -687,7 +687,7 @@ ${senderEmail}`;
               <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: 12 }}>
                 {directPaths.length} found
               </span>
-              <span style={{ fontSize: 12, color: '#64748B' }}>— Joe or Lillian knows these contacts directly (1 hop)</span>
+              <span style={{ fontSize: 12, color: '#64748B' }}>— your team has a direct LinkedIn connection to these contacts (1 hop)</span>
             </div>
 
             {teamDirectLoading && <div style={{ color: '#94A3B8', fontSize: 13 }}>Loading direct connections…</div>}
@@ -716,6 +716,11 @@ ${senderEmail}`;
                       </div>
                       <div style={{ fontSize: 11, color: '#94A3B8' }}>
                         LinkedIn 1st-degree connection · {company}
+                        {c.connection_company && c.connection_company.toLowerCase() !== (company || '').toLowerCase() && (
+                          <span style={{ color: '#F59E0B', marginLeft: 6 }}>
+                            (LinkedIn shows: {c.connection_company})
+                          </span>
+                        )}
                       </div>
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', background: '#DCFCE7', padding: '3px 8px', borderRadius: 8 }}>
@@ -853,19 +858,34 @@ ${senderEmail}`;
                             const connectorNames = confirmed
                               ? connectors.map(c => c.team_member_name.split(' ')[0]).join(' / ')
                               : null;
-                            const fundLabel = path.source_prior_fund === 'fund_i' ? 'Fund I' : path.source_prior_fund === 'fund_ii' ? 'Fund II' : 'Fund I+II';
+                            const fundLabel = path.source_prior_fund === 'fund_i' ? 'Fund I'
+                              : path.source_prior_fund === 'fund_ii' ? 'Fund II' : 'Fund I+II';
+                            const fundBadgeColor = path.source_prior_fund === 'fund_i'
+                              ? { bg: '#EFF6FF', text: '#003B76' }
+                              : path.source_prior_fund === 'fund_ii'
+                              ? { bg: '#E0F2FE', text: '#0369A1' }
+                              : { bg: '#F0FDF4', text: '#059669' };
                             return (
                               <>
-                                <div style={{ color: '#64748B', marginBottom: 4, fontSize: 12 }}>
+                                <div style={{ color: '#64748B', marginBottom: 4, fontSize: 12, lineHeight: 1.6 }}>
                                   {confirmed ? (
                                     <strong style={{ color: '#0F172A' }}>{connectorNames}</strong>
                                   ) : (
                                     <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Unconfirmed connector</span>
                                   )}
                                   <span style={{ margin: '0 5px', color: '#CBD5E1' }}>→</span>
+                                  {/* Fund LP: name + institution + fund badge */}
                                   <strong style={{ color: confirmed ? '#0F172A' : '#94A3B8' }}>{path.source_person_name}</strong>
-                                  <span style={{ color: '#94A3B8', fontWeight: 400 }}>
-                                    {' '}({fundLabel} LP{path.source_lp_company ? ` · ${path.source_lp_company}` : ''})
+                                  {path.source_lp_company && (
+                                    <span style={{ color: '#64748B', fontWeight: 400 }}>{' '}· {path.source_lp_company}</span>
+                                  )}
+                                  {' '}
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 5,
+                                    background: fundBadgeColor.bg, color: fundBadgeColor.text,
+                                    verticalAlign: 'middle', whiteSpace: 'nowrap',
+                                  }}>
+                                    {fundLabel}
                                   </span>
                                   <span style={{ margin: '0 5px', color: '#CBD5E1' }}>→</span>
                                   {path.target_contact_name
