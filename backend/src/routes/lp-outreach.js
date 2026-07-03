@@ -4282,6 +4282,9 @@ router.post('/apollo/build-network-map', authenticate, async (req, res) => {
 
 // GET /api/lp/apollo/network-map
 // Returns all discovered warm intro paths with optional filters.
+// For each path, includes team_connectors — the team members (Kieran, Joe, Lillian, etc.)
+// who are confirmed LinkedIn connections of that Fund I/II LP via uploaded CSV data.
+// Paths with confirmed connections are sorted first.
 router.get('/apollo/network-map', authenticate, async (req, res) => {
   try {
     const { target_lp_id, source_lp_id, connection_type, min_confidence } = req.query;
@@ -4310,20 +4313,52 @@ router.get('/apollo/network-map', authenticate, async (req, res) => {
 
     const { rows: paths } = await db.query(
       `SELECT p.*,
-              src.full_name  AS source_lp_full_name,
-              src.company    AS source_lp_company,
-              src.prior_fund AS source_prior_fund,
-              src.email      AS source_email,
+              src.full_name    AS source_lp_full_name,
+              src.company      AS source_lp_company,
+              src.prior_fund   AS source_prior_fund,
+              src.email        AS source_email,
               src.linkedin_url AS source_linkedin,
-              tgt.full_name  AS target_lp_full_name,
-              tgt.company    AS target_lp_company,
+              tgt.full_name    AS target_lp_full_name,
+              tgt.company      AS target_lp_company,
               tgt.outreach_status,
-              tgt.priority
+              tgt.priority,
+              -- Confirmed team connectors: team members whose LinkedIn CSV includes this Fund LP
+              COALESCE(
+                (SELECT json_agg(DISTINCT jsonb_build_object(
+                  'team_member_id',   tm.id,
+                  'team_member_name', tm.full_name
+                ))
+                 FROM linkedin_connections lc
+                 JOIN team_members tm ON lc.team_member_id = tm.id
+                 WHERE
+                   -- Match by LinkedIn URL (most reliable)
+                   (src.linkedin_url IS NOT NULL
+                    AND lc.connection_linkedin_url IS NOT NULL
+                    AND lc.connection_linkedin_url != ''
+                    AND LOWER(TRIM(src.linkedin_url)) = LOWER(TRIM(lc.connection_linkedin_url)))
+                   OR
+                   -- Fall back to full name match
+                   (src.full_name IS NOT NULL
+                    AND LOWER(TRIM(src.full_name)) = LOWER(TRIM(lc.connection_name)))
+                ),
+                '[]'::json
+              ) AS team_connectors
        FROM lp_network_paths p
        JOIN lp_targets src ON p.source_lp_id = src.id
        JOIN lp_targets tgt ON p.target_lp_id = tgt.id
        ${where}
-       ORDER BY p.confidence_score DESC, p.target_company, p.created_at DESC
+       ORDER BY
+         -- Confirmed connections first
+         (EXISTS (
+           SELECT 1 FROM linkedin_connections lc
+           WHERE
+             (src.linkedin_url IS NOT NULL AND lc.connection_linkedin_url IS NOT NULL
+              AND LOWER(TRIM(src.linkedin_url)) = LOWER(TRIM(lc.connection_linkedin_url)))
+             OR LOWER(TRIM(src.full_name)) = LOWER(TRIM(lc.connection_name))
+         )) DESC,
+         p.confidence_score DESC,
+         p.target_company,
+         p.created_at DESC
        LIMIT 1000`,
       params
     );
@@ -4340,12 +4375,13 @@ router.get('/apollo/network-map', authenticate, async (req, res) => {
        FROM lp_network_paths`
     );
 
-    // Check how many Fund LPs have been enriched
+    // How many Fund LPs have been enriched
     const { rows: [enrichStats] } = await db.query(
       `SELECT
          COUNT(*) FILTER (WHERE prior_fund IS NOT NULL) as total_fund_lps,
          COUNT(*) FILTER (WHERE prior_fund IS NOT NULL AND apollo_enriched_at IS NOT NULL) as enriched_fund_lps,
-         COUNT(*) FILTER (WHERE prior_fund IS NOT NULL AND apollo_employment_history IS NOT NULL AND apollo_employment_history::text != '[]') as with_history
+         COUNT(*) FILTER (WHERE prior_fund IS NOT NULL AND apollo_employment_history IS NOT NULL
+           AND apollo_employment_history::text != '[]') as with_history
        FROM lp_targets`
     );
 

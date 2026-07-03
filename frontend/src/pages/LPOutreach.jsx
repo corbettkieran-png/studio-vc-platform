@@ -739,14 +739,14 @@ ${senderEmail}`;
         {mapStats.total_paths > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
             {[
-              { label: 'Indirect Paths', value: mapStats.total_paths },
+              { label: 'Confirmed Paths', value: paths.filter(p => Array.isArray(p.team_connectors) && p.team_connectors.length > 0).length, highlight: true },
+              { label: 'Total Paths', value: mapStats.total_paths },
               { label: 'Target LPs Reachable', value: mapStats.unique_target_lps },
-              { label: 'Fund LP Connectors', value: mapStats.unique_source_lps },
               { label: 'Direct Connections', value: directPaths.length },
             ].map(card => (
-              <div key={card.label} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#0F172A' }}>{card.value || 0}</div>
-                <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
+              <div key={card.label} style={{ background: card.highlight ? '#F0FDF4' : '#fff', border: `1px solid ${card.highlight ? '#86EFAC' : '#E2E8F0'}`, borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: card.highlight ? '#166534' : '#0F172A' }}>{card.value || 0}</div>
+                <div style={{ fontSize: 11, color: card.highlight ? '#166534' : '#64748B', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
               </div>
             ))}
           </div>
@@ -847,27 +847,47 @@ ${senderEmail}`;
 
                         <div style={{ flex: 1, fontSize: 13 }}>
                           {/* Full intro chain */}
-                          <div style={{ color: '#64748B', marginBottom: 4, fontSize: 12 }}>
-                            <strong style={{ color: '#0F172A' }}>Joe / Lillian</strong>
-                            <span style={{ margin: '0 5px', color: '#CBD5E1' }}>→</span>
-                            <strong style={{ color: '#0F172A' }}>{path.source_person_name}</strong>
-                            <span style={{ color: '#94A3B8', fontWeight: 400 }}>
-                              {' '}({path.source_prior_fund === 'fund_i' ? 'Fund I' : path.source_prior_fund === 'fund_ii' ? 'Fund II' : 'Fund I+II'} LP
-                              {path.source_lp_company ? ` · ${path.source_lp_company}` : ''})
-                            </span>
-                            <span style={{ margin: '0 5px', color: '#CBD5E1' }}>→</span>
-                            {path.target_contact_name
-                              ? <strong style={{ color: '#1E40AF' }}>{path.target_contact_name}</strong>
-                              : <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Senior contact at {company}</span>
-                            }
-                          </div>
-                          {/* Connection basis */}
-                          <div style={{ fontSize: 11, color: '#94A3B8' }}>
-                            {path.connection_type === 'current_employer'
-                              ? `Both currently at ${path.overlap_company || company}`
-                              : `${path.source_person_name?.split(' ')[0]} previously at ${path.overlap_company || company}`}
-                            {path.target_contact_title ? ` · Target: ${path.target_contact_title}` : ''}
-                          </div>
+                          {(() => {
+                            const connectors = Array.isArray(path.team_connectors) ? path.team_connectors : [];
+                            const confirmed = connectors.length > 0;
+                            const connectorNames = confirmed
+                              ? connectors.map(c => c.team_member_name.split(' ')[0]).join(' / ')
+                              : null;
+                            const fundLabel = path.source_prior_fund === 'fund_i' ? 'Fund I' : path.source_prior_fund === 'fund_ii' ? 'Fund II' : 'Fund I+II';
+                            return (
+                              <>
+                                <div style={{ color: '#64748B', marginBottom: 4, fontSize: 12 }}>
+                                  {confirmed ? (
+                                    <strong style={{ color: '#0F172A' }}>{connectorNames}</strong>
+                                  ) : (
+                                    <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Unconfirmed connector</span>
+                                  )}
+                                  <span style={{ margin: '0 5px', color: '#CBD5E1' }}>→</span>
+                                  <strong style={{ color: confirmed ? '#0F172A' : '#94A3B8' }}>{path.source_person_name}</strong>
+                                  <span style={{ color: '#94A3B8', fontWeight: 400 }}>
+                                    {' '}({fundLabel} LP{path.source_lp_company ? ` · ${path.source_lp_company}` : ''})
+                                  </span>
+                                  <span style={{ margin: '0 5px', color: '#CBD5E1' }}>→</span>
+                                  {path.target_contact_name
+                                    ? <strong style={{ color: '#1E40AF' }}>{path.target_contact_name}</strong>
+                                    : <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Senior contact at {company}</span>
+                                  }
+                                </div>
+                                <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                                  {confirmed
+                                    ? <span style={{ color: '#059669', fontWeight: 600 }}>✓ LinkedIn confirmed</span>
+                                    : <span style={{ color: '#F59E0B' }}>⚠ Not in uploaded LinkedIn connections</span>
+                                  }
+                                  <span style={{ marginLeft: 8 }}>
+                                    {path.connection_type === 'current_employer'
+                                      ? `Both currently at ${path.overlap_company || company}`
+                                      : `${path.source_person_name?.split(' ')[0]} previously at ${path.overlap_company || company}`}
+                                    {path.target_contact_title ? ` · ${path.target_contact_title}` : ''}
+                                  </span>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
 
                         <div style={{ textAlign: 'right', paddingTop: 2 }}>
