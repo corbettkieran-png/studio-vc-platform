@@ -4004,5 +4004,396 @@ router.post('/admin/enrich-surnames', authenticate, async (req, res) => {
   }
 });
 
+// ============================================================
+// LP WARM INTRO NETWORK MAPPING
+// ============================================================
+
+// POST /api/lp/apollo/enrich-fund-lps
+// Enriches Fund I/II LP individuals via Apollo People Match to capture employment history.
+// This is what powers the warm intro network map.
+// Costs ~1 Apollo credit per LP found. With 48 Fund LPs this is ~48 credits max.
+router.post('/apollo/enrich-fund-lps', authenticate, async (req, res) => {
+  if (!rateLimit(`apollo-enrich-fund-lps:${req.user.id}`, 10 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Please wait 10 minutes between runs.' });
+  }
+  if (!apollo.hasKey()) {
+    return res.status(503).json({ error: 'APOLLO_API_KEY not configured in Railway variables.' });
+  }
+
+  const { limit = 100, dry_run = false, force_refresh = false } = req.body || {};
+
+  // Fetch Fund I/II LPs not yet enriched (or stale > 30 days if force_refresh)
+  const refreshClause = force_refresh
+    ? ''
+    : 'AND (apollo_enriched_at IS NULL OR apollo_enriched_at < NOW() - INTERVAL \'30 days\')';
+
+  const { rows: fundLPs } = await db.query(
+    `SELECT * FROM lp_targets
+     WHERE prior_fund IS NOT NULL
+       AND full_name IS NOT NULL
+       ${refreshClause}
+     ORDER BY imported_at DESC NULLS LAST
+     LIMIT $1`,
+    [Math.min(parseInt(limit) || 100, 500)]
+  );
+
+  if (dry_run) {
+    return res.json({
+      dry_run: true,
+      queue_size: fundLPs.length,
+      queue: fundLPs.map((lp) => ({
+        id: lp.id,
+        name: lp.full_name,
+        company: lp.company,
+        prior_fund: lp.prior_fund,
+        enriched_at: lp.apollo_enriched_at,
+      })),
+    });
+  }
+
+  const results = [];
+  let enriched = 0;
+  let no_match = 0;
+  let errors = 0;
+
+  for (const lp of fundLPs) {
+    try {
+      const nameParts = (lp.full_name || '').trim().split(/\s+/);
+      const firstName = nameParts[0] || null;
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+
+      const person = await apollo.matchPerson({
+        firstName,
+        lastName,
+        organizationName: lp.company || null,
+        linkedinUrl: lp.linkedin_url || null,
+        title: lp.title || null,
+      });
+
+      if (person) {
+        const employmentHistory = person.employment_history || [];
+        await db.query(
+          `UPDATE lp_targets SET
+            apollo_employment_history = $1,
+            apollo_enriched_at = NOW(),
+            linkedin_url = COALESCE($2, linkedin_url),
+            title = COALESCE($3, title)
+           WHERE id = $4`,
+          [
+            JSON.stringify(employmentHistory),
+            person.linkedin_url || null,
+            person.title || null,
+            lp.id,
+          ]
+        );
+        enriched++;
+        results.push({
+          id: lp.id,
+          name: lp.full_name,
+          company: lp.company,
+          status: 'enriched',
+          employer_count: employmentHistory.length,
+          employers: employmentHistory.map((e) => e.organization_name).filter(Boolean),
+        });
+      } else {
+        // Mark as attempted so we don't retry on every run
+        await db.query('UPDATE lp_targets SET apollo_enriched_at = NOW() WHERE id = $1', [lp.id]);
+        no_match++;
+        results.push({ id: lp.id, name: lp.full_name, company: lp.company, status: 'no_match' });
+      }
+    } catch (e) {
+      console.error('[enrich-fund-lps] Apollo error for LP', lp.id, e.message);
+      errors++;
+      results.push({ id: lp.id, name: lp.full_name, company: lp.company, status: 'error', error: e.message });
+    }
+    // Polite delay between Apollo calls
+    await new Promise((r) => setTimeout(r, 350));
+  }
+
+  res.json({
+    ok: true,
+    processed: fundLPs.length,
+    enriched,
+    no_match,
+    errors,
+    results,
+  });
+});
+
+// POST /api/lp/apollo/build-network-map
+// Cross-references Fund I/II LP employment histories with target LP companies.
+// Writes discovered paths into lp_network_paths. No Apollo credits used — pure SQL.
+router.post('/apollo/build-network-map', authenticate, async (req, res) => {
+  const { clear_existing = false } = req.body || {};
+
+  try {
+    if (clear_existing) {
+      await db.query('DELETE FROM lp_network_paths');
+    }
+
+    // Fund I/II LPs with enriched employment history
+    const { rows: fundLPs } = await db.query(
+      `SELECT id, full_name, title, company, prior_fund, linkedin_url,
+              apollo_employment_history
+       FROM lp_targets
+       WHERE prior_fund IS NOT NULL
+         AND apollo_employment_history IS NOT NULL
+         AND apollo_employment_history::text != '[]'`
+    );
+
+    if (!fundLPs.length) {
+      return res.json({
+        ok: false,
+        message: 'No Fund I/II LPs have been Apollo-enriched yet. Run "Enrich Fund LPs" first.',
+        paths_found: 0,
+      });
+    }
+
+    // Target LP prospects (not Fund I/II LPs) with a company name
+    const { rows: targetLPs } = await db.query(
+      `SELECT id, full_name, company, outreach_status, priority
+       FROM lp_targets
+       WHERE prior_fund IS NULL
+         AND company IS NOT NULL`
+    );
+
+    // Build a lookup: normalized company name → [target LP rows]
+    const targetsByCompany = new Map();
+    for (const t of targetLPs) {
+      const key = normalizeCompanyName(t.company);
+      if (!targetsByCompany.has(key)) targetsByCompany.set(key, []);
+      targetsByCompany.get(key).push(t);
+    }
+
+    let pathsFound = 0;
+    const client = await db.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      for (const fundLP of fundLPs) {
+        let history;
+        try {
+          history = Array.isArray(fundLP.apollo_employment_history)
+            ? fundLP.apollo_employment_history
+            : JSON.parse(fundLP.apollo_employment_history);
+        } catch (_) {
+          continue;
+        }
+
+        for (const job of history) {
+          const jobCompany = (job.organization_name || '').trim();
+          if (!jobCompany) continue;
+          const jobKey = normalizeCompanyName(jobCompany);
+
+          // Find matching target LP companies
+          const matchedTargets = findCompanyMatches(jobKey, targetsByCompany);
+
+          for (const targetLP of matchedTargets) {
+            const connectionType = job.current ? 'current_employer' : 'former_employer';
+            const confidence = job.current ? 90 : 65;
+
+            // Get top Apollo contacts we've already fetched at this target company
+            const { rows: apolloContacts } = await client.query(
+              `SELECT * FROM apollo_company_contacts
+               WHERE lp_target_id = $1
+               ORDER BY CASE seniority
+                 WHEN 'c_suite' THEN 1 WHEN 'partner' THEN 2
+                 WHEN 'vp' THEN 3 WHEN 'director' THEN 4
+                 ELSE 5 END
+               LIMIT 5`,
+              [targetLP.id]
+            );
+
+            if (apolloContacts.length > 0) {
+              for (const contact of apolloContacts) {
+                try {
+                  await client.query(
+                    `INSERT INTO lp_network_paths
+                      (source_lp_id, target_lp_id, connection_type,
+                       source_person_name, source_person_title, source_company,
+                       target_company, target_contact_name, target_contact_title,
+                       target_contact_id, overlap_company, confidence_score)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+                     ON CONFLICT DO NOTHING`,
+                    [
+                      fundLP.id, targetLP.id, connectionType,
+                      fundLP.full_name, fundLP.title, fundLP.company,
+                      targetLP.company, contact.full_name, contact.title,
+                      contact.id, jobCompany, confidence,
+                    ]
+                  );
+                  pathsFound++;
+                } catch (_) { /* skip */ }
+              }
+            } else {
+              // No Apollo contacts yet for this target LP — still record the company-level path
+              try {
+                await client.query(
+                  `INSERT INTO lp_network_paths
+                    (source_lp_id, target_lp_id, connection_type,
+                     source_person_name, source_person_title, source_company,
+                     target_company, overlap_company, confidence_score)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                   ON CONFLICT DO NOTHING`,
+                  [
+                    fundLP.id, targetLP.id, connectionType,
+                    fundLP.full_name, fundLP.title, fundLP.company,
+                    targetLP.company, jobCompany, job.current ? 80 : 55,
+                  ]
+                );
+                pathsFound++;
+              } catch (_) { /* skip */ }
+            }
+          }
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // Summary of what was found
+    const { rows: summary } = await db.query(
+      `SELECT
+         COUNT(*) as total_paths,
+         COUNT(DISTINCT source_lp_id) as unique_source_lps,
+         COUNT(DISTINCT target_lp_id) as unique_target_lps,
+         COUNT(CASE WHEN connection_type = 'current_employer' THEN 1 END) as current_employer_paths,
+         COUNT(CASE WHEN connection_type = 'former_employer' THEN 1 END) as former_employer_paths
+       FROM lp_network_paths`
+    );
+
+    res.json({
+      ok: true,
+      paths_found: pathsFound,
+      fund_lps_processed: fundLPs.length,
+      ...summary[0],
+    });
+  } catch (err) {
+    console.error('Error building network map:', err);
+    res.status(500).json({ error: err.message || 'Failed to build network map' });
+  }
+});
+
+// GET /api/lp/apollo/network-map
+// Returns all discovered warm intro paths with optional filters.
+router.get('/apollo/network-map', authenticate, async (req, res) => {
+  try {
+    const { target_lp_id, source_lp_id, connection_type, min_confidence } = req.query;
+
+    const conditions = [];
+    const params = [];
+
+    if (target_lp_id) {
+      params.push(target_lp_id);
+      conditions.push(`p.target_lp_id = $${params.length}`);
+    }
+    if (source_lp_id) {
+      params.push(source_lp_id);
+      conditions.push(`p.source_lp_id = $${params.length}`);
+    }
+    if (connection_type) {
+      params.push(connection_type);
+      conditions.push(`p.connection_type = $${params.length}`);
+    }
+    if (min_confidence) {
+      params.push(parseInt(min_confidence) || 50);
+      conditions.push(`p.confidence_score >= $${params.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const { rows: paths } = await db.query(
+      `SELECT p.*,
+              src.full_name  AS source_lp_full_name,
+              src.company    AS source_lp_company,
+              src.prior_fund AS source_prior_fund,
+              src.email      AS source_email,
+              src.linkedin_url AS source_linkedin,
+              tgt.full_name  AS target_lp_full_name,
+              tgt.company    AS target_lp_company,
+              tgt.outreach_status,
+              tgt.priority
+       FROM lp_network_paths p
+       JOIN lp_targets src ON p.source_lp_id = src.id
+       JOIN lp_targets tgt ON p.target_lp_id = tgt.id
+       ${where}
+       ORDER BY p.confidence_score DESC, p.target_company, p.created_at DESC
+       LIMIT 1000`,
+      params
+    );
+
+    // Aggregate stats
+    const { rows: [stats] } = await db.query(
+      `SELECT
+         COUNT(*) as total_paths,
+         COUNT(DISTINCT source_lp_id) as unique_source_lps,
+         COUNT(DISTINCT target_lp_id) as unique_target_lps,
+         COUNT(CASE WHEN connection_type = 'current_employer' THEN 1 END) as current_paths,
+         COUNT(CASE WHEN connection_type = 'former_employer' THEN 1 END) as former_paths,
+         COUNT(DISTINCT target_company) as unique_target_companies
+       FROM lp_network_paths`
+    );
+
+    // Check how many Fund LPs have been enriched
+    const { rows: [enrichStats] } = await db.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE prior_fund IS NOT NULL) as total_fund_lps,
+         COUNT(*) FILTER (WHERE prior_fund IS NOT NULL AND apollo_enriched_at IS NOT NULL) as enriched_fund_lps,
+         COUNT(*) FILTER (WHERE prior_fund IS NOT NULL AND apollo_employment_history IS NOT NULL AND apollo_employment_history::text != '[]') as with_history
+       FROM lp_targets`
+    );
+
+    res.json({ paths, stats, enrich_stats: enrichStats });
+  } catch (err) {
+    console.error('Error fetching network map:', err);
+    res.status(500).json({ error: 'Failed to fetch network map' });
+  }
+});
+
+// DELETE /api/lp/apollo/network-map
+// Clears all network paths so they can be rebuilt.
+router.delete('/apollo/network-map', authenticate, async (req, res) => {
+  try {
+    const { rows } = await db.query('DELETE FROM lp_network_paths RETURNING id');
+    res.json({ deleted: rows.length });
+  } catch (err) {
+    console.error('Error clearing network map:', err);
+    res.status(500).json({ error: 'Failed to clear network map' });
+  }
+});
+
+// ── Network map helper functions ───────────────────────────────
+
+function normalizeCompanyName(name) {
+  return (name || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[,.\-&']/g, ' ')
+    .replace(/\b(llc|ltd|inc|corp|co|group|management|capital|partners|fund|asset|investments?|advisors?|associates?|international|global|financial|services|holdings?)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findCompanyMatches(jobKey, targetsByCompany) {
+  const matches = [];
+  for (const [targetKey, targetRows] of targetsByCompany) {
+    if (!targetKey || !jobKey) continue;
+    // Exact match or one contains the other (both at least 5 chars to avoid false positives)
+    const isMatch =
+      jobKey === targetKey ||
+      (jobKey.length >= 5 && targetKey.length >= 5 && (
+        jobKey.includes(targetKey) || targetKey.includes(jobKey)
+      ));
+    if (isMatch) matches.push(...targetRows);
+  }
+  return matches;
+}
+
 module.exports = router;
 module.exports.computeFitScoreForMigration = computeFitScore;

@@ -181,6 +181,29 @@ export const importLPSurnames = (file) => {
   return request('/lp/admin/import-surnames', { method: 'POST', body: form });
 };
 
+// LP Warm Intro Network Mapping
+export const enrichFundLPs = (limit = 100, dry_run = false) =>
+  request('/lp/apollo/enrich-fund-lps', {
+    method: 'POST',
+    body: JSON.stringify({ limit, dry_run }),
+  });
+export const buildNetworkMap = (clear_existing = false) =>
+  request('/lp/apollo/build-network-map', {
+    method: 'POST',
+    body: JSON.stringify({ clear_existing }),
+  });
+export const getNetworkMap = (filters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.target_lp_id) params.set('target_lp_id', filters.target_lp_id);
+  if (filters.source_lp_id) params.set('source_lp_id', filters.source_lp_id);
+  if (filters.connection_type) params.set('connection_type', filters.connection_type);
+  if (filters.min_confidence) params.set('min_confidence', filters.min_confidence);
+  const qs = params.toString();
+  return request(`/lp/apollo/network-map${qs ? '?' + qs : ''}`);
+};
+export const clearNetworkMap = () =>
+  request('/lp/apollo/network-map', { method: 'DELETE' });
+
 // Known contacts (warm intro flags)
 export const flagKnownContact = (contactId, note) =>
   request(`/lp/apollo/contacts/${contactId}/know`, { method: 'POST', body: JSON.stringify({ relationship_note: note }) });
