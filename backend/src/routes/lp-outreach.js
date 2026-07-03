@@ -4323,6 +4323,7 @@ router.get('/apollo/network-map', authenticate, async (req, res) => {
               tgt.outreach_status,
               tgt.priority,
               -- Confirmed team connectors: team members whose LinkedIn CSV includes this Fund LP
+              -- Matches on full_name (linkedin_connections has no URL column)
               COALESCE(
                 (SELECT json_agg(DISTINCT jsonb_build_object(
                   'team_member_id',   tm.id,
@@ -4330,16 +4331,8 @@ router.get('/apollo/network-map', authenticate, async (req, res) => {
                 ))
                  FROM linkedin_connections lc
                  JOIN team_members tm ON lc.team_member_id = tm.id
-                 WHERE
-                   -- Match by LinkedIn URL (most reliable)
-                   (src.linkedin_url IS NOT NULL
-                    AND lc.connection_linkedin_url IS NOT NULL
-                    AND lc.connection_linkedin_url != ''
-                    AND LOWER(TRIM(src.linkedin_url)) = LOWER(TRIM(lc.connection_linkedin_url)))
-                   OR
-                   -- Fall back to full name match
-                   (src.full_name IS NOT NULL
-                    AND LOWER(TRIM(src.full_name)) = LOWER(TRIM(lc.connection_name)))
+                 WHERE src.full_name IS NOT NULL
+                   AND LOWER(TRIM(src.full_name)) = LOWER(TRIM(lc.full_name))
                 ),
                 '[]'::json
               ) AS team_connectors
@@ -4351,10 +4344,8 @@ router.get('/apollo/network-map', authenticate, async (req, res) => {
          -- Confirmed connections first
          (EXISTS (
            SELECT 1 FROM linkedin_connections lc
-           WHERE
-             (src.linkedin_url IS NOT NULL AND lc.connection_linkedin_url IS NOT NULL
-              AND LOWER(TRIM(src.linkedin_url)) = LOWER(TRIM(lc.connection_linkedin_url)))
-             OR LOWER(TRIM(src.full_name)) = LOWER(TRIM(lc.connection_name))
+           WHERE src.full_name IS NOT NULL
+             AND LOWER(TRIM(src.full_name)) = LOWER(TRIM(lc.full_name))
          )) DESC,
          p.confidence_score DESC,
          p.target_company,
@@ -4416,10 +4407,9 @@ router.get('/apollo/network-map/team-direct', authenticate, async (req, res) => 
       `SELECT
          tm.id          AS team_member_id,
          tm.full_name   AS team_member_name,
-         lc.connection_name,
-         lc.connection_company,
-         lc.connection_title,
-         lc.connection_linkedin_url,
+         lc.full_name   AS connection_name,
+         lc.company     AS connection_company,
+         lc.position    AS connection_title,
          acc.id         AS apollo_contact_id,
          acc.full_name  AS contact_full_name,
          acc.title      AS contact_title,
@@ -4433,15 +4423,8 @@ router.get('/apollo/network-map/team-direct', authenticate, async (req, res) => 
          lt.priority
        FROM linkedin_connections lc
        JOIN team_members tm ON lc.team_member_id = tm.id
-       JOIN apollo_company_contacts acc ON (
-         -- Match by LinkedIn URL when available (most reliable)
-         (lc.connection_linkedin_url IS NOT NULL AND lc.connection_linkedin_url != ''
-           AND acc.linkedin_url IS NOT NULL
-           AND LOWER(TRIM(lc.connection_linkedin_url)) = LOWER(TRIM(acc.linkedin_url)))
-         OR
-         -- Match by full name when LinkedIn URL not available (case-insensitive)
-         (LOWER(TRIM(lc.connection_name)) = LOWER(TRIM(acc.full_name)))
-       )
+       JOIN apollo_company_contacts acc ON
+         LOWER(TRIM(lc.full_name)) = LOWER(TRIM(acc.full_name))
        JOIN lp_targets lt ON acc.lp_target_id = lt.id
        WHERE lt.prior_fund IS NULL  -- only target LPs, not Fund I/II LPs
        ORDER BY tm.full_name, lt.company, acc.seniority`
