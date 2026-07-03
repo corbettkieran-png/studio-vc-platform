@@ -4191,7 +4191,7 @@ router.post('/apollo/build-network-map', authenticate, async (req, res) => {
 
           for (const targetLP of matchedTargets) {
             const connectionType = job.current ? 'current_employer' : 'former_employer';
-            const confidence = job.current ? 90 : 65;
+            const confidence = calcConfidence(job);
 
             // Get top Apollo contacts we've already fetched at this target company
             const { rows: apolloContacts } = await client.query(
@@ -4239,7 +4239,7 @@ router.post('/apollo/build-network-map', authenticate, async (req, res) => {
                   [
                     fundLP.id, targetLP.id, connectionType,
                     fundLP.full_name, fundLP.title, fundLP.company,
-                    targetLP.company, jobCompany, job.current ? 80 : 55,
+                    targetLP.company, jobCompany, Math.max(calcConfidence(job) - 10, 25),
                   ]
                 );
                 pathsFound++;
@@ -4368,7 +4368,89 @@ router.delete('/apollo/network-map', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/lp/apollo/network-map/team-direct
+// Finds cases where team members (Joe, Lillian, etc.) are directly LinkedIn-connected
+// to Apollo contacts already found at target LP companies.
+// Requires team members to have uploaded their LinkedIn connection CSVs.
+router.get('/apollo/network-map/team-direct', authenticate, async (req, res) => {
+  try {
+    // Cross-reference linkedin_connections (uploaded CSVs) against apollo_company_contacts
+    // Match on full_name similarity — LinkedIn names and Apollo names may differ slightly
+    const { rows: directPaths } = await db.query(
+      `SELECT
+         tm.id          AS team_member_id,
+         tm.full_name   AS team_member_name,
+         lc.connection_name,
+         lc.connection_company,
+         lc.connection_title,
+         lc.connection_linkedin_url,
+         acc.id         AS apollo_contact_id,
+         acc.full_name  AS contact_full_name,
+         acc.title      AS contact_title,
+         acc.seniority  AS contact_seniority,
+         acc.linkedin_url AS contact_linkedin_url,
+         acc.company_name,
+         lt.id          AS target_lp_id,
+         lt.full_name   AS target_lp_name,
+         lt.company     AS target_company,
+         lt.outreach_status,
+         lt.priority
+       FROM linkedin_connections lc
+       JOIN team_members tm ON lc.team_member_id = tm.id
+       JOIN apollo_company_contacts acc ON (
+         -- Match by LinkedIn URL when available (most reliable)
+         (lc.connection_linkedin_url IS NOT NULL AND lc.connection_linkedin_url != ''
+           AND acc.linkedin_url IS NOT NULL
+           AND LOWER(TRIM(lc.connection_linkedin_url)) = LOWER(TRIM(acc.linkedin_url)))
+         OR
+         -- Match by full name when LinkedIn URL not available (case-insensitive)
+         (LOWER(TRIM(lc.connection_name)) = LOWER(TRIM(acc.full_name)))
+       )
+       JOIN lp_targets lt ON acc.lp_target_id = lt.id
+       WHERE lt.prior_fund IS NULL  -- only target LPs, not Fund I/II LPs
+       ORDER BY tm.full_name, lt.company, acc.seniority`
+    );
+
+    // Check if any team members have uploaded LinkedIn connections at all
+    const { rows: uploadStats } = await db.query(
+      `SELECT tm.full_name, COUNT(lc.id) as connection_count
+       FROM team_members tm
+       LEFT JOIN linkedin_connections lc ON lc.team_member_id = tm.id
+       GROUP BY tm.id, tm.full_name
+       ORDER BY connection_count DESC`
+    );
+
+    res.json({
+      direct_paths: directPaths,
+      total: directPaths.length,
+      unique_targets: new Set(directPaths.map(p => p.target_lp_id)).size,
+      team_upload_stats: uploadStats,
+      has_uploads: uploadStats.some(s => parseInt(s.connection_count) > 0),
+    });
+  } catch (err) {
+    console.error('Error fetching team direct paths:', err);
+    res.status(500).json({ error: 'Failed to fetch team direct connections' });
+  }
+});
+
 // ── Network map helper functions ───────────────────────────────
+
+// Calculate confidence score based on employment recency
+// Current job = highest signal. Former jobs decay over time.
+function calcConfidence(job) {
+  if (job.current || !job.end_date) return 90;
+  try {
+    const endDate = new Date(job.end_date);
+    const now = new Date();
+    const yearsAgo = (now - endDate) / (1000 * 60 * 60 * 24 * 365.25);
+    if (yearsAgo < 1)  return 82; // left very recently — relationship very warm
+    if (yearsAgo < 3)  return 70; // left 1–3 years ago — still solid
+    if (yearsAgo < 7)  return 55; // left 3–7 years ago — moderate
+    return 35;                     // left >7 years ago — stale, lower priority
+  } catch (_) {
+    return 55; // can't parse date — default to moderate
+  }
+}
 
 function normalizeCompanyName(name) {
   return (name || '')

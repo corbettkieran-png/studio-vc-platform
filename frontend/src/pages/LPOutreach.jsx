@@ -10,7 +10,7 @@ import {
   enrichApolloContact, enrichApolloContactsBatch,
   getClaySettings, saveClaySettings, exportToClay, importClayCSV, getClayWebhookUrl,
   addManualConnection, deleteManualConnection, deleteLPTarget,
-  enrichFundLPs, buildNetworkMap, getNetworkMap, clearNetworkMap,
+  enrichFundLPs, buildNetworkMap, getNetworkMap, clearNetworkMap, getTeamDirectConnections,
 } from '../services/api';
 
 const request = (path, opts = {}) => {
@@ -182,6 +182,8 @@ export default function LPOutreach() {
   const [networkScanResult, setNetworkScanResult] = useState(null);
   const [networkFilter, setNetworkFilter] = useState('all'); // 'all' | 'current_employer' | 'former_employer'
   const [networkSearch, setNetworkSearch] = useState('');
+  const [teamDirect, setTeamDirect] = useState(null); // { direct_paths, team_upload_stats }
+  const [teamDirectLoading, setTeamDirectLoading] = useState(false);
 
   // Manual connections state
   const [showAddConnection, setShowAddConnection] = useState(false);
@@ -515,15 +517,21 @@ ${senderEmail}`;
 
   // WARM INTROS / NETWORK MAP TAB
   const renderNetworkMap = () => {
-    const loadNetworkMap = async () => {
+    const loadAll = async () => {
       setNetworkMapLoading(true);
+      setTeamDirectLoading(true);
       try {
-        const data = await getNetworkMap({ min_confidence: networkFilter === 'current_employer' ? 80 : networkFilter === 'former_employer' ? 50 : 0 });
-        setNetworkMap(data);
+        const [mapData, directData] = await Promise.all([
+          getNetworkMap({}),
+          getTeamDirectConnections(),
+        ]);
+        setNetworkMap(mapData);
+        setTeamDirect(directData);
       } catch (e) {
         console.error('Failed to load network map:', e);
       }
       setNetworkMapLoading(false);
+      setTeamDirectLoading(false);
     };
 
     const runFullScan = async () => {
@@ -534,11 +542,10 @@ ${senderEmail}`;
         setNetworkScanStep('mapping');
         const mapResult = await buildNetworkMap(false);
         setNetworkScanResult({ enrichResult, mapResult });
-        // Reload the map
-        const data = await getNetworkMap({});
-        setNetworkMap(data);
+        const [mapData, directData] = await Promise.all([getNetworkMap({}), getTeamDirectConnections()]);
+        setNetworkMap(mapData);
+        setTeamDirect(directData);
       } catch (e) {
-        console.error('Network scan failed:', e);
         setNetworkScanResult({ error: e.message });
       }
       setNetworkScanStep(null);
@@ -551,9 +558,10 @@ ${senderEmail}`;
       try {
         await enrichFundLPs(100, false);
         setNetworkScanStep('mapping');
-        await buildNetworkMap(true); // clear_existing = true
-        const data = await getNetworkMap({});
-        setNetworkMap(data);
+        await buildNetworkMap(true);
+        const [mapData, directData] = await Promise.all([getNetworkMap({}), getTeamDirectConnections()]);
+        setNetworkMap(mapData);
+        setTeamDirect(directData);
         setNetworkScanResult({ rebuilt: true });
       } catch (e) {
         setNetworkScanResult({ error: e.message });
@@ -561,16 +569,16 @@ ${senderEmail}`;
       setNetworkScanStep(null);
     };
 
-    // Load map on first tab visit
-    if (!networkMap && !networkMapLoading) {
-      loadNetworkMap();
-    }
+    // Load on first tab visit
+    if (!networkMap && !networkMapLoading) loadAll();
 
     const paths = networkMap?.paths || [];
-    const stats = networkMap?.stats || {};
+    const mapStats = networkMap?.stats || {};
     const enrichStats = networkMap?.enrich_stats || {};
+    const directPaths = teamDirect?.direct_paths || [];
+    const uploadStats = teamDirect?.team_upload_stats || [];
 
-    // Filter & group paths
+    // Filter & group indirect paths
     const filteredPaths = paths.filter(p => {
       if (networkFilter === 'current_employer' && p.connection_type !== 'current_employer') return false;
       if (networkFilter === 'former_employer' && p.connection_type !== 'former_employer') return false;
@@ -586,7 +594,7 @@ ${senderEmail}`;
       return true;
     });
 
-    // Group by target company
+    // Group indirect paths by target company
     const grouped = {};
     for (const p of filteredPaths) {
       const key = p.target_company || p.target_lp_company || 'Unknown';
@@ -595,30 +603,41 @@ ${senderEmail}`;
     }
     const groupedEntries = Object.entries(grouped).sort((a, b) => b[1].length - a[1].length);
 
+    // Group direct paths by target company
+    const directGrouped = {};
+    for (const p of directPaths) {
+      const key = p.target_company || p.company_name || 'Unknown';
+      if (!directGrouped[key]) directGrouped[key] = [];
+      directGrouped[key].push(p);
+    }
+    const directGroupedEntries = Object.entries(directGrouped).sort((a, b) => b[1].length - a[1].length);
+
     const scanBtnStyle = {
       padding: '10px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
-      fontWeight: 600, fontSize: 13, transition: 'all 0.15s',
+      fontWeight: 600, fontSize: 13,
     };
-
     const pillStyle = (active) => ({
       padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
       cursor: 'pointer', border: 'none',
       background: active ? '#1E293B' : '#F1F5F9',
       color: active ? '#fff' : '#64748B',
     });
+    const confidenceColor = (score) => score >= 80 ? '#059669' : score >= 60 ? '#D97706' : '#94A3B8';
 
     return (
       <div style={{ padding: '0 0 40px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+
+        {/* ── HEADER ─────────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>Warm Intro Network</h2>
             <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>
-              Apollo maps career histories of your Fund I/II LPs against target LP institutions — surfacing intro paths you can activate.
+              Apollo maps Fund I/II LP career histories against target institutions.
+              Joe &amp; Lillian are connectors to all Fund LPs — every path below is actionable.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            {stats.total_paths > 0 && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            {mapStats.total_paths > 0 && (
               <button onClick={handleClearAndRebuild} disabled={!!networkScanStep}
                 style={{ ...scanBtnStyle, background: '#F8FAFC', color: '#64748B', border: '1px solid #E2E8F0' }}>
                 Rebuild
@@ -628,18 +647,18 @@ ${senderEmail}`;
               style={{ ...scanBtnStyle, background: networkScanStep ? '#CBD5E1' : '#1E293B', color: '#fff' }}>
               {networkScanStep === 'enriching' ? '⟳ Enriching LPs…'
                 : networkScanStep === 'mapping' ? '⟳ Building Map…'
-                : stats.total_paths > 0 ? 'Refresh Scan' : 'Run Network Scan'}
+                : mapStats.total_paths > 0 ? 'Refresh Scan' : 'Run Network Scan'}
             </button>
           </div>
         </div>
 
-        {/* Scan result banner */}
+        {/* Banners */}
         {networkScanResult && !networkScanResult.error && (
           <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 13 }}>
             <strong style={{ color: '#166534' }}>Scan complete.</strong>{' '}
             <span style={{ color: '#15803D' }}>
-              {networkScanResult.enrichResult?.enriched || 0} Fund LPs enriched via Apollo ·{' '}
-              {networkScanResult.mapResult?.paths_found || networkScanResult.mapResult?.total_paths || 0} intro paths found.
+              {networkScanResult.enrichResult?.enriched || 0} Fund LPs enriched ·{' '}
+              {networkScanResult.mapResult?.paths_found || 0} intro paths found.
             </span>
           </div>
         )}
@@ -648,33 +667,84 @@ ${senderEmail}`;
             Scan error: {networkScanResult.error}
           </div>
         )}
-
-        {/* Enrichment prereq warning */}
         {!networkScanStep && networkMap && parseInt(enrichStats.enriched_fund_lps || 0) === 0 && (
           <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#92400E', marginBottom: 4 }}>
-              No Fund LPs enriched yet
-            </div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#92400E', marginBottom: 4 }}>No Fund LPs enriched yet</div>
             <div style={{ fontSize: 12, color: '#B45309' }}>
-              Click <strong>Run Network Scan</strong> to have Apollo pull employment histories for your {enrichStats.total_fund_lps || 0} Fund I/II LPs (~1 Apollo credit each).
-              Studio VC will then cross-reference their career histories against your target LP institutions.
+              Click <strong>Run Network Scan</strong> — Apollo pulls employment histories for your {enrichStats.total_fund_lps || 0} Fund I/II LPs (~1 credit each),
+              then cross-references against your target LP companies.
             </div>
           </div>
         )}
 
-        {/* Stats row */}
-        {stats.total_paths > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        {/* ── DIRECT CONNECTIONS (Joe / Lillian → Target Contact) ──── */}
+        {(directPaths.length > 0 || teamDirectLoading) && (
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                Direct LinkedIn Connections
+              </h3>
+              <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: 12 }}>
+                {directPaths.length} found
+              </span>
+              <span style={{ fontSize: 12, color: '#64748B' }}>— Joe or Lillian knows these contacts directly (1 hop)</span>
+            </div>
+
+            {teamDirectLoading && <div style={{ color: '#94A3B8', fontSize: 13 }}>Loading direct connections…</div>}
+
+            {!teamDirectLoading && directGroupedEntries.map(([company, contacts]) => (
+              <div key={company} style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
+                <div style={{ padding: '10px 16px', background: '#DCFCE7', borderBottom: '1px solid #86EFAC', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: '#14532D' }}>{company}</span>
+                  <span style={{ fontSize: 11, color: '#166534' }}>{contacts.length} direct contact{contacts.length !== 1 ? 's' : ''}</span>
+                </div>
+                {contacts.map((c, i) => (
+                  <div key={i} style={{
+                    padding: '10px 16px',
+                    borderBottom: i < contacts.length - 1 ? '1px solid #BBF7D0' : 'none',
+                    display: 'flex', alignItems: 'center', gap: 12
+                  }}>
+                    {/* Chain: Team → Contact */}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, color: '#64748B', marginBottom: 3 }}>
+                        <strong style={{ color: '#1E293B' }}>{c.team_member_name}</strong>
+                        <span style={{ margin: '0 6px', color: '#94A3B8' }}>→</span>
+                        <strong style={{ color: '#1E40AF' }}>{c.contact_full_name || c.connection_name}</strong>
+                        {(c.contact_title || c.connection_title) && (
+                          <span style={{ color: '#64748B' }}>, {c.contact_title || c.connection_title}</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                        LinkedIn 1st-degree connection · {company}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', background: '#DCFCE7', padding: '3px 8px', borderRadius: 8 }}>
+                      Direct · 100%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            {!teamDirectLoading && directPaths.length === 0 && uploadStats.some(s => parseInt(s.connection_count) > 0) && (
+              <div style={{ fontSize: 13, color: '#64748B', padding: '12px 16px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                LinkedIn connections uploaded but no name/URL matches found against Apollo contacts yet.
+                Run <strong>Bulk Enrich</strong> on the LP List tab to pull more contacts from target companies.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── STATS ROW ─────────────────────────────── */}
+        {mapStats.total_paths > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
             {[
-              { label: 'Total Paths', value: stats.total_paths },
-              { label: 'Target LPs Reachable', value: stats.unique_target_lps },
-              { label: 'Fund LPs as Connectors', value: stats.unique_source_lps },
-              { label: 'Target Companies', value: stats.unique_target_companies },
+              { label: 'Indirect Paths', value: mapStats.total_paths },
+              { label: 'Target LPs Reachable', value: mapStats.unique_target_lps },
+              { label: 'Fund LP Connectors', value: mapStats.unique_source_lps },
+              { label: 'Direct Connections', value: directPaths.length },
             ].map(card => (
-              <div key={card.label} style={{
-                background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10,
-                padding: '14px 16px', textAlign: 'center'
-              }}>
+              <div key={card.label} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color: '#0F172A' }}>{card.value || 0}</div>
                 <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
               </div>
@@ -682,51 +752,45 @@ ${senderEmail}`;
           </div>
         )}
 
-        {/* Enrich progress sub-stats */}
         {parseInt(enrichStats.total_fund_lps || 0) > 0 && (
           <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 16 }}>
-            Fund LP enrichment: {enrichStats.enriched_fund_lps || 0} / {enrichStats.total_fund_lps || 0} enriched via Apollo ·{' '}
-            {enrichStats.with_history || 0} have employment history
+            Fund LP enrichment: {enrichStats.enriched_fund_lps || 0} / {enrichStats.total_fund_lps || 0} via Apollo ·{' '}
+            {enrichStats.with_history || 0} with employment history
           </div>
         )}
 
-        {/* Filter + search bar */}
-        {stats.total_paths > 0 && (
+        {/* ── FILTER BAR ────────────────────────────── */}
+        {mapStats.total_paths > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-            <input
-              value={networkSearch}
-              onChange={e => setNetworkSearch(e.target.value)}
-              placeholder="Search by company or person…"
-              style={{ padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, width: 240, outline: 'none' }}
-            />
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>Via Fund LP (2-hop paths)</div>
+            <input value={networkSearch} onChange={e => setNetworkSearch(e.target.value)}
+              placeholder="Search company or person…"
+              style={{ padding: '7px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, width: 220, outline: 'none' }} />
             <div style={{ display: 'flex', gap: 6 }}>
-              {[['all', 'All Paths'], ['current_employer', 'Current Employer'], ['former_employer', 'Former Employer']].map(([val, label]) => (
+              {[['all', 'All'], ['current_employer', 'Current Employer'], ['former_employer', 'Former Employer']].map(([val, label]) => (
                 <button key={val} onClick={() => setNetworkFilter(val)} style={pillStyle(networkFilter === val)}>{label}</button>
               ))}
             </div>
           </div>
         )}
 
-        {/* Empty state */}
-        {networkMapLoading && (
-          <div style={{ textAlign: 'center', padding: 60, color: '#94A3B8' }}>Loading network map…</div>
-        )}
-        {!networkMapLoading && stats.total_paths === 0 && !networkScanStep && (
+        {/* Empty / loading states */}
+        {networkMapLoading && <div style={{ textAlign: 'center', padding: 60, color: '#94A3B8' }}>Loading network map…</div>}
+        {!networkMapLoading && mapStats.total_paths === 0 && directPaths.length === 0 && !networkScanStep && (
           <div style={{ textAlign: 'center', padding: '60px 40px', color: '#94A3B8', background: '#F8FAFC', borderRadius: 12, border: '1px dashed #CBD5E1' }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🕸️</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#475569', marginBottom: 8 }}>No warm intro paths mapped yet</div>
             <div style={{ fontSize: 13 }}>
-              Click <strong>Run Network Scan</strong> above. Apollo will look up employment histories for your {enrichStats.total_fund_lps || 0} Fund I/II LPs
-              and find overlaps with your {stats.total_paths === 0 ? 'target LP' : ''} institutions.
+              Click <strong>Run Network Scan</strong>. Apollo looks up employment histories for your {enrichStats.total_fund_lps || 0} Fund I/II LPs
+              and cross-references them against your target LP institutions.
             </div>
           </div>
         )}
 
-        {/* Results grouped by target company */}
+        {/* ── INDIRECT PATHS (via Fund LP) ──────────── */}
         {!networkMapLoading && groupedEntries.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {groupedEntries.map(([company, companyPaths]) => {
-              // Deduplicate source → target contact combinations
               const seen = new Set();
               const dedupedPaths = companyPaths.filter(p => {
                 const key = `${p.source_lp_id}:${p.target_contact_id || p.overlap_company}`;
@@ -734,98 +798,81 @@ ${senderEmail}`;
                 seen.add(key);
                 return true;
               });
-
               const hasCurrent = dedupedPaths.some(p => p.connection_type === 'current_employer');
               const outreachStatus = dedupedPaths[0]?.outreach_status;
 
               return (
                 <div key={company} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
                   {/* Company header */}
-                  <div style={{ padding: '14px 20px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ padding: '12px 18px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: '#0F172A' }}>{company}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: '#0F172A' }}>{company}</span>
                       {outreachStatus && outreachStatus !== 'not_contacted' && (
                         <span style={{
-                          marginLeft: 10, fontSize: 11, padding: '2px 8px', borderRadius: 12,
-                          background: outreachStatus === 'responded' ? '#DCFCE7' : outreachStatus === 'sent' ? '#DBEAFE' : '#FEF9C3',
-                          color: outreachStatus === 'responded' ? '#166534' : outreachStatus === 'sent' ? '#1E40AF' : '#854D0E',
-                          fontWeight: 600, textTransform: 'capitalize'
-                        }}>
-                          {outreachStatus.replace(/_/g, ' ')}
-                        </span>
+                          marginLeft: 8, fontSize: 11, padding: '2px 7px', borderRadius: 10,
+                          background: outreachStatus === 'responded' ? '#DCFCE7' : '#DBEAFE',
+                          color: outreachStatus === 'responded' ? '#166534' : '#1E40AF',
+                          fontWeight: 600, textTransform: 'capitalize',
+                        }}>{outreachStatus.replace(/_/g, ' ')}</span>
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       {hasCurrent && (
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', background: '#EDE9FE', padding: '2px 8px', borderRadius: 12 }}>
-                          Direct Connection
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', background: '#EDE9FE', padding: '2px 8px', borderRadius: 10 }}>
+                          Still There
                         </span>
                       )}
                       <span style={{ fontSize: 12, color: '#94A3B8' }}>{dedupedPaths.length} path{dedupedPaths.length !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
 
-                  {/* Paths */}
-                  <div style={{ padding: '4px 0' }}>
+                  {/* Path rows */}
+                  <div>
                     {dedupedPaths.map((path, i) => (
                       <div key={i} style={{
-                        padding: '12px 20px',
+                        padding: '11px 18px',
                         borderBottom: i < dedupedPaths.length - 1 ? '1px solid #F1F5F9' : 'none',
-                        display: 'flex', alignItems: 'flex-start', gap: 12
+                        display: 'flex', alignItems: 'flex-start', gap: 12,
                       }}>
-                        {/* Connection type badge */}
                         <div style={{ paddingTop: 2 }}>
                           <span style={{
-                            fontSize: 10, fontWeight: 700, padding: '3px 7px', borderRadius: 8,
+                            fontSize: 10, fontWeight: 700, padding: '3px 7px', borderRadius: 6,
                             background: path.connection_type === 'current_employer' ? '#EDE9FE' : '#F1F5F9',
                             color: path.connection_type === 'current_employer' ? '#6D28D9' : '#64748B',
-                            textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap'
+                            textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap',
                           }}>
                             {path.connection_type === 'current_employer' ? 'Current' : 'Former'}
                           </span>
                         </div>
 
-                        {/* Path details */}
-                        <div style={{ flex: 1 }}>
-                          {/* Source LP */}
-                          <div style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>
-                            {path.source_person_name}
-                            <span style={{ fontWeight: 400, color: '#64748B', marginLeft: 4 }}>
-                              ({path.source_prior_fund === 'fund_i' ? 'Fund I' : path.source_prior_fund === 'fund_ii' ? 'Fund II' : 'Fund I+II'} LP
+                        <div style={{ flex: 1, fontSize: 13 }}>
+                          {/* Full intro chain */}
+                          <div style={{ color: '#64748B', marginBottom: 4, fontSize: 12 }}>
+                            <strong style={{ color: '#0F172A' }}>Joe / Lillian</strong>
+                            <span style={{ margin: '0 5px', color: '#CBD5E1' }}>→</span>
+                            <strong style={{ color: '#0F172A' }}>{path.source_person_name}</strong>
+                            <span style={{ color: '#94A3B8', fontWeight: 400 }}>
+                              {' '}({path.source_prior_fund === 'fund_i' ? 'Fund I' : path.source_prior_fund === 'fund_ii' ? 'Fund II' : 'Fund I+II'} LP
                               {path.source_lp_company ? ` · ${path.source_lp_company}` : ''})
                             </span>
+                            <span style={{ margin: '0 5px', color: '#CBD5E1' }}>→</span>
+                            {path.target_contact_name
+                              ? <strong style={{ color: '#1E40AF' }}>{path.target_contact_name}</strong>
+                              : <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Senior contact at {company}</span>
+                            }
                           </div>
-
-                          {/* Connection path */}
-                          <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ color: '#94A3B8' }}>↓</span>
-                            <span>
-                              {path.connection_type === 'current_employer'
-                                ? `Both currently at ${path.overlap_company || company}`
-                                : `Previously at ${path.overlap_company || company}`}
-                            </span>
+                          {/* Connection basis */}
+                          <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                            {path.connection_type === 'current_employer'
+                              ? `Both currently at ${path.overlap_company || company}`
+                              : `${path.source_person_name?.split(' ')[0]} previously at ${path.overlap_company || company}`}
+                            {path.target_contact_title ? ` · Target: ${path.target_contact_title}` : ''}
                           </div>
-
-                          {/* Target contact */}
-                          {path.target_contact_name && (
-                            <div style={{ fontSize: 13, color: '#1E40AF', fontWeight: 500, marginTop: 4 }}>
-                              → {path.target_contact_name}
-                              {path.target_contact_title && (
-                                <span style={{ fontWeight: 400, color: '#64748B' }}>, {path.target_contact_title}</span>
-                              )}
-                            </div>
-                          )}
-                          {!path.target_contact_name && (
-                            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontStyle: 'italic' }}>
-                              No Apollo contacts found at this company yet — run Bulk Enrich on LP List to find senior contacts.
-                            </div>
-                          )}
                         </div>
 
-                        {/* Confidence */}
                         <div style={{ textAlign: 'right', paddingTop: 2 }}>
                           <div style={{ fontSize: 11, color: '#94A3B8' }}>Confidence</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: path.confidence_score >= 80 ? '#059669' : '#F59E0B' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: confidenceColor(path.confidence_score) }}>
                             {path.confidence_score}%
                           </div>
                         </div>
@@ -838,11 +885,8 @@ ${senderEmail}`;
           </div>
         )}
 
-        {/* Search no-results */}
-        {!networkMapLoading && stats.total_paths > 0 && filteredPaths.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8' }}>
-            No paths match your search.
-          </div>
+        {!networkMapLoading && mapStats.total_paths > 0 && filteredPaths.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8' }}>No paths match your search.</div>
         )}
       </div>
     );

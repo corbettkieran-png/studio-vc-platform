@@ -203,6 +203,8 @@ export const getNetworkMap = (filters = {}) => {
 };
 export const clearNetworkMap = () =>
   request('/lp/apollo/network-map', { method: 'DELETE' });
+export const getTeamDirectConnections = () =>
+  request('/lp/apollo/network-map/team-direct');
 
 // Known contacts (warm intro flags)
 export const flagKnownContact = (contactId, note) =>
