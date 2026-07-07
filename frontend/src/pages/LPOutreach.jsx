@@ -498,7 +498,7 @@ ${senderEmail}`;
     const loadDetail = async () => {
       try {
         const data = await getLPTarget(selectedTarget);
-        setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log, manual_connections: data.manual_connections || [] });
+        setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log, manual_connections: data.manual_connections || [], linkedin_team_connections: data.linkedin_team_connections || [] });
         // Load Apollo contacts for this LP
         setApolloLoading(true);
         try {
@@ -2274,6 +2274,24 @@ ${senderEmail}`;
                 </a>
               )}
             </div>
+
+            {/* Team LinkedIn connections from uploaded CSVs */}
+            {detail.linkedin_team_connections?.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', paddingTop: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  Team knows:
+                </span>
+                {detail.linkedin_team_connections.map(c => (
+                  <span key={c.team_member_id} style={{
+                    fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+                    background: '#DCFCE7', color: '#166534', whiteSpace: 'nowrap',
+                  }}>
+                    {c.team_member_name.split(' ')[0]}
+                  </span>
+                ))}
+                <span style={{ fontSize: 11, color: '#94A3B8' }}>LinkedIn 1st-degree</span>
+              </div>
+            )}
           </div>
 
           <div className="detail-body">
@@ -3563,7 +3581,7 @@ ${senderEmail}`;
                               setApolloContacts(apolloData.contacts || []);
                               // Reload detail for warm intro paths
                               const data = await getLPTarget(selectedTarget);
-                              setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log, manual_connections: data.manual_connections || [] });
+                              setDetail({ ...(data.lp_target || data.target), connectors: data.connectors, warm_intro_paths: data.warm_intro_paths || [], linkedin_enrichment: data.linkedin_enrichment || null, activity: data.activity_log, manual_connections: data.manual_connections || [], linkedin_team_connections: data.linkedin_team_connections || [] });
                             } catch (err) { console.error('Flag error:', err); }
                           }}
                           style={{

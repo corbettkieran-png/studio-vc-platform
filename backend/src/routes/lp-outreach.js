@@ -1369,6 +1369,25 @@ router.get('/targets/:id', authenticate, requireUUID('id'), async (req, res) => 
       [id]
     );
 
+    // ── Team LinkedIn connections (from uploaded CSVs) ──
+    // Match this LP's full_name against linkedin_connections to show who on the team knows them.
+    let linkedinTeamConnections = [];
+    if (lp.full_name) {
+      const { rows: csvMatches } = await db.query(
+        `SELECT DISTINCT
+           tm.id   AS team_member_id,
+           tm.full_name AS team_member_name,
+           lc.position  AS lc_position,
+           lc.company   AS lc_company
+         FROM linkedin_connections lc
+         JOIN team_members tm ON lc.team_member_id = tm.id
+         WHERE LOWER(TRIM(lc.full_name)) = LOWER(TRIM($1))
+         ORDER BY tm.full_name`,
+        [lp.full_name]
+      );
+      linkedinTeamConnections = csvMatches;
+    }
+
     res.json({
       lp_target: lp,
       connectors,
@@ -1376,6 +1395,7 @@ router.get('/targets/:id', authenticate, requireUUID('id'), async (req, res) => 
       linkedin_enrichment: enrichmentRows[0] || null,
       activity_log: activity,
       manual_connections: manualConnections,
+      linkedin_team_connections: linkedinTeamConnections,
     });
   } catch (err) {
     console.error('Error fetching LP target:', err);
