@@ -346,6 +346,17 @@ async function autoMigrate() {
         ON linkedin_connections (lower(trim(company)));
     `);
 
+    // ── Restore 278 LPs deleted during dedup op (2026-07-07) ─────────
+    // Runs BEFORE dedup_v2 so restored records aren't immediately re-deduped.
+    const { rows: restoreFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_restore_deleted_2026_07'`
+    );
+    if (!restoreFlag.length) {
+      const inserted = await migrateRestoreLPs(db);
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_restore_deleted_2026_07')`);
+      console.log(`LP restore migration complete: ${inserted} records re-inserted.`);
+    }
+
     // ── Dedup v2: by full_name + company (v1 only deduped by company alone) ──
     const { rows: dedupV2Flag } = await db.query(
       `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_targets_dedup_v2'`
@@ -361,7 +372,7 @@ async function autoMigrate() {
                 ORDER BY
                   (CASE WHEN email IS NOT NULL THEN 0 ELSE 1 END),
                   (CASE WHEN linkedin_url IS NOT NULL THEN 0 ELSE 1 END),
-                  created_at ASC NULLS LAST,
+                  imported_at ASC NULLS LAST,
                   id ASC
               ) AS rn
             FROM lp_targets
@@ -371,16 +382,6 @@ async function autoMigrate() {
       `);
       await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_targets_dedup_v2')`);
       if (rowCount > 0) console.log(`LP dedup v2: removed ${rowCount} duplicate rows.`);
-    }
-
-    // ── Restore 278 LPs deleted during dedup op (2026-07-07) ─────────
-    const { rows: restoreFlag } = await db.query(
-      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_restore_deleted_2026_07'`
-    );
-    if (!restoreFlag.length) {
-      const inserted = await migrateRestoreLPs(db);
-      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_restore_deleted_2026_07')`);
-      console.log(`LP restore migration complete: ${inserted} records re-inserted.`);
     }
 
     console.log('Auto-migrate: contacts schema applied.');
