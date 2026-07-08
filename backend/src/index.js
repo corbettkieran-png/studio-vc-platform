@@ -295,6 +295,26 @@ async function autoMigrate() {
       AND (title IS NULL OR title = '');
     `);
 
+    // ── Prior fund tracking ───────────────────────────────────
+    // Tracks whether an LP invested in Fund I, Fund II, or both.
+    await db.query(`
+      ALTER TABLE lp_targets
+        ADD COLUMN IF NOT EXISTS prior_fund TEXT DEFAULT NULL;
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'lp_targets_prior_fund_check'
+        ) THEN
+          ALTER TABLE lp_targets
+            ADD CONSTRAINT lp_targets_prior_fund_check
+            CHECK (prior_fund IN ('fund_i', 'fund_ii', 'both'));
+        END IF;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_lp_targets_prior_fund
+        ON lp_targets(prior_fund)
+        WHERE prior_fund IS NOT NULL;
+    `);
+
     // ── Performance indexes ────────────────────────────────────
     // These are all CREATE INDEX IF NOT EXISTS so safe to run every boot.
     await db.query(`
