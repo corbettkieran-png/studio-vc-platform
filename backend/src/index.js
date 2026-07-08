@@ -316,16 +316,67 @@ async function autoMigrate() {
         WHERE prior_fund IS NOT NULL;
     `);
 
-    // ── Flag Fund II investors (one-time, idempotent) ───────────
-    // LPs imported between 2026-06-24 and 2026-07-08 are Fund II investors.
-    // prior_fund IS NULL guard makes this safe to re-run on every boot.
-    await db.query(`
-      UPDATE lp_targets
-        SET prior_fund = 'fund_ii'
-      WHERE prior_fund IS NULL
-        AND imported_at >= '2026-06-24 00:00:00'
-        AND imported_at <= '2026-07-08 23:59:59';
-    `);
+    // ── Categorise Fund I / Fund II LPs from definitive email list ───────────
+    // Source: Mailchimp segment export (subscribed_email_segment_export_b44d81a473.xlsx)
+    // Replaces the imprecise date-range approach that tagged ~230 records incorrectly.
+    // One-time migration; boot-time connections INSERT below handles new imports.
+    const { rows: priorFundFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_prior_fund_correct_2026_07'`
+    );
+    if (!priorFundFlag.length) {
+      // Email lists derived from TAGS column in the Mailchimp export
+      const FUND_I_EMAILS = [
+        'winters.daniel@gmail.com', 'jeffrshafer@gmail.com',
+        'patrick.m.clinton@irscounsel.treas.gov', 'clark@nebari.us',
+        'anderslynch@hotmail.com', 'gjmmorales@gmail.com', 'dan@nebari.us',
+        'patrickmclinton@yahoo.com', 'dhassett@summitrepartners.com',
+        'jfin481@gmail.com', 'mmamatc@icloud.com', 'michael@inisheerpartners.com',
+      ];
+      const FUND_II_EMAILS = [
+        'federico.jost@blueopalcapital.com', 'jessica.s.chow@gmail.com',
+        'wmsmurray@gmail.com', 'mtorbert@5cpartners.com', 'neal.shear@gmail.com',
+        'amiramir@gmail.com', 'john.r.niehaus@gmail.com', 'ggs@msg.com',
+        'aharatz@propuscapital.com', 'hemanshunpatel@gmail.com',
+        'seibert.nicholas@gmail.com', 'eric@jamali.net',
+        'sebastien.dejong@blueopalcapital.com', 'stephen.cohen@scohenplanning.com',
+        'rsteinberg@propuscapital.com', 'jmeriwether@jmadvisorsllc.com',
+        'douglas.munsey@gmail.com', 'rniehaus@gcpcapital.com', 'chifu.huang@gmail.com',
+      ];
+      const BOTH_EMAILS = [
+        'lcovillo@gmail.com', 'jcoyne@studio.vc', 'jcovillo@gmail.com',
+        'lesliejr55@gmail.com', 'dballen@gmail.com', 'rzenker@overbrook.com',
+        'anselmi.lillian@gmail.com', 'liam@studio.vc', 'rweiss328@gmail.com',
+        'tcb@zmlp.com', 'mg@zmlp.com', 'michaelluftman@hotmail.com',
+        'lynchvab@gmail.com', 'lanselmi@marlboroughinvestments.com',
+        'nicolelauralynch@hotmail.com', 'pingpongdiplomat@gmail.com',
+        'brucehack1@gmail.com', 'nateleung@gmail.com', 'cneider@clearviewcap.com',
+      ];
+      const ALL_FUND_EMAILS = [...FUND_I_EMAILS, ...FUND_II_EMAILS, ...BOTH_EMAILS];
+
+      // Reset any prior_fund values that were set by the old date-range approach
+      await db.query(`UPDATE lp_targets SET prior_fund = NULL WHERE prior_fund IS NOT NULL`);
+
+      // Apply correct categories based on email
+      const { rowCount: tagged } = await db.query(`
+        UPDATE lp_targets
+        SET prior_fund = CASE
+          WHEN lower(trim(email)) = ANY($1) THEN 'both'
+          WHEN lower(trim(email)) = ANY($2) THEN 'fund_i'
+          WHEN lower(trim(email)) = ANY($3) THEN 'fund_ii'
+        END
+        WHERE lower(trim(email)) = ANY($4)
+      `, [BOTH_EMAILS, FUND_I_EMAILS, FUND_II_EMAILS, ALL_FUND_EMAILS]);
+
+      // Remove auto-inserted connections from the old (imprecise) batch so the
+      // boot-time INSERT below re-adds only the correct ~50 LPs.
+      await db.query(`
+        DELETE FROM lp_manual_connections
+        WHERE name = 'Kieran Corbett' AND relationship = 'Existing LP'
+      `);
+
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_prior_fund_correct_2026_07')`);
+      console.log(`Prior fund correction: tagged ${tagged} LP records from definitive email list (Fund I: ${FUND_I_EMAILS.length}, Fund II: ${FUND_II_EMAILS.length}, Both: ${BOTH_EMAILS.length}).`);
+    }
 
     // ── Performance indexes ────────────────────────────────────
     // These are all CREATE INDEX IF NOT EXISTS so safe to run every boot.
