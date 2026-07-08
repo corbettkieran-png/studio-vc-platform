@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
+const { migrateRestoreLPs } = require('./utils/migrate-restore-lps');
 const authRoutes = require('./routes/auth');
 const submissionRoutes = require('./routes/submissions');
 const activityRoutes = require('./routes/activity');
@@ -315,6 +316,17 @@ async function autoMigrate() {
         WHERE prior_fund IS NOT NULL;
     `);
 
+    // ── Flag Fund II investors (one-time, idempotent) ───────────
+    // LPs imported between 2026-06-24 and 2026-07-08 are Fund II investors.
+    // prior_fund IS NULL guard makes this safe to re-run on every boot.
+    await db.query(`
+      UPDATE lp_targets
+        SET prior_fund = 'fund_ii'
+      WHERE prior_fund IS NULL
+        AND imported_at >= '2026-06-24 00:00:00'
+        AND imported_at <= '2026-07-08 23:59:59';
+    `);
+
     // ── Performance indexes ────────────────────────────────────
     // These are all CREATE INDEX IF NOT EXISTS so safe to run every boot.
     await db.query(`
@@ -359,6 +371,16 @@ async function autoMigrate() {
       `);
       await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_targets_dedup_v2')`);
       if (rowCount > 0) console.log(`LP dedup v2: removed ${rowCount} duplicate rows.`);
+    }
+
+    // ── Restore 278 LPs deleted during dedup op (2026-07-07) ─────────
+    const { rows: restoreFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_restore_deleted_2026_07'`
+    );
+    if (!restoreFlag.length) {
+      const inserted = await migrateRestoreLPs(db);
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_restore_deleted_2026_07')`);
+      console.log(`LP restore migration complete: ${inserted} records re-inserted.`);
     }
 
     console.log('Auto-migrate: contacts schema applied.');
