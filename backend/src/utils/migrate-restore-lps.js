@@ -9,13 +9,25 @@ async function migrateRestoreLPs(db) {
   let skipped = 0;
 
   for (const lp of DELETED_LPS) {
+    // Handle two formats: {n,e,c,ft,s,g} and {name,email,company,fund_type,sector,geo}
+    const name     = lp.n  ?? lp.name  ?? '';
+    const email    = lp.e  ?? lp.email ?? '';
+    const company  = lp.c  ?? lp.company ?? '';
+    const fundType = lp.ft ?? (lp.fund_type  === 'NULL' ? null : lp.fund_type)  ?? null;
+    const sector   = lp.s  ?? (lp.sector     === 'NULL' ? null : lp.sector)     ?? null;
+    const geo      = lp.g  ?? (lp.geo        === 'NULL' ? null : lp.geo)        ?? null;
+
+    if (!email) { skipped++; continue; }
+
+    // $7 is a duplicate of $2 so PG can resolve types independently in the
+    // outer SELECT and the correlated WHERE NOT EXISTS subquery.
     const res = await db.query(
       `INSERT INTO lp_targets (full_name, email, company, fund_type, sector_interest, geographic_focus, outreach_status)
        SELECT $1, $2, $3, $4, $5, $6, 'not_started'
        WHERE NOT EXISTS (
-         SELECT 1 FROM lp_targets WHERE LOWER(TRIM(email)) = LOWER(TRIM($2))
+         SELECT 1 FROM lp_targets WHERE LOWER(TRIM(email)) = LOWER(TRIM($7))
        )`,
-      [lp.n || '', lp.e, lp.c, lp.ft || null, lp.s || null, lp.g || null]
+      [name, email, company, fundType, sector, geo, email]
     );
     if (res.rowCount > 0) inserted++;
     else skipped++;
