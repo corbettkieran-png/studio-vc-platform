@@ -521,6 +521,36 @@ async function autoMigrate() {
       console.log(`Fund LP LinkedIn URLs: set ${urlsSet} URLs from confirmed Joe Coyne connection data.`);
     }
 
+    // ── LinkedIn URLs for Fund I/II LPs sourced from Apollo enrichment (July 2026) ─
+    // Second pass: 6 additional LPs confirmed via Apollo People Match API.
+    // Note: Alan Haratz email prefix "a" makes his email aharatz@propuscapital.com —
+    // confirmed via Propus Capital employment history in Apollo response.
+    const { rows: apolloUrlFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_linkedin_urls_apollo_2026_07'`
+    );
+    if (!apolloUrlFlag.length) {
+      const APOLLO_LINKEDIN_URLS = [
+        ['federico.jost@blueopalcapital.com',  'https://www.linkedin.com/in/federico-a-jost'],
+        ['neal.shear@gmail.com',               'https://www.linkedin.com/in/neal-shear-b32745a'],
+        ['aharatz@propuscapital.com',           'https://www.linkedin.com/in/alan-haratz-57a4584'],
+        ['eric@jamali.net',                    'https://www.linkedin.com/in/eric-rosenfeld-5a78805'],
+        ['jcoyne@studio.vc',                   'https://www.linkedin.com/in/coynejoseph'],
+        ['cneider@clearviewcap.com',           'https://www.linkedin.com/in/calvin-neider-2300321b'],
+      ];
+      let apolloUrlsSet = 0;
+      for (const [email, url] of APOLLO_LINKEDIN_URLS) {
+        const { rowCount } = await db.query(`
+          UPDATE lp_targets
+          SET linkedin_url = $1
+          WHERE lower(trim(email)) = $2
+            AND (linkedin_url IS NULL OR linkedin_url = '')
+        `, [url, email]);
+        apolloUrlsSet += rowCount;
+      }
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_linkedin_urls_apollo_2026_07')`);
+      console.log(`Fund LP LinkedIn URLs (Apollo): set ${apolloUrlsSet} additional URLs from Apollo enrichment.`);
+    }
+
     console.log('Auto-migrate: contacts schema applied.');
   } catch (err) {
     console.error('Auto-migrate error:', err.message);
