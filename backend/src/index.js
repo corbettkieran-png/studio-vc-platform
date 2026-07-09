@@ -437,27 +437,40 @@ async function autoMigrate() {
 
     // ── Fund I/II investors → lp_manual_connections (idempotent) ────────────
     // Any LP with prior_fund set is a known Fund I or Fund II investor.
-    // Insert them as Kieran's direct connection ('Existing LP') so they
+    // Insert them as Joe Coyne's direct connection ('Existing LP') so they
     // surface in the Warm Intros direct-connections panel automatically.
     // Runs on every boot; WHERE NOT EXISTS prevents duplicates.
+
+    // One-time: swap any entries that were previously inserted under Kieran's name
+    const { rows: joeSwapFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_conn_owner_joe_2026_07'`
+    );
+    if (!joeSwapFlag.length) {
+      await db.query(`
+        DELETE FROM lp_manual_connections
+        WHERE name = 'Kieran Corbett' AND relationship = 'Existing LP'
+      `);
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_conn_owner_joe_2026_07')`);
+    }
+
     const { rowCount: connInserted } = await db.query(`
       INSERT INTO lp_manual_connections (lp_target_id, name, relationship, added_by)
       SELECT
         lt.id,
-        'Kieran Corbett',
+        'Joe Coyne',
         'Existing LP',
-        (SELECT id FROM users WHERE email = 'corbett.kieran@gmail.com' LIMIT 1)
+        (SELECT id FROM users WHERE email = 'jcoyne@studio.vc' LIMIT 1)
       FROM lp_targets lt
       WHERE lt.prior_fund IS NOT NULL
         AND NOT EXISTS (
           SELECT 1 FROM lp_manual_connections mc
           WHERE mc.lp_target_id = lt.id
-            AND mc.name          = 'Kieran Corbett'
+            AND mc.name          = 'Joe Coyne'
             AND mc.relationship  = 'Existing LP'
         )
     `);
     if (connInserted > 0) {
-      console.log(`Fund LP connections: added ${connInserted} Fund I/II investors as direct connections.`);
+      console.log(`Fund LP connections: added ${connInserted} Fund I/II investors as Joe Coyne direct connections.`);
     }
 
     console.log('Auto-migrate: contacts schema applied.');
