@@ -551,6 +551,31 @@ async function autoMigrate() {
       console.log(`Fund LP LinkedIn URLs (Apollo): set ${apolloUrlsSet} additional URLs from Apollo enrichment.`);
     }
 
+    // ── LinkedIn URLs confirmed via Sales Navigator + web search (July 2026) ────
+    // Michael Luftman  → SN profile navigation + Joe's connections seed confirmation
+    // Chi-Fu Huang     → SN search (private investor, Wilson WY, member 4028197)
+    // Jeff Shafer      → SN search (Aura Equity, Dallas; LinkedIn: jjshafer)
+    const { rows: snUrlFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_linkedin_urls_sn_2026_07'`
+    );
+    if (!snUrlFlag.length) {
+      const SN_LINKEDIN_URLS = [
+        ['michaelluftman@hotmail.com', 'https://www.linkedin.com/in/michaelluftmanhudsonwealthadvs'],
+        ['chifu.huang@gmail.com',      'https://www.linkedin.com/in/chi-fu-huang-1714231'],
+        ['jeffrshafer@gmail.com',      'https://www.linkedin.com/in/jjshafer'],
+      ];
+      let snUrlsSet = 0;
+      for (const [email, url] of SN_LINKEDIN_URLS) {
+        const { rowCount } = await db.query(`
+          UPDATE lp_targets SET linkedin_url = $1
+          WHERE lower(trim(email)) = $2 AND (linkedin_url IS NULL OR linkedin_url = '')
+        `, [url, email]);
+        snUrlsSet += rowCount;
+      }
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_linkedin_urls_sn_2026_07')`);
+      console.log(`Fund LP LinkedIn URLs (Sales Navigator): set ${snUrlsSet} additional URLs from SN + web search.`);
+    }
+
     console.log('Auto-migrate: contacts schema applied.');
   } catch (err) {
     console.error('Auto-migrate error:', err.message);
