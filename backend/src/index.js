@@ -576,6 +576,47 @@ async function autoMigrate() {
       console.log(`Fund LP LinkedIn URLs (Sales Navigator): set ${snUrlsSet} additional URLs from SN + web search.`);
     }
 
+    // ── Warm intro connections confirmed via Apollo enrichment (July 2026) ──────
+    // Marques Torbert (Fund II, ex-Lazard IB) → Kenneth Colton at Lazard
+    // Neal Shear (Fund II, ex-Apollo Global Management Partner) → Kevin Crowe at Apollo Manager LLC
+    // Inserts into lp_manual_connections so they surface in the Warm Intros tab.
+    const { rows: warmIntroFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_warm_intros_apollo_2026_07'`
+    );
+    if (!warmIntroFlag.length) {
+      const WARM_INTROS = [
+        {
+          targetEmail: 'kenneth.colton@lazard.com',
+          connectorName: 'Marques Torbert',
+          relationship: 'Fund II LP — ex-Lazard IB Analyst; can warm intro to Lazard AM team',
+          linkedinUrl: 'https://www.linkedin.com/in/marques-torbert-b35b5913',
+        },
+        {
+          targetEmail: 'kcrowe@apollo.com',
+          connectorName: 'Neal Shear',
+          relationship: 'Fund II LP — ex-Apollo Global Management Partner (Commodities); can warm intro to Apollo AM',
+          linkedinUrl: 'https://www.linkedin.com/in/neal-shear-b32745a',
+        },
+      ];
+      let warmIntrosSet = 0;
+      for (const intro of WARM_INTROS) {
+        const { rows: targets } = await db.query(
+          `SELECT id FROM lp_targets WHERE lower(trim(email)) = $1 LIMIT 1`,
+          [intro.targetEmail.toLowerCase()]
+        );
+        if (targets.length > 0) {
+          const { rowCount } = await db.query(`
+            INSERT INTO lp_manual_connections (lp_target_id, name, relationship, linkedin_url)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
+          `, [targets[0].id, intro.connectorName, intro.relationship, intro.linkedinUrl]);
+          warmIntrosSet += rowCount;
+        }
+      }
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_warm_intros_apollo_2026_07')`);
+      console.log(`Warm intro connections: inserted ${warmIntrosSet} confirmed paths from Apollo enrichment.`);
+    }
+
     console.log('Auto-migrate: contacts schema applied.');
   } catch (err) {
     console.error('Auto-migrate error:', err.message);
