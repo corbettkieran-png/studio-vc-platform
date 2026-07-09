@@ -473,6 +473,54 @@ async function autoMigrate() {
       console.log(`Fund LP connections: added ${connInserted} Fund I/II investors as Joe Coyne direct connections.`);
     }
 
+    // ── LinkedIn URLs for Fund I/II LPs confirmed from team connection CSVs ────
+    // 24 email→URL mappings sourced from Joe's LinkedIn export (July 2026).
+    // Flexible name matching was used (Dan→Daniel, Bob→Robert, Sébastien accent).
+    // Only sets URL when currently NULL — won't overwrite any manually entered values.
+    const { rows: linkedinUrlFlag } = await db.query(
+      `SELECT 1 FROM migration_flags WHERE flag_key = 'lp_linkedin_urls_fund_lps_2026_07'`
+    );
+    if (!linkedinUrlFlag.length) {
+      const LP_LINKEDIN_URLS = [
+        ['winters.daniel@gmail.com',            'https://www.linkedin.com/in/dan-winters-75805331'],
+        ['clark@nebari.us',                      'https://www.linkedin.com/in/clark-gillam-79010827'],
+        ['gjmmorales@gmail.com',                 'https://www.linkedin.com/in/gabriel-m-6625b2140'],
+        ['dan@nebari.us',                        'https://www.linkedin.com/in/daniel-freuman-1a5a861'],
+        ['michael@inisheerpartners.com',         'https://www.linkedin.com/in/michaelspellacy'],
+        ['jessica.s.chow@gmail.com',            'https://www.linkedin.com/in/jessica-chow-1844963a'],
+        ['wmsmurray@gmail.com',                  'https://www.linkedin.com/in/scot-murray-18266223'],
+        ['mtorbert@5cpartners.com',              'https://www.linkedin.com/in/marques-torbert-b35b5913'],
+        ['amiramir@gmail.com',                   'https://www.linkedin.com/in/amirbakhtiar'],
+        ['john.r.niehaus@gmail.com',             'https://www.linkedin.com/in/john-niehaus-aaaa0188'],
+        ['hemanshunpatel@gmail.com',             'https://www.linkedin.com/in/hemanshunpatel'],
+        ['rsteinberg@propuscapital.com',         'https://www.linkedin.com/in/rafael-steinberg-1827015'],
+        ['douglas.munsey@gmail.com',             'https://www.linkedin.com/in/douglas-munsey-17407423'],
+        ['rzenker@overbrook.com',                'https://www.linkedin.com/in/richard-zenker-808397'],
+        ['anselmi.lillian@gmail.com',            'https://www.linkedin.com/in/lillian-anselmi-03931420'],
+        ['lanselmi@marlboroughinvestments.com',  'https://www.linkedin.com/in/lillian-anselmi-03931420'],
+        ['liam@studio.vc',                       'https://www.linkedin.com/in/liam-lynch-021435'],
+        ['mg@zmlp.com',                          'https://www.linkedin.com/in/mukgulati'],
+        ['brucehack1@gmail.com',                 'https://www.linkedin.com/in/brucehack'],
+        ['nateleung@gmail.com',                  'https://www.linkedin.com/in/nleung'],
+        ['dballen@gmail.com',                    'https://www.linkedin.com/in/dballen'],
+        ['dhassett@summitrepartners.com',        'https://www.linkedin.com/in/daniel-hassett-2294055'],
+        ['rniehaus@gcpcapital.com',              'https://www.linkedin.com/in/robert-niehaus-3821843b'],
+        ['sebastien.dejong@blueopalcapital.com', 'https://www.linkedin.com/in/s%C3%A9bastien-de-jong-55b5118'],
+      ];
+      let urlsSet = 0;
+      for (const [email, url] of LP_LINKEDIN_URLS) {
+        const { rowCount } = await db.query(`
+          UPDATE lp_targets
+          SET linkedin_url = $1
+          WHERE lower(trim(email)) = $2
+            AND (linkedin_url IS NULL OR linkedin_url = '')
+        `, [url, email]);
+        urlsSet += rowCount;
+      }
+      await db.query(`INSERT INTO migration_flags (flag_key) VALUES ('lp_linkedin_urls_fund_lps_2026_07')`);
+      console.log(`Fund LP LinkedIn URLs: set ${urlsSet} URLs from confirmed Joe Coyne connection data.`);
+    }
+
     console.log('Auto-migrate: contacts schema applied.');
   } catch (err) {
     console.error('Auto-migrate error:', err.message);
