@@ -734,9 +734,9 @@ router.post('/team', authenticate, async (req, res) => {
 
     const tmId = uuid();
     await db.query(
-      `INSERT INTO team_members (id, user_id, full_name, linkedin_url)
-       VALUES ($1, $2, $3, $4)`,
-      [tmId, req.user.id, full_name, linkedin_url || null]
+      `INSERT INTO team_members (id, full_name, linkedin_url)
+       VALUES ($1, $2, $3)`,
+      [tmId, full_name, linkedin_url || null]
     );
 
     const { rows } = await db.query('SELECT * FROM team_members WHERE id = $1', [tmId]);
