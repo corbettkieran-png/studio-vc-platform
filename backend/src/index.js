@@ -1250,6 +1250,46 @@ async function matchLPSurnamesFromConnections() {
   } catch (err) {
     console.error('[surname-match] Error:', err.message);
   }
+
+  // ── Fix team_member user_id linkage (POST /team bug) ────────────────────
+  // The admin-create route stamped user_id = admin's ID on all new team member
+  // slots. Clear those and re-link each GP to their actual row.
+  const { rows: tmLinkFlag } = await db.query(
+    `SELECT 1 FROM migration_flags WHERE flag_key = 'team_member_userid_fix_v1'`
+  );
+  if (!tmLinkFlag.length) {
+    // Clear wrong user_id from non-GP slots (Lillian, Stanley)
+    await db.query(`
+      UPDATE team_members SET user_id = NULL
+      WHERE full_name ILIKE 'lillian anselmi'
+        AND user_id = (SELECT id FROM users WHERE email = 'corbett.kieran@gmail.com' LIMIT 1)
+    `);
+    await db.query(`
+      UPDATE team_members SET user_id = NULL
+      WHERE full_name ILIKE 'stanley scott'
+        AND user_id IS NOT NULL
+    `);
+    // Link Kieran's actual row + set work email / title
+    await db.query(`
+      UPDATE team_members
+      SET user_id    = (SELECT id FROM users WHERE email = 'corbett.kieran@gmail.com' LIMIT 1),
+          work_email = 'kcorbett@studio.vc',
+          title      = 'General Partner'
+      WHERE id = '1ac41adb-71ff-4c9d-993f-220388f8b896'
+    `);
+    // Link Joe's row + set work email / title (no-op if Joe has no user account yet)
+    await db.query(`
+      UPDATE team_members
+      SET user_id    = (SELECT id FROM users WHERE email = 'jcoyne@studio.vc' LIMIT 1),
+          work_email = 'jcoyne@studio.vc',
+          title      = 'General Partner'
+      WHERE id = '8928842a-9e8c-4e9f-9ccc-e3cab85b7586'
+    `);
+    await db.query(
+      `INSERT INTO migration_flags (flag_key) VALUES ('team_member_userid_fix_v1')`
+    ).catch(() => {});
+    console.log('team_member_userid_fix_v1: GP user_id linkage corrected.');
+  }
 }
 matchLPSurnamesFromConnections();
 
