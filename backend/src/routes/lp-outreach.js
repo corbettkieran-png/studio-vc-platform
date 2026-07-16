@@ -971,7 +971,7 @@ router.post('/targets', authenticate, async (req, res) => {
         fund_type, estimated_aum, typical_check_size,
         sector_interest, geographic_focus, notes, prior_fund,
         commitment_amount,
-        outreach_status, fit_score, created_at, updated_at
+        outreach_status, fit_score, imported_at, updated_at
       ) VALUES (
         gen_random_uuid(), $1, $2, $3, $4, $5,
         $6, $7, $8,
