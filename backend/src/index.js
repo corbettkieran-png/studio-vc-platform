@@ -888,6 +888,7 @@ async function deduplicateLPTargets() {
     const { rows: dupeGroups } = await db.query(`
       SELECT LOWER(TRIM(company)) AS norm_company, COUNT(*) AS cnt
       FROM lp_targets
+      WHERE company IS NOT NULL AND TRIM(company) <> ''
       GROUP BY LOWER(TRIM(company))
       HAVING COUNT(*) > 1
     `);
