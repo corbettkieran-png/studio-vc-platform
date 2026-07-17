@@ -174,6 +174,8 @@ export default function LPOutreach() {
     estimated_aum: '', notes: '', prior_fund: '',
     sector_interest: '', commitment_amount: '',
   });
+  const [directConnectMember, setDirectConnectMember] = useState('');
+  const [addModalTeamMembers, setAddModalTeamMembers] = useState([]);
 
   // Network map (warm intro) state
   const [networkMap, setNetworkMap] = useState(null); // { paths, stats, enrich_stats }
@@ -1341,7 +1343,7 @@ ${senderEmail}`;
             <span style={{ fontSize: 12, color: '#94A3B8', whiteSpace: 'nowrap', background: '#EEF4FF', padding: '5px 12px', borderRadius: 20, fontWeight: 600, color: '#1D3557' }}>
               {filtered.length} LP{filtered.length !== 1 ? 's' : ''}
             </span>
-            <button onClick={() => setShowAddLPModal(true)} style={{
+            <button onClick={async () => { setShowAddLPModal(true); try { const t = await getLPTeam(); setAddModalTeamMembers(t.team || []); } catch(e) {} }} style={{
               padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
               background: '#003B76', color: '#fff', border: 'none',
               boxShadow: '0 1px 4px rgba(0,59,118,0.25)', whiteSpace: 'nowrap',
@@ -3862,6 +3864,20 @@ ${senderEmail}`;
               </div>
             </div>
 
+            {/* Direct Connection */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Direct Studio Connection</label>
+              <select
+                value={directConnectMember}
+                onChange={e => setDirectConnectMember(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, boxSizing: 'border-box', color: '#1E293B', background: '#fff' }}
+              >
+                <option value="">— None —</option>
+                {addModalTeamMembers.map(m => (
+                  <option key={m.id} value={m.id}>{m.full_name}</option>
+                ))}
+              </select>
+            </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
               <button onClick={() => setShowAddLPModal(false)} style={{
                 padding: '9px 20px', borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff',
@@ -3878,8 +3894,10 @@ ${senderEmail}`;
                   });
                   if (res.target) {
                     setTargets(prev => [res.target, ...prev]);
+                    if (directConnectMember) { const m = addModalTeamMembers.find(tm => tm.id === directConnectMember); if (m) try { await addManualConnection(res.target.id, { name: m.full_name, relationship: 'Direct connection', linkedin_url: m.linkedin_url || null }); } catch(e) {} }
                   }
                   setShowAddLPModal(false);
+                  setDirectConnectMember('');
                   setNewLP({ full_name: '', company: '', title: '', email: '', linkedin_url: '', fund_type: '', geographic_focus: '', estimated_aum: '', notes: '', prior_fund: '', sector_interest: '', commitment_amount: '' });
                 } catch (err) {
                   alert('Failed to add LP: ' + err.message);
