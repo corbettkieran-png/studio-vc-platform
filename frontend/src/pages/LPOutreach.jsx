@@ -1343,7 +1343,7 @@ ${senderEmail}`;
             <span style={{ fontSize: 12, color: '#94A3B8', whiteSpace: 'nowrap', background: '#EEF4FF', padding: '5px 12px', borderRadius: 20, fontWeight: 600, color: '#1D3557' }}>
               {filtered.length} LP{filtered.length !== 1 ? 's' : ''}
             </span>
-            <button onClick={async () => { setShowAddLPModal(true); try { const t = await getLPTeam(); setAddModalTeamMembers(t.team || []); } catch(e) {} }} style={{
+            <button onClick={async () => { setShowAddLPModal(true); try { const t = await getLPTeam(); setAddModalTeamMembers(t.team_members || []); } catch(e) {} }} style={{
               padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
               background: '#003B76', color: '#fff', border: 'none',
               boxShadow: '0 1px 4px rgba(0,59,118,0.25)', whiteSpace: 'nowrap',
