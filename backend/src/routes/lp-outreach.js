@@ -133,6 +133,7 @@ function computeFitScore(lp) {
   else if (/pension|sovereign.wealth|swf/.test(ft))              score += 20;
   else if (/venture|vc fund/.test(ft))                           score += 15;
   else if (/corporate|strategic/.test(ft))                       score += 10;
+  else if (/institutional|wealth.management|private.wealth|asset.management/.test(ft)) score += 20;
   else if (ft)                                                    score += 5;
 
   // ── Sector alignment with Studio VC thesis (25 pts) ─────────
@@ -151,7 +152,7 @@ function computeFitScore(lp) {
   // ── Geography — prefer US / global (15 pts) ─────────────────
   const geo = (lp.geographic_focus || '').toLowerCase();
   if (/global|worldwide|international|agnostic/.test(geo))                              score += 15;
-  else if (/north america|usa|united states|new york|nyc|silicon valley|california/.test(geo)) score += 15;
+  else if (/north america|\busa?\b|united states|new york|nyc|silicon valley|california/.test(geo)) score += 15;
   else if (/europe|uk|canada|israel|australia/.test(geo))                              score += 8;
   else if (geo)                                                                         score += 3;
 
@@ -165,6 +166,14 @@ function computeFitScore(lp) {
   else if (/[5-9]\d{2}\s*m|[1-9]\d{3}\s*m|500m|750m/.test(aum))       score += 12;
   else if (/[1-4]\d{2}\s*m|100m|200m|300m|400m/.test(aum))             score += 8;
   else if (/\d+\s*m/.test(aum))                                         score += 4;
+
+  // ── Title / seniority — decision-maker authority (20 pts) ───────────────────────────────────────
+  const title = (lp.title || '').toLowerCase();
+  if (/chief.investment.officer|chief.financial.officer|\bcio\b|\bcfo\b/.test(title)) score += 20;
+  else if (/managing.director|general.partner|chief.executive|\bceo\b/.test(title)) score += 18;
+  else if (/\bpartner\b|\bpresident\b|\bprincipal\b/.test(title)) score += 15;
+  else if (/director|vice.president|\bvp\b/.test(title)) score += 10;
+  else if (/\bmanager\b|senior/.test(title)) score += 5;
 
   return Math.min(score, 100);
 }
