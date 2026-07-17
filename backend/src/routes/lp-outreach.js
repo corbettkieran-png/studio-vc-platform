@@ -997,6 +997,8 @@ router.post('/targets', authenticate, async (req, res) => {
     ]);
 
     res.json({ success: true, target: rows[0] });
+    // Trigger connection matching fire-and-forget
+    runMatching().catch(e => console.error('runMatching after manual add:', e.message));
   } catch (err) {
     console.error('POST /targets error:', err.message);
     res.status(500).json({ error: err.message });
