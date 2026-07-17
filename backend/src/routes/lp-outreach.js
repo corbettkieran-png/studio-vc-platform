@@ -2,12 +2,27 @@ const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { v4: uuid } = require('uuid');
 const db = require('../config/db');
 const { authenticate } = require('../middleware/auth');
 const apollo = require('../services/apollo');
 const lpResearch = require('../services/lpResearch');
 const { notifyIntroRequest } = require('../services/email');
+
+// Timing-safe string comparison to prevent secret timing attacks
+function timingSafeEqual(a, b) {
+  try {
+    const ba = Buffer.from(String(a));
+    const bb = Buffer.from(String(b));
+    if (ba.length !== bb.length) {
+      // Still run comparison to avoid length-based timing leak
+      crypto.timingSafeEqual(ba, Buffer.alloc(ba.length));
+      return false;
+    }
+    return crypto.timingSafeEqual(ba, bb);
+  } catch { return false; }
+}
 
 const DECK_PATH = path.join(__dirname, '../static/StudioVC_Fund_III_April_2026.pdf');
 const DECK_FILENAME = 'StudioVC_Fund_III_April_2026.pdf';
@@ -930,6 +945,11 @@ router.post('/targets', authenticate, async (req, res) => {
     if (!full_name || !full_name.trim()) {
       return res.status(400).json({ error: 'full_name is required' });
     }
+    if (full_name.length > 500) return res.status(400).json({ error: 'full_name too long (max 500 chars)' });
+    if (company && company.length > 500) return res.status(400).json({ error: 'company too long (max 500 chars)' });
+    if (email && email.length > 500) return res.status(400).json({ error: 'email too long (max 500 chars)' });
+    if (title && title.length > 500) return res.status(400).json({ error: 'title too long (max 500 chars)' });
+    if (linkedin_url && linkedin_url.length > 500) return res.status(400).json({ error: 'linkedin_url too long (max 500 chars)' });
 
     const VALID_PRIOR_FUNDS = ['fund_i', 'fund_ii', 'both'];
     if (prior_fund && !VALID_PRIOR_FUNDS.includes(prior_fund)) {
@@ -1167,6 +1187,7 @@ router.get('/targets', authenticate, async (req, res) => {
       min_score,
       has_connector,
       search,
+      fund_type,
       sort_by = 'fit_score',
       page = 1,
       limit = 2000,
@@ -1228,6 +1249,11 @@ router.get('/targets', authenticate, async (req, res) => {
       params.push(searchTerm);
     }
 
+    if (fund_type) {
+      query += ` AND t.fund_type ILIKE $${params.length + 1}`;
+      params.push(`%${fund_type}%`);
+    }
+
     // Sorting — done client-side too, but keep server sort for initial load order
     const validSortFields = ['fit_score', 'connection_strength', 'last_outreach_at', 'created_at', 'company', 'last_contacted_at', 'next_followup_at', 'priority'];
     const sortField = validSortFields.includes(sort_by) ? sort_by : 'company';
@@ -1264,6 +1290,11 @@ router.get('/targets', authenticate, async (req, res) => {
       const searchTerm = `%${search}%`;
       countQuery += ` AND (full_name ILIKE $${countParams.length + 1} OR company ILIKE $${countParams.length + 1} OR email ILIKE $${countParams.length + 1})`;
       countParams.push(searchTerm);
+    }
+
+    if (fund_type) {
+      countQuery += ` AND fund_type ILIKE $${countParams.length + 1}`;
+      countParams.push(`%${fund_type}%`);
     }
 
     const { rows: countRows } = await db.query(countQuery, countParams);
@@ -1784,9 +1815,12 @@ router.post('/targets/:id/send-intro', authenticate, requireUUID('id'), async (r
 // https://studio-vc-backend-production.up.railway.app/api/lp/email-events/resend?key=<RESEND_WEBHOOK_SECRET>
 // ============================================================
 router.post('/email-events/resend', async (req, res) => {
-  // Verify shared secret passed as URL query param
+  // Require RESEND_WEBHOOK_SECRET to be configured — reject all calls if not set
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
-  if (webhookSecret && req.query.key !== webhookSecret) {
+  if (!webhookSecret) {
+    return res.status(503).json({ error: 'Resend webhook not configured' });
+  }
+  if (!timingSafeEqual(req.query.key || '', webhookSecret)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   // Cap payload size to prevent large blob storage
@@ -3442,12 +3476,14 @@ router.post('/clay/webhook', async (req, res) => {
     const { rows: settingsRows } = await db.query('SELECT * FROM clay_settings LIMIT 1');
     const settings = settingsRows[0];
 
-    if (settings && settings.clay_webhook_secret) {
-      const authHeader = req.headers['authorization'] || req.headers['x-webhook-secret'] || '';
-      const token = authHeader.replace('Bearer ', '');
-      if (token !== settings.clay_webhook_secret) {
-        return res.status(401).json({ error: 'Invalid webhook secret' });
-      }
+    if (!settings || !settings.clay_webhook_secret) {
+      return res.status(503).json({ error: 'Clay webhook is not configured' });
+    }
+
+    const authHeader = req.headers['authorization'] || req.headers['x-webhook-secret'] || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token || !timingSafeEqual(token, settings.clay_webhook_secret)) {
+      return res.status(401).json({ error: 'Invalid webhook secret' });
     }
 
     // Clay can send a single record or an array
@@ -3757,7 +3793,7 @@ router.post('/clay/import-csv', authenticate, upload.single('file'), async (req,
 
 // GET /api/lp/clay/export-csv — Public CSV download of LP targets for Clay import
 // Temporary convenience endpoint - no auth required but uses a time-limited token
-router.get('/clay/export-csv', async (req, res) => {
+router.get('/clay/export-csv', authenticate, async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM lp_targets ORDER BY fit_score DESC');
     const esc = (v) => {
@@ -3774,7 +3810,6 @@ router.get('/clay/export-csv', async (req, res) => {
     const csv = [headers.join(','), ...csvRows].join('\n');
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=lp_targets_clay.csv');
-    res.setHeader('Access-Control-Allow-Origin', '*');
     res.send(csv);
   } catch (err) {
     console.error('Error exporting CSV:', err);
