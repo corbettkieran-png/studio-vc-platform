@@ -238,7 +238,7 @@ async function autoMigrate() {
     {
       const { computeFitScoreForMigration } = require('./routes/lp-outreach');
       if (computeFitScoreForMigration) {
-        const { rows: allLPs } = await db.query('SELECT * FROM lp_targets WHERE fit_score = 0 OR fit_score IS NULL');
+        const { rows: allLPs } = await db.query('SELECT * FROM lp_targets');
         let rescored = 0;
         for (const lp of allLPs) {
           const score = computeFitScoreForMigration(lp);
