@@ -1521,7 +1521,7 @@ ${senderEmail}`;
                           style={{ fontSize: 10, width: '100%', border: '1px solid var(--navy)', borderRadius: 3, padding: '2px 4px', outline: 'none' }} />
                       ) : (
                         <span style={{ fontSize: 12, color: t.last_contacted_at ? '#374151' : '#CBD5E1', cursor: 'pointer' }}>
-                          {t.last_contacted_at ? new Date(t.last_contacted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+                          {t.last_contacted_at ? new Date(t.last_contacted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                         </span>
                       )}
                     </td>
